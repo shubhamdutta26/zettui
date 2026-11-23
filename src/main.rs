@@ -1,5 +1,7 @@
-//! Zettui Lesson 4: browse, edit, manage and follow local note links.
+//! Zettui Lesson 5: browse, edit, link notes and insert Zotero citations.
 
+mod bibliography;
+mod config;
 mod editor;
 mod file_ops;
 mod links;
@@ -15,6 +17,8 @@ use ratatui::{
     widgets::{Block, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 
+use crate::bibliography::Bibliography;
+use crate::config::Config;
 use crate::editor::OpenNote;
 use crate::links::{Index, LinkItem};
 
@@ -40,6 +44,32 @@ struct LinkDialog {
     selected: usize,
 }
 
+/// A searchable, read-only view of the JSON export loaded when the picker opens.
+struct CitationDialog {
+    bibliography: Bibliography,
+    query: String,
+    matches: Vec<usize>,
+    selected: usize,
+}
+
+impl CitationDialog {
+    fn new(bibliography: Bibliography) -> Self {
+        let mut picker = Self {
+            bibliography,
+            query: String::new(),
+            matches: Vec::new(),
+            selected: 0,
+        };
+        picker.filter();
+        picker
+    }
+
+    fn filter(&mut self) {
+        self.matches = self.bibliography.search(&self.query, 200);
+        self.selected = 0;
+    }
+}
+
 struct Entry {
     name: String,
     path: PathBuf,
@@ -58,12 +88,14 @@ struct App {
     command: Option<String>,
     prompt: Option<Prompt>,
     links: Option<LinkDialog>,
+    citation_picker: Option<CitationDialog>,
+    bibliography_path: Option<PathBuf>,
     history: Vec<PathBuf>,
     message: String,
 }
 
 impl App {
-    fn new(root: PathBuf) -> io::Result<Self> {
+    fn new(root: PathBuf, bibliography_path: Option<PathBuf>) -> io::Result<Self> {
         let root = root.canonicalize()?;
         if !root.is_dir() {
             return Err(io::Error::new(
@@ -82,6 +114,8 @@ impl App {
             command: None,
             prompt: None,
             links: None,
+            citation_picker: None,
+            bibliography_path,
             history: Vec::new(),
             message: String::new(),
         };
@@ -241,7 +275,7 @@ impl App {
             let instruction = if let Some(command) = &self.command {
                 format!(":{command}   (Enter to run, Esc to cancel)")
             } else {
-                "Esc: Normal | :w save | :q close | Ctrl+O links | Ctrl+B backlinks | Ctrl+T previous note".to_owned()
+                "Esc: Normal | :w save | :q close | Ctrl+P cite | Ctrl+O links | Ctrl+B backlinks | Ctrl+T back".to_owned()
             };
             format!(
                 "{} | {}{}\n{}\n{}",
@@ -328,6 +362,9 @@ impl App {
         if self.links.is_some() {
             self.draw_link_dialog(frame);
         }
+        if self.citation_picker.is_some() {
+            self.draw_citation_picker(frame);
+        }
     }
 
     /// Display links on demand. Only this dialog captures j/k/Enter/Esc.
@@ -374,6 +411,165 @@ impl App {
             ),
             areas[1],
         );
+    }
+
+    fn draw_citation_picker(&self, frame: &mut Frame) {
+        let Some(dialog) = &self.citation_picker else {
+            return;
+        };
+        let screen = frame.area();
+        let width = screen.width.saturating_sub(2).min(110);
+        let height = screen.height.saturating_sub(2).min(22);
+        if width < 18 || height < 7 {
+            return;
+        }
+        let popup = Rect::new(
+            screen.x + (screen.width - width) / 2,
+            screen.y + (screen.height - height) / 2,
+            width,
+            height,
+        );
+        frame.render_widget(Clear, popup);
+        let block = Block::bordered().title("Zotero citations — type to search");
+        let inner = block.inner(popup);
+        frame.render_widget(block, popup);
+        let areas = Layout::vertical([
+            Constraint::Length(2),
+            Constraint::Min(1),
+            Constraint::Length(2),
+        ])
+        .split(inner);
+        frame.render_widget(
+            Paragraph::new(format!("Search: {}▏", dialog.query)),
+            areas[0],
+        );
+        let results: Vec<ListItem> = dialog
+            .matches
+            .iter()
+            .map(|&index| ListItem::new(dialog.bibliography.references[index].summary()))
+            .collect();
+        let results = List::new(results)
+            .highlight_style(Style::default().bg(Color::Blue).fg(Color::White))
+            .highlight_symbol("> ");
+        let mut state = ListState::default();
+        if !dialog.matches.is_empty() {
+            state.select(Some(dialog.selected));
+        }
+        frame.render_stateful_widget(results, areas[1], &mut state);
+        let count = dialog.matches.len();
+        frame.render_widget(
+            Paragraph::new(format!(
+                "{count} results (max 200) | Up/Down select | Enter insert | Esc cancel
+Ctrl+U clear search | Backspace delete"
+            )),
+            areas[2],
+        );
+    }
+
+    /// Re-read the file every time Ctrl+P is pressed, so Zotero auto-exports
+    /// become available immediately without restarting the application.
+    fn open_citation_picker(&mut self) {
+        if self.editor.is_none() {
+            self.message = "Open a note before inserting a citation.".to_owned();
+            return;
+        }
+        let Some(path) = &self.bibliography_path else {
+            self.message = "No bibliography configured. Set bibliography in ~/.config/zettui/config.toml or pass --bibliography FILE".to_owned();
+            return;
+        };
+        match Bibliography::load(path) {
+            Ok(bibliography) => {
+                self.citation_picker = Some(CitationDialog::new(bibliography));
+                self.message.clear();
+            }
+            Err(e) => {
+                self.message = format!("Cannot load bibliography {}: {e}", path.display());
+            }
+        }
+    }
+
+    fn insert_citation(&mut self, key: &str) {
+        let Some(note) = &mut self.editor else {
+            return;
+        };
+        if note.state.mode != EditorMode::Normal && note.state.mode != EditorMode::Insert {
+            self.message =
+                "Switch to Normal or Insert mode before inserting a citation.".to_owned();
+            return;
+        }
+        let started_in_normal_mode = note.state.mode == EditorMode::Normal;
+        // Use editor key events, not direct text replacement. EdTUI owns the
+        // cursor, change history and undo stack.
+        if started_in_normal_mode {
+            self.editor_keys.on_key_event(
+                KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE),
+                &mut note.state,
+            );
+        }
+        for character in format!("[@{key}]").chars() {
+            self.editor_keys.on_key_event(
+                KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE),
+                &mut note.state,
+            );
+        }
+        if started_in_normal_mode {
+            self.editor_keys.on_key_event(
+                KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
+                &mut note.state,
+            );
+        }
+        self.message = format!("Inserted [@{key}] — use :w to save your note.");
+    }
+
+    fn handle_citation_key(&mut self, key: KeyEvent) {
+        let Some(mut dialog) = self.citation_picker.take() else {
+            return;
+        };
+        match key.code {
+            KeyCode::Esc => {
+                self.message = "Citation picker closed.".to_owned();
+            }
+            KeyCode::Up => {
+                dialog.selected = dialog.selected.saturating_sub(1);
+                self.citation_picker = Some(dialog);
+            }
+            KeyCode::Down => {
+                if dialog.selected + 1 < dialog.matches.len() {
+                    dialog.selected += 1;
+                }
+                self.citation_picker = Some(dialog);
+            }
+            KeyCode::Enter => {
+                if let Some(&index) = dialog.matches.get(dialog.selected) {
+                    let citekey = dialog.bibliography.references[index].key.clone();
+                    self.insert_citation(&citekey);
+                } else {
+                    self.message = "No matching reference. Try another search.".to_owned();
+                    self.citation_picker = Some(dialog);
+                }
+            }
+            KeyCode::Backspace => {
+                dialog.query.pop();
+                dialog.filter();
+                self.citation_picker = Some(dialog);
+            }
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                dialog.query.clear();
+                dialog.filter();
+                self.citation_picker = Some(dialog);
+            }
+            // Typing is search input, so j/k are not navigation while searching.
+            KeyCode::Char(c)
+                if !key
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+            {
+                dialog.query.push(c);
+                dialog.filter();
+                self.citation_picker = Some(dialog);
+            }
+            _ => self.citation_picker = Some(dialog),
+        }
     }
 
     /// Build an index only when requested; it does not change any note files.
@@ -710,6 +906,10 @@ impl App {
                     self.previous_note();
                     return;
                 }
+                KeyCode::Char('p') => {
+                    self.open_citation_picker();
+                    return;
+                }
                 _ => {}
             }
         }
@@ -749,6 +949,10 @@ impl App {
             }
             if self.links.is_some() {
                 self.handle_link_key(key);
+                continue;
+            }
+            if self.citation_picker.is_some() {
+                self.handle_citation_key(key);
                 continue;
             }
             if self.prompt.is_some() {
@@ -798,11 +1002,57 @@ impl App {
     }
 }
 
+/// Command line syntax:
+///   zettui [NOTES_DIR] [--bibliography /path/to/references.json]
+/// Configuration acts as a default; explicit CLI arguments win.
+fn arguments() -> io::Result<(PathBuf, Option<PathBuf>)> {
+    let config = Config::load()?;
+    let mut notes_dir = None;
+    let mut bibliography = None;
+    let mut args = env::args_os().skip(1);
+    while let Some(arg) = args.next() {
+        let flag = arg.to_string_lossy().into_owned();
+        match flag.as_str() {
+            "--bibliography" => {
+                let value = args.next().ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "--bibliography requires a path",
+                    )
+                })?;
+                bibliography = Some(PathBuf::from(value));
+            }
+            "-h" | "--help" => {
+                println!(
+                    "zettui [NOTES_DIR] [--bibliography FILE]\n\nConfiguration: ~/.config/zettui/config.toml"
+                );
+                std::process::exit(0);
+            }
+            other if other.starts_with('-') => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("Unknown option: {other}"),
+                ));
+            }
+            _ if notes_dir.is_none() => notes_dir = Some(PathBuf::from(arg)),
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "Provide at most one NOTES_DIR",
+                ));
+            }
+        }
+    }
+    Ok((
+        notes_dir
+            .or(config.notes_dir)
+            .unwrap_or(env::current_dir()?),
+        bibliography.or(config.bibliography),
+    ))
+}
+
 fn main() -> io::Result<()> {
-    let path = env::args_os()
-        .nth(1)
-        .map(PathBuf::from)
-        .unwrap_or(env::current_dir()?);
-    let mut app = App::new(path)?;
+    let (root, bibliography) = arguments()?;
+    let mut app = App::new(root, bibliography)?;
     ratatui::run(|terminal| app.run(terminal))
 }
