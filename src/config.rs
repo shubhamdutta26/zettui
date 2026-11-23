@@ -1,6 +1,7 @@
 //! Local configuration, stored in $XDG_CONFIG_HOME/zettui/config.toml
 //! (or ~/.config/zettui/config.toml). Zettui never writes this file.
 
+use crate::theme::ColorOverrides;
 use serde::Deserialize;
 use std::{
     env, fs, io,
@@ -11,6 +12,9 @@ use std::{
 pub struct Config {
     pub bibliography: Option<PathBuf>,
     pub notes_dir: Option<PathBuf>,
+    pub theme: Option<String>,
+    #[serde(default)]
+    pub colors: ColorOverrides,
 }
 
 impl Config {
@@ -72,6 +76,13 @@ notes_dir = "/tmp/notes"
         )
         .unwrap();
         assert_eq!(cfg.bibliography.unwrap(), PathBuf::from("/tmp/refs.json"));
+    }
+
+    #[test]
+    fn parses_theme_and_color_overrides() {
+        let cfg: Config = toml::from_str("theme = 'auto'\n[colors]\naccent = '#123456'\n").unwrap();
+        assert_eq!(cfg.theme.as_deref(), Some("auto"));
+        assert_eq!(cfg.colors.accent.as_deref(), Some("#123456"));
     }
 
     #[test]

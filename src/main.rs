@@ -1,19 +1,21 @@
-//! Zettui Lesson 5: browse, edit, link notes and insert Zotero citations.
+//! Zettui v0.6.1: system-aware light/dark themes, browsing, editing, links and Zotero.
 
 mod bibliography;
 mod config;
 mod editor;
 mod file_ops;
 mod links;
+mod theme;
 
-use std::{env, fs, io, path::PathBuf};
+use std::{env, fs, io, path::PathBuf, time::Duration};
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use edtui::{EditorEventHandler, EditorMode, EditorView, LineNumbers};
+use edtui::{EditorEventHandler, EditorMode, EditorTheme, EditorView, LineNumbers};
 use ratatui::{
     DefaultTerminal, Frame,
     layout::{Constraint, Layout, Rect},
-    style::{Color, Style},
+    style::{Modifier, Style},
+    text::{Line, Span},
     widgets::{Block, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 
@@ -21,6 +23,9 @@ use crate::bibliography::Bibliography;
 use crate::config::Config;
 use crate::editor::OpenNote;
 use crate::links::{Index, LinkItem};
+use crate::theme::{
+    Appearance, ColorOverrides, THEME_CHOICES, Theme, ThemeChoice, omarchy_appearance,
+};
 
 /// Temporary, single-line prompt shown over the file browser.
 #[derive(Clone)]
@@ -76,6 +81,37 @@ struct Entry {
     is_dir: bool,
 }
 
+/// A non-destructive filename finder limited to the current directory.
+/// It never touches file contents and only changes the browser selection.
+struct FindDialog {
+    query: String,
+    matches: Vec<usize>,
+    selected: usize,
+}
+
+impl FindDialog {
+    fn new(entries: &[Entry]) -> Self {
+        let mut dialog = Self {
+            query: String::new(),
+            matches: Vec::new(),
+            selected: 0,
+        };
+        dialog.filter(entries);
+        dialog
+    }
+
+    fn filter(&mut self, entries: &[Entry]) {
+        let query = self.query.to_lowercase();
+        self.matches = entries
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| entry.name.to_lowercase().contains(&query))
+            .map(|(index, _)| index)
+            .collect();
+        self.selected = 0;
+    }
+}
+
 /// The file browser and editor share one application state.
 struct App {
     root: PathBuf,
@@ -89,13 +125,28 @@ struct App {
     prompt: Option<Prompt>,
     links: Option<LinkDialog>,
     citation_picker: Option<CitationDialog>,
+    find_dialog: Option<FindDialog>,
     bibliography_path: Option<PathBuf>,
+    theme: Theme,
+    theme_choice: ThemeChoice,
+    fallback_appearance: Appearance,
+    theme_overrides: ColorOverrides,
     history: Vec<PathBuf>,
     message: String,
 }
 
 impl App {
-    fn new(root: PathBuf, bibliography_path: Option<PathBuf>) -> io::Result<Self> {
+    fn new(
+        root: PathBuf,
+        bibliography_path: Option<PathBuf>,
+        theme_choice: ThemeChoice,
+        theme_overrides: ColorOverrides,
+        fallback_appearance: Appearance,
+    ) -> io::Result<Self> {
+        let appearance = theme_choice.resolve(omarchy_appearance().unwrap_or(fallback_appearance));
+        let theme = Theme::named(appearance.as_str())
+            .and_then(|theme| theme.with_overrides(&theme_overrides))
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e.to_string()))?;
         let root = root.canonicalize()?;
         if !root.is_dir() {
             return Err(io::Error::new(
@@ -115,7 +166,12 @@ impl App {
             prompt: None,
             links: None,
             citation_picker: None,
+            find_dialog: None,
             bibliography_path,
+            theme,
+            theme_choice,
+            fallback_appearance,
+            theme_overrides,
             history: Vec::new(),
             message: String::new(),
         };
@@ -227,143 +283,267 @@ impl App {
         Ok(())
     }
 
-    /// Render either the read-only preview or the editor in the right pane.
-    fn draw(&mut self, frame: &mut Frame) {
-        let areas =
-            Layout::vertical([Constraint::Min(1), Constraint::Length(3)]).split(frame.area());
-        let panes = Layout::horizontal([Constraint::Percentage(35), Constraint::Percentage(65)])
-            .split(areas[0]);
+    /// Re-evaluate the Omarchy theme only when Auto is enabled. This is called
+    /// periodically even without keyboard input, so theme switches are live.
+    fn sync_system_theme(&mut self) {
+        if self.theme_choice != ThemeChoice::Auto {
+            return;
+        }
+        let appearance = omarchy_appearance().unwrap_or(self.fallback_appearance);
+        if self.theme.name != appearance.as_str() {
+            if let Ok(theme) = Theme::named(appearance.as_str())
+                .and_then(|t| t.with_overrides(&self.theme_overrides))
+            {
+                self.theme = theme;
+            }
+        }
+    }
 
-        let files: Vec<ListItem> = self
+    /// Auto -> Dark -> Light -> Auto. This never changes local settings.
+    fn cycle_theme(&mut self) {
+        let next = self.theme_choice.next();
+        let appearance = next.resolve(omarchy_appearance().unwrap_or(self.fallback_appearance));
+        match Theme::named(appearance.as_str())
+            .and_then(|theme| theme.with_overrides(&self.theme_overrides))
+        {
+            Ok(theme) => {
+                self.theme_choice = next;
+                self.theme = theme;
+                self.message = format!(
+                    "Theme mode: {} ({}) — session only. Set theme = \"{}\" in config.toml.",
+                    next.as_str(),
+                    appearance.as_str(),
+                    next.as_str()
+                );
+            }
+            Err(error) => self.message = format!("Theme error: {error}"),
+        }
+    }
+
+    /// All panels share one palette, including EdTUI's cursor and selection.
+    fn draw(&mut self, frame: &mut Frame) {
+        let theme = self.theme;
+        frame.render_widget(Block::default().style(theme.base_style()), frame.area());
+        let areas = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Min(1),
+            Constraint::Length(3),
+        ])
+        .split(frame.area());
+        let panes = Layout::horizontal([Constraint::Percentage(35), Constraint::Percentage(65)])
+            .split(areas[1]);
+
+        let location = if self.editor.is_some() {
+            "EDITOR"
+        } else {
+            "BROWSER"
+        };
+        let header = Line::from(vec![
+            Span::styled(
+                " ZETTUI v0.6.1 ",
+                Style::default()
+                    .fg(theme.background)
+                    .bg(theme.accent)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!("  {location}  "),
+                Style::default().fg(theme.foreground),
+            ),
+            Span::styled(
+                format!(
+                    "theme: {} ({})   Ctrl+G: mode",
+                    self.theme_choice.as_str(),
+                    theme.name
+                ),
+                Style::default().fg(theme.muted),
+            ),
+        ]);
+        frame.render_widget(
+            Paragraph::new(header).style(Style::default().bg(theme.surface)),
+            areas[0],
+        );
+
+        let items: Vec<ListItem> = self
             .entries
             .iter()
             .map(|entry| {
                 let prefix = if entry.is_dir { "[D] " } else { "    " };
-                ListItem::new(format!("{prefix}{}", entry.name))
+                let color = if entry.is_dir {
+                    theme.directory
+                } else {
+                    theme.foreground
+                };
+                ListItem::new(Line::from(vec![
+                    Span::styled(prefix.to_owned(), Style::default().fg(color)),
+                    Span::styled(entry.name.clone(), Style::default().fg(color)),
+                ]))
             })
             .collect();
-        let list = List::new(files)
-            .block(Block::bordered().title("Files"))
-            .highlight_style(Style::default().bg(Color::Blue).fg(Color::White))
-            .highlight_symbol("> ");
+        let list = List::new(items)
+            .block(
+                Block::bordered()
+                    .title(" Files ")
+                    .border_style(Style::default().fg(theme.border))
+                    .title_style(Style::default().fg(theme.accent)),
+            )
+            .highlight_style(Style::default().bg(theme.selected_bg).fg(theme.selected_fg))
+            .highlight_symbol("❯ ");
         let mut state = ListState::default();
         if !self.entries.is_empty() {
             state.select(Some(self.selected));
         }
         frame.render_stateful_widget(list, panes[0], &mut state);
 
-        let status = if let Some(note) = &mut self.editor {
+        let footer = if let Some(note) = &mut self.editor {
             let filename = note
                 .path
                 .file_name()
                 .and_then(|name| name.to_str())
                 .unwrap_or("note");
             let dirty = if note.is_dirty() { " [+]" } else { "" };
-            let title = format!("Editing: {filename}{dirty}");
-            let border = Block::bordered().title(title);
+            let title = format!(" {filename}{dirty} ");
+            let border = Block::bordered()
+                .title(title)
+                .border_style(Style::default().fg(theme.border))
+                .title_style(Style::default().fg(if note.is_dirty() {
+                    theme.warning
+                } else {
+                    theme.accent
+                }));
             let inner = border.inner(panes[1]);
             frame.render_widget(border, panes[1]);
+            let editor_theme = EditorTheme::default()
+                .base(theme.base_style())
+                .line_numbers_style(
+                    Style::default()
+                        .fg(theme.muted)
+                        .bg(ratatui::style::Color::Reset),
+                )
+                .selection_style(Style::default().fg(theme.selected_fg).bg(theme.selected_bg))
+                .cursor_style(Style::default().fg(theme.background).bg(theme.accent))
+                .hide_status_line();
             frame.render_widget(
                 EditorView::new(&mut note.state)
                     .wrap(true)
-                    .line_numbers(LineNumbers::Absolute),
+                    .line_numbers(LineNumbers::Absolute)
+                    .theme(editor_theme),
                 inner,
             );
             if let Some(cursor) = note.state.cursor_screen_position() {
                 frame.set_cursor_position((cursor.x, cursor.y));
             }
-            let instruction = if let Some(command) = &self.command {
-                format!(":{command}   (Enter to run, Esc to cancel)")
+            let help = if let Some(command) = &self.command {
+                format!(":{command}   Enter: run | Esc: cancel")
             } else {
-                "Esc: Normal | :w save | :q close | Ctrl+P cite | Ctrl+O links | Ctrl+B backlinks | Ctrl+T back".to_owned()
+                "Esc Normal | :w save | :q close | Ctrl+P cite | Ctrl+O links | Ctrl+B backlinks | Ctrl+T back | Ctrl+G mode".to_owned()
             };
             format!(
                 "{} | {}{}\n{}\n{}",
                 note.path.display(),
                 note.state.mode.name(),
                 dirty,
-                instruction,
-                self.message
+                help,
+                self.message,
             )
         } else {
             let preview = Paragraph::new(self.preview.as_str())
-                .block(Block::bordered().title("Preview (press Enter to edit)"))
+                .block(
+                    Block::bordered()
+                        .title(" Preview — Enter to edit ")
+                        .border_style(Style::default().fg(theme.border))
+                        .title_style(Style::default().fg(theme.accent)),
+                )
+                .style(theme.base_style())
                 .wrap(Wrap { trim: false });
             frame.render_widget(preview, panes[1]);
             format!(
-                "{}\nj/k move | Enter open | h parent | o links | b backlinks | n note | N folder | r rename | m move | d Trash | q quit\n{}",
+                "{}\nj/k move | Enter open | h parent | o links | b backlinks | n/N create | r rename | m move | d Trash | / find | Ctrl+G mode | q quit\n{}",
                 self.current_dir.display(),
-                self.message
+                self.message,
             )
         };
-        frame.render_widget(Paragraph::new(status), areas[1]);
+        frame.render_widget(
+            Paragraph::new(footer).style(Style::default().fg(theme.foreground).bg(theme.surface)),
+            areas[2],
+        );
 
         if let Some(prompt) = &self.prompt {
             let screen = frame.area();
             let width = screen.width.saturating_sub(2).min(74);
             let height = screen.height.saturating_sub(2).min(8);
-            let popup = Rect::new(
-                screen.x + (screen.width - width) / 2,
-                screen.y + (screen.height - height) / 2,
-                width,
-                height,
-            );
-            let (title, help, input) = match &prompt.kind {
-                PromptKind::NewNote => (
-                    "Create note",
-                    "Single filename. Add .json, .txt, etc. or leave blank for .md",
-                    prompt.input.clone(),
-                ),
-                PromptKind::NewFolder => (
-                    "Create folder",
-                    "Enter a folder name without / or ..",
-                    prompt.input.clone(),
-                ),
-                PromptKind::Rename { .. } => (
-                    "Rename selected",
-                    "Enter a new filename (including its extension)",
-                    prompt.input.clone(),
-                ),
-                PromptKind::Move { .. } => (
-                    "Move selected",
-                    "Existing folder RELATIVE TO NOTES ROOT (e.g. Readings or .)",
-                    prompt.input.clone(),
-                ),
-                PromptKind::Trash { source } => (
-                    "Move to Trash?",
-                    "Press y to confirm, n or Esc to cancel",
-                    source
-                        .file_name()
-                        .map(|name| name.to_string_lossy().into_owned())
-                        .unwrap_or_else(|| "item".to_owned()),
-                ),
-            };
-            let contents = format!(
-                "{help}\n\n> {input}{}\n\n{}",
-                if matches!(&prompt.kind, PromptKind::Trash { .. }) {
-                    ""
-                } else {
-                    "▏"
-                },
-                if matches!(&prompt.kind, PromptKind::Trash { .. }) {
-                    "Trash is recoverable using your desktop file manager"
-                } else {
-                    "Enter: confirm   Esc: cancel   Ctrl+U: clear"
-                }
-            );
-            frame.render_widget(Clear, popup);
-            frame.render_widget(
-                Paragraph::new(contents)
-                    .block(Block::bordered().title(title))
-                    .wrap(Wrap { trim: false }),
-                popup,
-            );
+            if width >= 12 && height >= 5 {
+                let popup = Rect::new(
+                    screen.x + (screen.width - width) / 2,
+                    screen.y + (screen.height - height) / 2,
+                    width,
+                    height,
+                );
+                let (title, help, input) = match &prompt.kind {
+                    PromptKind::NewNote => (
+                        "Create note",
+                        "Single filename. Add .json, .txt, etc. or leave blank for .md",
+                        prompt.input.clone(),
+                    ),
+                    PromptKind::NewFolder => (
+                        "Create folder",
+                        "Enter a folder name without / or ..",
+                        prompt.input.clone(),
+                    ),
+                    PromptKind::Rename { .. } => (
+                        "Rename selected",
+                        "Enter a new filename (including its extension)",
+                        prompt.input.clone(),
+                    ),
+                    PromptKind::Move { .. } => (
+                        "Move selected",
+                        "Existing folder RELATIVE TO NOTES ROOT (e.g. Readings or .)",
+                        prompt.input.clone(),
+                    ),
+                    PromptKind::Trash { source } => (
+                        "Move to Trash?",
+                        "Press y to confirm, n or Esc to cancel",
+                        source
+                            .file_name()
+                            .map(|name| name.to_string_lossy().into_owned())
+                            .unwrap_or_else(|| "item".to_owned()),
+                    ),
+                };
+                let contents = format!(
+                    "{help}\n\n> {input}{}\n\n{}",
+                    if matches!(&prompt.kind, PromptKind::Trash { .. }) {
+                        ""
+                    } else {
+                        "▏"
+                    },
+                    if matches!(&prompt.kind, PromptKind::Trash { .. }) {
+                        "Trash is recoverable using your desktop file manager"
+                    } else {
+                        "Enter: confirm   Esc: cancel   Ctrl+U: clear"
+                    }
+                );
+                frame.render_widget(Clear, popup);
+                frame.render_widget(
+                    Paragraph::new(contents)
+                        .block(
+                            Block::bordered()
+                                .title(title)
+                                .border_style(Style::default().fg(theme.accent)),
+                        )
+                        .style(Style::default().fg(theme.foreground).bg(theme.surface))
+                        .wrap(Wrap { trim: false }),
+                    popup,
+                );
+            }
         }
         if self.links.is_some() {
             self.draw_link_dialog(frame);
         }
         if self.citation_picker.is_some() {
             self.draw_citation_picker(frame);
+        }
+        if self.find_dialog.is_some() {
+            self.draw_find_dialog(frame);
         }
     }
 
@@ -385,8 +565,15 @@ impl App {
             height,
         );
         frame.render_widget(Clear, popup);
-        let block = Block::bordered().title(dialog.title.as_str());
+        let theme = self.theme;
+        let block = Block::bordered()
+            .title(dialog.title.as_str())
+            .border_style(Style::default().fg(theme.accent));
         let inner = block.inner(popup);
+        frame.render_widget(
+            Block::default().style(Style::default().bg(theme.surface)),
+            popup,
+        );
         frame.render_widget(block, popup);
         let areas = Layout::vertical([Constraint::Min(1), Constraint::Length(2)]).split(inner);
         let entries: Vec<ListItem> = dialog
@@ -394,11 +581,19 @@ impl App {
             .iter()
             .map(|item| {
                 let symbol = if item.target.is_some() { "  " } else { "! " };
-                ListItem::new(format!("{symbol}{}", item.label))
+                let color = if item.target.is_some() {
+                    theme.foreground
+                } else {
+                    theme.warning
+                };
+                ListItem::new(Line::from(vec![
+                    Span::styled(symbol.to_owned(), Style::default().fg(color)),
+                    Span::styled(item.label.clone(), Style::default().fg(color)),
+                ]))
             })
             .collect();
         let list = List::new(entries)
-            .highlight_style(Style::default().bg(Color::Blue).fg(Color::White))
+            .highlight_style(Style::default().bg(theme.selected_bg).fg(theme.selected_fg))
             .highlight_symbol("> ");
         let mut state = ListState::default();
         if !dialog.items.is_empty() {
@@ -408,7 +603,8 @@ impl App {
         frame.render_widget(
             Paragraph::new(
                 "j/k select | Enter open | Esc close\n! means missing or ambiguous; no auto-create",
-            ),
+            )
+            .style(Style::default().fg(theme.muted).bg(theme.surface)),
             areas[1],
         );
     }
@@ -430,8 +626,15 @@ impl App {
             height,
         );
         frame.render_widget(Clear, popup);
-        let block = Block::bordered().title("Zotero citations — type to search");
+        let theme = self.theme;
+        let block = Block::bordered()
+            .title("Zotero citations — type to search")
+            .border_style(Style::default().fg(theme.accent));
         let inner = block.inner(popup);
+        frame.render_widget(
+            Block::default().style(Style::default().bg(theme.surface)),
+            popup,
+        );
         frame.render_widget(block, popup);
         let areas = Layout::vertical([
             Constraint::Length(2),
@@ -440,16 +643,22 @@ impl App {
         ])
         .split(inner);
         frame.render_widget(
-            Paragraph::new(format!("Search: {}▏", dialog.query)),
+            Paragraph::new(format!("Search: {}▏", dialog.query))
+                .style(Style::default().fg(theme.accent).bg(theme.surface)),
             areas[0],
         );
         let results: Vec<ListItem> = dialog
             .matches
             .iter()
-            .map(|&index| ListItem::new(dialog.bibliography.references[index].summary()))
+            .map(|&index| {
+                ListItem::new(Line::styled(
+                    dialog.bibliography.references[index].summary(),
+                    Style::default().fg(theme.foreground),
+                ))
+            })
             .collect();
         let results = List::new(results)
-            .highlight_style(Style::default().bg(Color::Blue).fg(Color::White))
+            .highlight_style(Style::default().bg(theme.selected_bg).fg(theme.selected_fg))
             .highlight_symbol("> ");
         let mut state = ListState::default();
         if !dialog.matches.is_empty() {
@@ -461,9 +670,128 @@ impl App {
             Paragraph::new(format!(
                 "{count} results (max 200) | Up/Down select | Enter insert | Esc cancel
 Ctrl+U clear search | Backspace delete"
-            )),
+            ))
+            .style(Style::default().fg(theme.muted).bg(theme.surface)),
             areas[2],
         );
+    }
+
+    fn draw_find_dialog(&self, frame: &mut Frame) {
+        let Some(dialog) = &self.find_dialog else {
+            return;
+        };
+        let theme = self.theme;
+        let screen = frame.area();
+        let width = screen.width.saturating_sub(2).min(84);
+        let height = screen.height.saturating_sub(2).min(18);
+        if width < 18 || height < 7 {
+            return;
+        }
+        let popup = Rect::new(
+            screen.x + (screen.width - width) / 2,
+            screen.y + (screen.height - height) / 2,
+            width,
+            height,
+        );
+        frame.render_widget(Clear, popup);
+        frame.render_widget(
+            Block::default().style(Style::default().bg(theme.surface)),
+            popup,
+        );
+        let block = Block::bordered()
+            .title(" Find in current folder ")
+            .border_style(Style::default().fg(theme.accent));
+        let inner = block.inner(popup);
+        frame.render_widget(block, popup);
+        let areas = Layout::vertical([
+            Constraint::Length(2),
+            Constraint::Min(1),
+            Constraint::Length(2),
+        ])
+        .split(inner);
+        frame.render_widget(
+            Paragraph::new(format!("Name: {}▏", dialog.query))
+                .style(Style::default().fg(theme.accent).bg(theme.surface)),
+            areas[0],
+        );
+        let items: Vec<ListItem> = dialog
+            .matches
+            .iter()
+            .map(|index| {
+                let entry = &self.entries[*index];
+                let color = if entry.is_dir {
+                    theme.directory
+                } else {
+                    theme.foreground
+                };
+                ListItem::new(Line::styled(entry.name.clone(), Style::default().fg(color)))
+            })
+            .collect();
+        let list = List::new(items)
+            .highlight_style(Style::default().fg(theme.selected_fg).bg(theme.selected_bg))
+            .highlight_symbol("❯ ");
+        let mut state = ListState::default();
+        if !dialog.matches.is_empty() {
+            state.select(Some(dialog.selected));
+        }
+        frame.render_stateful_widget(list, areas[1], &mut state);
+        frame.render_widget(
+            Paragraph::new(format!(
+                "{} matches | Up/Down: select | Enter: jump to file\nEsc: cancel | Ctrl+U: clear",
+                dialog.matches.len()
+            ))
+            .style(Style::default().fg(theme.muted).bg(theme.surface)),
+            areas[2],
+        );
+    }
+
+    fn handle_find_key(&mut self, key: KeyEvent) {
+        let Some(mut dialog) = self.find_dialog.take() else {
+            return;
+        };
+        match key.code {
+            KeyCode::Esc => self.message = "Filename search canceled.".to_owned(),
+            KeyCode::Enter => {
+                if let Some(&index) = dialog.matches.get(dialog.selected) {
+                    let path = self.entries[index].path.clone();
+                    self.select_path(&path);
+                    self.message = format!("Selected {}. Press Enter to open.", path.display());
+                } else {
+                    self.message = "No matching filename in this folder.".to_owned();
+                    self.find_dialog = Some(dialog);
+                }
+            }
+            KeyCode::Up => {
+                dialog.selected = dialog.selected.saturating_sub(1);
+                self.find_dialog = Some(dialog);
+            }
+            KeyCode::Down => {
+                if dialog.selected + 1 < dialog.matches.len() {
+                    dialog.selected += 1;
+                }
+                self.find_dialog = Some(dialog);
+            }
+            KeyCode::Backspace => {
+                dialog.query.pop();
+                dialog.filter(&self.entries);
+                self.find_dialog = Some(dialog);
+            }
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                dialog.query.clear();
+                dialog.filter(&self.entries);
+                self.find_dialog = Some(dialog);
+            }
+            KeyCode::Char(c)
+                if !key
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+            {
+                dialog.query.push(c);
+                dialog.filter(&self.entries);
+                self.find_dialog = Some(dialog);
+            }
+            _ => self.find_dialog = Some(dialog),
+        }
     }
 
     /// Re-read the file every time Ctrl+P is pressed, so Zotero auto-exports
@@ -910,6 +1238,10 @@ Ctrl+U clear search | Backspace delete"
                     self.open_citation_picker();
                     return;
                 }
+                KeyCode::Char('g') => {
+                    self.cycle_theme();
+                    return;
+                }
                 _ => {}
             }
         }
@@ -940,7 +1272,13 @@ Ctrl+U clear search | Backspace delete"
 
     fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
         loop {
+            self.sync_system_theme();
             terminal.draw(|frame| self.draw(frame))?;
+            // Poll instead of waiting forever: Omarchy may change its theme
+            // while the user isn't pressing any keys.
+            if !event::poll(Duration::from_millis(400))? {
+                continue;
+            }
             let Event::Key(key) = event::read()? else {
                 continue;
             };
@@ -959,14 +1297,25 @@ Ctrl+U clear search | Backspace delete"
                 self.handle_prompt_key(key);
                 continue;
             }
+            if self.find_dialog.is_some() {
+                self.handle_find_key(key);
+                continue;
+            }
             if self.editor.is_some() {
                 self.handle_editor_key(key);
+                continue;
+            }
+            if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('g') {
+                self.cycle_theme();
                 continue;
             }
             match key.code {
                 KeyCode::Char('q') => return Ok(()),
                 KeyCode::Char('o') => self.show_links(false),
                 KeyCode::Char('b') => self.show_links(true),
+                KeyCode::Char('/') => {
+                    self.find_dialog = Some(FindDialog::new(&self.entries));
+                }
                 KeyCode::Char('t') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                     self.previous_note()
                 }
@@ -1003,12 +1352,19 @@ Ctrl+U clear search | Backspace delete"
 }
 
 /// Command line syntax:
-///   zettui [NOTES_DIR] [--bibliography /path/to/references.json]
+///   zettui [NOTES_DIR] [--bibliography PATH] [--theme auto|dark|light]
 /// Configuration acts as a default; explicit CLI arguments win.
-fn arguments() -> io::Result<(PathBuf, Option<PathBuf>)> {
+fn arguments() -> io::Result<(
+    PathBuf,
+    Option<PathBuf>,
+    ThemeChoice,
+    ColorOverrides,
+    Appearance,
+)> {
     let config = Config::load()?;
     let mut notes_dir = None;
     let mut bibliography = None;
+    let mut theme_override = None;
     let mut args = env::args_os().skip(1);
     while let Some(arg) = args.next() {
         let flag = arg.to_string_lossy().into_owned();
@@ -1022,9 +1378,16 @@ fn arguments() -> io::Result<(PathBuf, Option<PathBuf>)> {
                 })?;
                 bibliography = Some(PathBuf::from(value));
             }
+            "--theme" => {
+                let value = args.next().ok_or_else(|| {
+                    io::Error::new(io::ErrorKind::InvalidInput, "--theme requires a name")
+                })?;
+                theme_override = Some(value.to_string_lossy().into_owned());
+            }
             "-h" | "--help" => {
                 println!(
-                    "zettui [NOTES_DIR] [--bibliography FILE]\n\nConfiguration: ~/.config/zettui/config.toml"
+                    "zettui [NOTES_DIR] [--bibliography FILE] [--theme auto|dark|light]\n\nModes: {}\nConfig: ~/.config/zettui/config.toml",
+                    THEME_CHOICES.join(", "),
                 );
                 std::process::exit(0);
             }
@@ -1043,16 +1406,66 @@ fn arguments() -> io::Result<(PathBuf, Option<PathBuf>)> {
             }
         }
     }
+    let name = theme_override
+        .or(config.theme)
+        .unwrap_or_else(|| "auto".to_owned());
+    let choice = ThemeChoice::named(&name)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error.to_string()))?;
+    let system = omarchy_appearance().unwrap_or_else(|| {
+        // On other Linux desktops, use the terminal background at launch.
+        // OSC color queries run here, before Ratatui enables raw input mode.
+        match terminal_colorsaurus::theme_mode(terminal_colorsaurus::QueryOptions::default()) {
+            Ok(terminal_colorsaurus::ThemeMode::Light) => Appearance::Light,
+            _ => Appearance::Dark,
+        }
+    });
     Ok((
         notes_dir
             .or(config.notes_dir)
             .unwrap_or(env::current_dir()?),
         bibliography.or(config.bibliography),
+        choice,
+        config.colors,
+        system,
     ))
 }
 
 fn main() -> io::Result<()> {
-    let (root, bibliography) = arguments()?;
-    let mut app = App::new(root, bibliography)?;
+    let (root, bibliography, choice, overrides, fallback) = arguments()?;
+    let mut app = App::new(root, bibliography, choice, overrides, fallback)?;
     ratatui::run(|terminal| app.run(terminal))
+}
+
+#[cfg(test)]
+mod lesson6_tests {
+    use super::*;
+
+    #[test]
+    fn filename_search_is_case_insensitive_and_non_destructive() {
+        let entries = vec![
+            Entry {
+                name: "CD4-SEC.md".into(),
+                path: "CD4-SEC.md".into(),
+                is_dir: false,
+            },
+            Entry {
+                name: "VHH.json".into(),
+                path: "VHH.json".into(),
+                is_dir: false,
+            },
+            Entry {
+                name: "Antibody".into(),
+                path: "Antibody".into(),
+                is_dir: true,
+            },
+        ];
+        let mut dialog = FindDialog::new(&entries);
+        dialog.query = "cd4".into();
+        dialog.filter(&entries);
+        assert_eq!(dialog.matches, vec![0]);
+        dialog.query = "ANTIBODY".into();
+        dialog.filter(&entries);
+        assert_eq!(dialog.matches, vec![2]);
+        assert_eq!(entries[0].name, "CD4-SEC.md");
+    }
 }

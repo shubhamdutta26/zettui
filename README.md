@@ -1,73 +1,64 @@
-# Zettui — Lesson 2: Vim editing + safe save
+# Zettui (Lesson 6, v0.6.0)
 
-This is the second lesson of Zettui, a local-first TUI for plain-text notes. Your YAML front matter, note IDs, and tags are **ordinary text** — the app does not parse, delete, or rearrange them. In Lesson 2, edits are limited to UTF-8 files no larger than 256 KB.
+Zettui is a **local-first Rust terminal notes manager** built in incremental lessons.
+Lesson 6 adds color themes and a filename finder to the existing file browser,
+Vim-style editor, wiki links/backlinks, safe file management, and Zotero citation picker.
 
-## Try it (on a disposable copy first)
-
-```bash
-cd ~/Projects/zettui
-cargo check
-cargo test
-cargo run -- examples/notes
-```
-
-You can point Zettui at any note directory:
-
-```bash
-cargo run -- /path/to/notes
-```
-
-### File browser (left pane)
-
-| Key | Action |
-|---|---|
-| `j` / `k` | Move up/down |
-| `l` or `Enter` | Open selected directory or **open a file in the editor** |
-| `h` | Parent directory |
-| `q` | Quit Zettui (only while in file browser) |
-
-### Editor (right pane)
-
-| Key/Command | Action |
-|---|---|
-| `i` | Insert mode |
-| `Esc` | Return to Normal mode |
-| `h j k l` | Move cursor in Normal mode |
-| `w`, `b`, `0`, `$`, `gg`, `G` | Word/line/file motions |
-| `x`, `dd`, `o`, `u`, `Ctrl+r` | Delete char/line, new line, undo, redo |
-| `v` | Visual selection |
-| `Ctrl+S` | Save anytime |
-| `:w` + Enter | Save |
-| `:q` + Enter | Close file **if no unsaved changes** |
-| `:q!` + Enter | Discard unsaved changes, close file |
-| `:wq` + Enter | Save and return to file browser |
-
-> Important: `:q` is an application command that closes the file, not Zettui. To quit the application, close the editor and press `q` in the file browser. If you are in Insert mode, press `Esc` **before typing a colon command**.
-
-## Safer saving
-
-- Zettui compares your edited text to the version saved from disk, so it warns before closing dirty files.
-- If another app changed the on-disk contents since opening, save is refused, not overwritten.
-- A save writes to a temporary file in the same directory, then renames it over the original.
-- File permissions are preserved. UTF-8 BOM and CRLF line endings are preserved for typical files. Mixed line-ending files may be normalized, so test with copies first.
-- Saving via rename can result in a new inode; other apps holding the old inode might need to reopen the file. Always keep a proper backup.
-
-## Files explained
-
-- `src/main.rs`: file browser, window drawing, key routing, command bar.
-- `src/editor.rs`: note loading, change tracking, safe saving, and automated tests.
-- `Cargo.toml`: dependency configuration (`edtui` and `tempfile` added in this lesson).
-
-## Tests
+## Quick start
 
 ```bash
 cargo fmt --check
 cargo check
 cargo test
+cargo run -- examples/notes --bibliography examples/references.json --theme catppuccin
 ```
 
-## Next
+### Browser shortcuts
 
-Lesson 3: create, rename, move, and delete notes and directories. Then note linking, bibliography search, configuration and themes, and Linux release packaging.
+- `j`/`k` move, `Enter` open, `h` parent, `q` exit.
+- `/` search filenames **in the current folder** (type to filter, Up/Down to select,
+  Enter jumps to the file in the browser, then Enter opens it; Esc cancels).
+- `Ctrl+G` cycle Gruvbox Dark, Catppuccin Mocha, Tokyo Night, Paper Light.
+- `n` new note, `N` new folder, `r` rename, `m` move, `d` Trash.
+- `o` outgoing links, `b` backlinks, `R` refresh.
 
-Do **not** commit real Zettlr notes, Zotero files, or personal configuration into a public GitHub repository.
+### Editor shortcuts
+
+- `i` Insert; `Esc` Normal; Vim motions from EdTUI; `:w`, `:q`, `:q!`, `:wq`.
+- `Ctrl+S` save; `Ctrl+O` outgoing links; `Ctrl+B` backlinks;
+  `Ctrl+T` back in link navigation history; `Ctrl+P` Zotero picker.
+- `Ctrl+G` cycle themes without altering note contents.
+
+## Theme configuration
+
+Create `~/.config/zettui/config.toml` (or `$XDG_CONFIG_HOME/zettui/config.toml`):
+
+```toml
+notes_dir = "/home/YOUR_USER/Documents/Notes"
+bibliography = "/home/YOUR_USER/Documents/Zotero/references.json"
+theme = "tokyo-night"
+
+[colors]
+accent = "#B89CF4"
+selected_bg = "#364A82"
+```
+
+The `[colors]` keys are optional overrides; use `#RRGGBB` syntax.
+Other names: `gruvbox`, `catppuccin`, `paper`. For a temporary theme, use
+`--theme NAME`. Changing the theme via `Ctrl+G` is **session-only**; Zettui
+never edits your configuration file. Restarting restores the selected
+configuration/CLI theme. The terminal must support true color for accurate RGB.
+
+For a documented update from Lesson 5, see [LESSON-6.md](LESSON-6.md).
+
+## Important limitations
+
+- The filename finder searches only the *current folder*, not note contents
+  or nested directories. Full-vault content search is planned for later.
+- Themes style the application and the editor's base text, cursor, line numbers
+  and selections, but do **not** implement Markdown/YAML syntax highlighting.
+- Plain citation insertion (`[@citekey]`) is not citation rendering.
+- Link updates after rename/move are not automatic.
+- No Linux installer/package yet (Lesson 7).
+- Do not push personal notes, bibliographies, or local config files to GitHub.
+- Test the updated application on copied notes first.
