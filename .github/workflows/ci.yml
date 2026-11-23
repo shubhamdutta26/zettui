@@ -1,0 +1,29 @@
+name: Rust CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Require a committed Cargo.lock
+        run: |
+          test -f Cargo.lock || { echo 'Commit Cargo.lock: cargo generate-lockfile && git add Cargo.lock'; exit 1; }
+      - name: Verify formatting
+        run: cargo fmt --all -- --check
+      - name: Run tests
+        run: cargo test --locked
+      - name: Build executable
+        run: cargo build --release --locked

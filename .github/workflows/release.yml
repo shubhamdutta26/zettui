@@ -1,0 +1,78 @@
+name: Linux Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  linux-x86_64:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v6
+
+      - name: Install stable Rust with musl target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+          components: rustfmt
+
+      - name: Install Linux packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools binutils file rpm
+
+      - name: Verify tag matches Cargo package version
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f Cargo.lock || { echo 'Cargo.lock must be committed before release'; exit 1; }
+          version=$(sed -n '/^\[package\]/,/^\[/{s/^version = "\([^"]*\)"/\1/p;}' Cargo.toml | head -n 1)
+          test -n "$version"
+          if [[ "v${version}" != "${GITHUB_REF_NAME}" ]]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match Cargo package version $version"
+            exit 1
+          fi
+          echo "VERSION=${version}" >> "$GITHUB_ENV"
+
+      - name: Check and test
+        run: |
+          cargo fmt --all -- --check
+          cargo test --locked
+
+      - name: Build portable Linux binary
+        run: |
+          cargo build --locked --release --target x86_64-unknown-linux-musl
+          file target/x86_64-unknown-linux-musl/release/zettui
+          if readelf -l target/x86_64-unknown-linux-musl/release/zettui | grep -q INTERP; then
+            echo 'Binary uses a dynamic interpreter; refusing to label it portable'
+            exit 1
+          fi
+
+      - name: Create tarball, Debian and Fedora packages, Arch recipe, checksums
+        shell: bash
+        run: |
+          bash scripts/package-linux.sh \
+            target/x86_64-unknown-linux-musl/release/zettui "${VERSION}"
+          for suffix in tar.gz deb rpm; do
+            test -s "dist/zettui_${VERSION}_linux_x86_64.${suffix}"
+          done
+          test -s dist/PKGBUILD
+          test -s dist/SHA256SUMS
+          (cd dist && sha256sum -c SHA256SUMS)
+          ls -lh dist/
+
+      - name: Publish GitHub release assets
+        uses: softprops/action-gh-release@v3
+        with:
+          generate_release_notes: true
+          files: |
+            dist/*.tar.gz
+            dist/*.deb
+            dist/*.rpm
+            dist/PKGBUILD
+            dist/SHA256SUMS
