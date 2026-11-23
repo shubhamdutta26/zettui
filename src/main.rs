@@ -6,6 +6,7 @@ mod editor;
 mod file_ops;
 mod layout;
 mod links;
+mod search;
 mod snippets;
 mod theme;
 
@@ -26,10 +27,12 @@ use crate::config::Config;
 use crate::editor::OpenNote;
 use crate::layout::{DEFAULT_BROWSER_PERCENT, resize_browser_percent, split_panes};
 use crate::links::{Index, LinkItem, NoteSuggestion};
+use crate::search::{SearchHit, SearchMode, VaultIndex};
 use crate::snippets::{Field, Snippet, load_snippets};
 use crate::theme::{
     Appearance, ColorOverrides, THEME_CHOICES, Theme, ThemeChoice, omarchy_appearance,
 };
+use crossterm::cursor::SetCursorStyle;
 use edtui::Index2;
 
 /// Temporary, single-line prompt shown over the file browser.
@@ -196,6 +199,33 @@ impl FindDialog {
     }
 }
 
+/// Interactive picker for searching text lines or YAML frontmatter tags.
+/// The index is loaded from disk when the picker opens; typing only filters RAM.
+struct VaultSearchDialog {
+    index: VaultIndex,
+    mode: SearchMode,
+    query: String,
+    matches: Vec<SearchHit>,
+    selected: usize,
+}
+
+impl VaultSearchDialog {
+    fn new(index: VaultIndex, mode: SearchMode) -> Self {
+        Self {
+            index,
+            mode,
+            query: String::new(),
+            matches: Vec::new(),
+            selected: 0,
+        }
+    }
+
+    fn filter(&mut self) {
+        self.matches = self.index.search(self.mode, &self.query, 200);
+        self.selected = 0;
+    }
+}
+
 /// The file browser and editor share one application state.
 struct App {
     root: PathBuf,
@@ -215,6 +245,7 @@ struct App {
     wiki_completion: Option<WikiCompletionDialog>,
     pending_open_bracket: bool,
     find_dialog: Option<FindDialog>,
+    vault_search: Option<VaultSearchDialog>,
     bibliography_path: Option<PathBuf>,
     theme: Theme,
     theme_choice: ThemeChoice,
@@ -262,6 +293,7 @@ impl App {
             wiki_completion: None,
             pending_open_bracket: false,
             find_dialog: None,
+            vault_search: None,
             bibliography_path,
             theme,
             theme_choice,
@@ -536,7 +568,13 @@ impl App {
                         .bg(ratatui::style::Color::Reset),
                 )
                 .selection_style(Style::default().fg(theme.selected_fg).bg(theme.selected_bg))
-                .cursor_style(Style::default().fg(theme.background).bg(theme.accent))
+                .cursor_style(if note.state.mode == EditorMode::Insert {
+                    // Neutralize EdTUI's painted block cursor so the real
+                    // terminal can render its blinking horizontal underline.
+                    theme.base_style()
+                } else {
+                    Style::default().fg(theme.background).bg(theme.accent)
+                })
                 .hide_status_line();
             frame.render_widget(
                 EditorView::new(&mut note.state)
@@ -551,7 +589,7 @@ impl App {
             let help = if let Some(command) = &self.command {
                 format!(":{command}   Enter: run | Esc: cancel")
             } else {
-                "Insert: [[ link | Esc Normal | :w save | Ctrl+P cite | Ctrl+E snippet | Ctrl+O links | Ctrl+B backlinks | Ctrl+T back".to_owned()
+                "Insert: [[ link | Esc Normal | :w save | Ctrl+P cite | Ctrl+E snippet | Ctrl+F text | Alt+T tags | Ctrl+O links | Ctrl+B backlinks | Ctrl+T back".to_owned()
             };
             format!(
                 "{} | {}{}\n{}\n{}",
@@ -573,7 +611,7 @@ impl App {
                 .wrap(Wrap { trim: false });
             frame.render_widget(preview, panes[1]);
             format!(
-                "{}\nj/k move | Enter open | h parent | o links | b backlinks | n/N create | r rename | m move | d Trash | / find | Ctrl+G mode | q quit\n{}",
+                "{}\nj/k move | Enter open | h parent | o links | b backlinks | n/N create | r rename | m move | d Trash | / find | Ctrl+F text | Alt+T tags | Ctrl+G mode | q quit\n{}",
                 self.current_dir.display(),
                 self.message,
             )
@@ -668,6 +706,9 @@ impl App {
         }
         if self.snippet_form.is_some() {
             self.draw_snippet_form(frame);
+        }
+        if self.vault_search.is_some() {
+            self.draw_vault_search(frame);
         }
     }
 
@@ -986,6 +1027,82 @@ Ctrl+U clear search | Backspace delete"
         ).style(Style::default().fg(theme.muted).bg(theme.surface)), areas[1]);
     }
 
+    fn draw_vault_search(&self, frame: &mut Frame) {
+        let Some(dialog) = &self.vault_search else {
+            return;
+        };
+        let theme = self.theme;
+        let screen = frame.area();
+        let width = screen.width.saturating_sub(2).min(106);
+        let height = screen.height.saturating_sub(2).min(23);
+        if width < 24 || height < 7 {
+            return;
+        }
+        let popup = Rect::new(
+            screen.x + (screen.width - width) / 2,
+            screen.y + (screen.height - height) / 2,
+            width,
+            height,
+        );
+        frame.render_widget(Clear, popup);
+        frame.render_widget(
+            Block::default().style(Style::default().bg(theme.surface)),
+            popup,
+        );
+        let block = Block::bordered()
+            .title(format!(" Search vault — {} ", dialog.mode.label()))
+            .border_style(Style::default().fg(theme.accent));
+        let inner = block.inner(popup);
+        frame.render_widget(block, popup);
+        let areas = Layout::vertical([
+            Constraint::Length(2),
+            Constraint::Min(1),
+            Constraint::Length(2),
+        ])
+        .split(inner);
+        frame.render_widget(
+            Paragraph::new(format!(
+                "{} search: {}▏  (Tab changes mode)",
+                dialog.mode.label(),
+                dialog.query
+            ))
+            .style(Style::default().fg(theme.accent).bg(theme.surface)),
+            areas[0],
+        );
+        let items: Vec<ListItem> = dialog
+            .matches
+            .iter()
+            .map(|hit| {
+                let relative = hit
+                    .path
+                    .strip_prefix(&dialog.index.root)
+                    .unwrap_or(&hit.path);
+                ListItem::new(format!(
+                    "{}:{}  {}",
+                    relative.display(),
+                    hit.line,
+                    hit.excerpt
+                ))
+            })
+            .collect();
+        let mut state = ListState::default();
+        if !dialog.matches.is_empty() {
+            state.select(Some(dialog.selected));
+        }
+        frame.render_stateful_widget(
+            List::new(items)
+                .highlight_style(Style::default().fg(theme.selected_fg).bg(theme.selected_bg))
+                .highlight_symbol("❯ "),
+            areas[1],
+            &mut state,
+        );
+        frame.render_widget(Paragraph::new(format!(
+            "{} matches | {} indexed | {} skipped{} | ↑↓ select Enter open Esc cancel\nTab toggle Text/Tags | Ctrl+U clear",
+            dialog.matches.len(), dialog.index.count(), dialog.index.skipped,
+            if dialog.index.truncated { " | file limit reached" } else { "" }
+        )).style(Style::default().fg(theme.muted).bg(theme.surface)), areas[2]);
+    }
+
     fn draw_find_dialog(&self, frame: &mut Frame) {
         let Some(dialog) = &self.find_dialog else {
             return;
@@ -1053,6 +1170,103 @@ Ctrl+U clear search | Backspace delete"
             .style(Style::default().fg(theme.muted).bg(theme.surface)),
             areas[2],
         );
+    }
+
+    fn open_vault_search(&mut self, mode: SearchMode) {
+        match VaultIndex::load(&self.root) {
+            Ok(index) => {
+                let count = index.count();
+                self.vault_search = Some(VaultSearchDialog::new(index, mode));
+                self.message =
+                    format!("Indexed {count} notes. Type a query or Tab to change search mode.");
+            }
+            Err(error) => self.message = format!("Cannot index notes: {error}"),
+        }
+    }
+
+    fn open_search_hit(&mut self, hit: SearchHit) -> bool {
+        if self
+            .editor
+            .as_ref()
+            .is_some_and(|note| note.path != hit.path && note.is_dirty())
+        {
+            self.message =
+                "Unsaved changes: save with :w before opening a search result.".to_owned();
+            return false;
+        }
+        if !self
+            .editor
+            .as_ref()
+            .is_some_and(|note| note.path == hit.path)
+        {
+            self.open_link_target(hit.path.clone(), true);
+        }
+        if let Some(note) = &mut self.editor {
+            if note.path == hit.path {
+                note.state.cursor = Index2::new(hit.line.saturating_sub(1), 0);
+                note.state
+                    .set_viewport_offset(0, hit.line.saturating_sub(2));
+                self.message = format!("Search result: {}:{}", hit.path.display(), hit.line);
+                return true;
+            }
+        }
+        false
+    }
+
+    fn handle_vault_search_key(&mut self, key: KeyEvent) {
+        let Some(mut dialog) = self.vault_search.take() else {
+            return;
+        };
+        match key.code {
+            KeyCode::Esc => {
+                self.message = "Vault search closed.".to_owned();
+            }
+            KeyCode::Tab => {
+                dialog.mode = dialog.mode.toggle();
+                dialog.filter();
+                self.vault_search = Some(dialog);
+            }
+            KeyCode::Up => {
+                dialog.selected = dialog.selected.saturating_sub(1);
+                self.vault_search = Some(dialog);
+            }
+            KeyCode::Down => {
+                if dialog.selected + 1 < dialog.matches.len() {
+                    dialog.selected += 1;
+                }
+                self.vault_search = Some(dialog);
+            }
+            KeyCode::Enter => {
+                if let Some(hit) = dialog.matches.get(dialog.selected).cloned() {
+                    if !self.open_search_hit(hit) {
+                        self.vault_search = Some(dialog);
+                    }
+                } else {
+                    self.message = "No result selected; type a query or press Esc.".to_owned();
+                    self.vault_search = Some(dialog);
+                }
+            }
+            KeyCode::Backspace => {
+                dialog.query.pop();
+                dialog.filter();
+                self.vault_search = Some(dialog);
+            }
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                dialog.query.clear();
+                dialog.filter();
+                self.vault_search = Some(dialog);
+            }
+            KeyCode::Char(ch)
+                if !key
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+            {
+                dialog.query.push(ch);
+                dialog.filter();
+                self.vault_search = Some(dialog);
+            }
+            _ => self.vault_search = Some(dialog),
+        }
     }
 
     fn handle_find_key(&mut self, key: KeyEvent) {
@@ -1882,7 +2096,31 @@ Ctrl+U clear search | Backspace delete"
     }
 
     fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
+        let result = self.run_loop(terminal);
+        // Restore the cursor configured by the user in Foot/other terminals.
+        let reset = crossterm::execute!(io::stdout(), SetCursorStyle::DefaultUserShape);
+        match result {
+            Err(error) => Err(error),
+            Ok(()) => reset,
+        }
+    }
+
+    fn run_loop(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
+        let mut previous_insert_mode = None;
         loop {
+            let in_insert = self
+                .editor
+                .as_ref()
+                .is_some_and(|note| note.state.mode == EditorMode::Insert);
+            if previous_insert_mode != Some(in_insert) {
+                let shape = if in_insert {
+                    SetCursorStyle::BlinkingBar
+                } else {
+                    SetCursorStyle::BlinkingBlock
+                };
+                crossterm::execute!(io::stdout(), shape)?;
+                previous_insert_mode = Some(in_insert);
+            }
             self.sync_system_theme();
             terminal.draw(|frame| self.draw(frame))?;
             // Poll instead of waiting forever: Omarchy may change its theme
@@ -1922,6 +2160,18 @@ Ctrl+U clear search | Backspace delete"
             }
             if self.find_dialog.is_some() {
                 self.handle_find_key(key);
+                continue;
+            }
+            if self.vault_search.is_some() {
+                self.handle_vault_search_key(key);
+                continue;
+            }
+            if key.code == KeyCode::Char('f') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                self.open_vault_search(SearchMode::Text);
+                continue;
+            }
+            if key.code == KeyCode::Char('t') && key.modifiers.contains(KeyModifiers::ALT) {
+                self.open_vault_search(SearchMode::Tags);
                 continue;
             }
             if self.resize_columns(key) {
@@ -2287,5 +2537,67 @@ $0"
 "
         );
         assert!(!app.editor.as_ref().unwrap().is_dirty());
+    }
+}
+
+#[cfg(test)]
+mod lesson75_search_app_tests {
+    use super::*;
+
+    #[test]
+    fn text_search_opens_note_and_closes_dialog() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("Target.md");
+        fs::write(
+            &target,
+            "---\ntags: [vhh]\n---\n# Title\nFramework details\n",
+        )
+        .unwrap();
+        let mut app = App::new(
+            dir.path().to_path_buf(),
+            None,
+            ThemeChoice::Dark,
+            ColorOverrides::default(),
+            Appearance::Dark,
+        )
+        .unwrap();
+        app.open_vault_search(SearchMode::Text);
+        let dialog = app.vault_search.as_mut().unwrap();
+        dialog.query = "framework".into();
+        dialog.filter();
+        assert_eq!(dialog.matches.len(), 1);
+        app.handle_vault_search_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(app.vault_search.is_none());
+        assert_eq!(app.editor.unwrap().path, target);
+    }
+
+    #[test]
+    fn search_refuses_to_discard_unsaved_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        let first = dir.path().join("First.md");
+        let second = dir.path().join("Second.md");
+        fs::write(&first, "# First\n").unwrap();
+        fs::write(&second, "# Second\nFind a unique antibody\n").unwrap();
+        let mut app = App::new(
+            dir.path().to_path_buf(),
+            None,
+            ThemeChoice::Dark,
+            ColorOverrides::default(),
+            Appearance::Dark,
+        )
+        .unwrap();
+        app.select_path(&first);
+        app.enter().unwrap();
+        app.handle_editor_key(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE));
+        app.handle_editor_key(KeyEvent::new(KeyCode::Char('X'), KeyModifiers::NONE));
+        assert!(app.editor.as_ref().unwrap().is_dirty());
+        app.open_vault_search(SearchMode::Text);
+        let dialog = app.vault_search.as_mut().unwrap();
+        dialog.query = "unique antibody".into();
+        dialog.filter();
+        assert_eq!(dialog.matches.len(), 1);
+        app.handle_vault_search_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(app.vault_search.is_some());
+        assert_eq!(app.editor.as_ref().unwrap().path, first);
     }
 }
