@@ -1,6 +1,7 @@
-//! Zettui Lesson 2: a file browser plus an embedded Vim-style text editor.
+//! Zettui Lesson 3: browse, edit, and manage local notes safely.
 
 mod editor;
+mod file_ops;
 
 use std::{env, fs, io, path::PathBuf};
 
@@ -8,12 +9,27 @@ use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifier
 use edtui::{EditorEventHandler, EditorMode, EditorView, LineNumbers};
 use ratatui::{
     DefaultTerminal, Frame,
-    layout::{Constraint, Layout},
+    layout::{Constraint, Layout, Rect},
     style::{Color, Style},
-    widgets::{Block, List, ListItem, ListState, Paragraph, Wrap},
+    widgets::{Block, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 
 use crate::editor::OpenNote;
+
+/// Temporary, single-line prompt shown over the file browser.
+#[derive(Clone)]
+enum PromptKind {
+    NewNote,
+    NewFolder,
+    Rename { source: PathBuf },
+    Move { source: PathBuf },
+    Trash { source: PathBuf },
+}
+
+struct Prompt {
+    kind: PromptKind,
+    input: String,
+}
 
 struct Entry {
     name: String,
@@ -31,6 +47,7 @@ struct App {
     editor: Option<OpenNote>,
     editor_keys: EditorEventHandler,
     command: Option<String>,
+    prompt: Option<Prompt>,
     message: String,
 }
 
@@ -52,6 +69,7 @@ impl App {
             editor: None,
             editor_keys: EditorEventHandler::default(),
             command: None,
+            prompt: None,
             message: String::new(),
         };
         app.refresh()?;
@@ -59,6 +77,11 @@ impl App {
     }
 
     fn refresh(&mut self) -> io::Result<()> {
+        let previously_selected = self
+            .entries
+            .get(self.selected)
+            .map(|entry| entry.path.clone());
+        let previous_index = self.selected;
         self.entries = fs::read_dir(&self.current_dir)?
             .filter_map(|item| {
                 let item = item.ok()?;
@@ -78,9 +101,18 @@ impl App {
                 .cmp(&a.is_dir)
                 .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
         });
-        self.selected = 0;
+        self.selected = previously_selected
+            .and_then(|path| self.entries.iter().position(|item| item.path == path))
+            .unwrap_or_else(|| previous_index.min(self.entries.len().saturating_sub(1)));
         self.update_preview();
         Ok(())
+    }
+
+    fn select_path(&mut self, path: &std::path::Path) {
+        if let Some(index) = self.entries.iter().position(|item| item.path == path) {
+            self.selected = index;
+            self.update_preview();
+        }
     }
 
     fn update_preview(&mut self) {
@@ -139,8 +171,10 @@ impl App {
     fn go_back(&mut self) -> io::Result<()> {
         if self.current_dir != self.root {
             if let Some(parent) = self.current_dir.parent() {
+                let child = self.current_dir.clone();
                 self.current_dir = parent.to_path_buf();
                 self.refresh()?;
+                self.select_path(&child);
             }
         }
         Ok(())
@@ -211,12 +245,166 @@ impl App {
                 .wrap(Wrap { trim: false });
             frame.render_widget(preview, panes[1]);
             format!(
-                "{}\nj/k: move | Enter/l: open | h: parent | q: quit\n{}",
+                "{}\nj/k move | Enter open | h parent | n note | N folder | r rename | m move | d Trash | R refresh | q quit\n{}",
                 self.current_dir.display(),
                 self.message
             )
         };
         frame.render_widget(Paragraph::new(status), areas[1]);
+
+        if let Some(prompt) = &self.prompt {
+            let screen = frame.area();
+            let width = screen.width.saturating_sub(2).min(74);
+            let height = screen.height.saturating_sub(2).min(8);
+            let popup = Rect::new(
+                screen.x + (screen.width - width) / 2,
+                screen.y + (screen.height - height) / 2,
+                width,
+                height,
+            );
+            let (title, help, input) = match &prompt.kind {
+                PromptKind::NewNote => (
+                    "Create note",
+                    "Single filename. Add .json, .txt, etc. or leave blank for .md",
+                    prompt.input.clone(),
+                ),
+                PromptKind::NewFolder => (
+                    "Create folder",
+                    "Enter a folder name without / or ..",
+                    prompt.input.clone(),
+                ),
+                PromptKind::Rename { .. } => (
+                    "Rename selected",
+                    "Enter a new filename (including its extension)",
+                    prompt.input.clone(),
+                ),
+                PromptKind::Move { .. } => (
+                    "Move selected",
+                    "Existing folder RELATIVE TO NOTES ROOT (e.g. Readings or .)",
+                    prompt.input.clone(),
+                ),
+                PromptKind::Trash { source } => (
+                    "Move to Trash?",
+                    "Press y to confirm, n or Esc to cancel",
+                    source
+                        .file_name()
+                        .map(|name| name.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| "item".to_owned()),
+                ),
+            };
+            let contents = format!(
+                "{help}\n\n> {input}{}\n\n{}",
+                if matches!(&prompt.kind, PromptKind::Trash { .. }) {
+                    ""
+                } else {
+                    "▏"
+                },
+                if matches!(&prompt.kind, PromptKind::Trash { .. }) {
+                    "Trash is recoverable using your desktop file manager"
+                } else {
+                    "Enter: confirm   Esc: cancel   Ctrl+U: clear"
+                }
+            );
+            frame.render_widget(Clear, popup);
+            frame.render_widget(
+                Paragraph::new(contents)
+                    .block(Block::bordered().title(title))
+                    .wrap(Wrap { trim: false }),
+                popup,
+            );
+        }
+    }
+
+    fn begin_prompt(&mut self, kind: PromptKind) {
+        let input = match &kind {
+            PromptKind::Rename { source } => source
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            _ => String::new(),
+        };
+        self.prompt = Some(Prompt { kind, input });
+        self.message.clear();
+    }
+
+    fn selected_path(&mut self) -> Option<PathBuf> {
+        match self.entries.get(self.selected) {
+            Some(entry) => Some(entry.path.clone()),
+            None => {
+                self.message = "No file or folder is selected.".to_owned();
+                None
+            }
+        }
+    }
+
+    fn run_prompt(&mut self, prompt: Prompt) {
+        let result = match &prompt.kind {
+            PromptKind::NewNote => file_ops::create_note(&self.current_dir, &prompt.input),
+            PromptKind::NewFolder => file_ops::create_folder(&self.current_dir, &prompt.input),
+            PromptKind::Rename { source } => file_ops::rename_entry(source, &prompt.input),
+            PromptKind::Move { source } => file_ops::move_entry(&self.root, source, &prompt.input),
+            PromptKind::Trash { source } => file_ops::send_to_trash(source).map(|_| source.clone()),
+        };
+        match result {
+            Ok(result_path) => {
+                let action = match prompt.kind {
+                    PromptKind::NewNote => "Created note",
+                    PromptKind::NewFolder => "Created folder",
+                    PromptKind::Rename { .. } => "Renamed",
+                    PromptKind::Move { .. } => "Moved",
+                    PromptKind::Trash { .. } => "Sent to Trash",
+                };
+                match self.refresh() {
+                    Ok(()) => {
+                        self.select_path(&result_path);
+                        self.message = format!("{action}: {}", result_path.display());
+                    }
+                    Err(e) => self.message = format!("{action}, but browser refresh failed: {e}"),
+                }
+            }
+            Err(e) => {
+                self.message = format!("Action failed: {e}");
+                // Keep the prompt and typed text, so the name can be fixed.
+                self.prompt = Some(prompt);
+            }
+        }
+    }
+
+    fn handle_prompt_key(&mut self, key: KeyEvent) {
+        let Some(mut prompt) = self.prompt.take() else {
+            return;
+        };
+        if matches!(&prompt.kind, PromptKind::Trash { .. }) {
+            match key.code {
+                KeyCode::Char('y') if key.modifiers.is_empty() => self.run_prompt(prompt),
+                KeyCode::Char('n') | KeyCode::Esc | KeyCode::Enter => {
+                    self.message = "Canceled Trash action.".to_owned();
+                }
+                _ => self.prompt = Some(prompt),
+            }
+            return;
+        }
+        match key.code {
+            KeyCode::Esc => self.message = "Canceled.".to_owned(),
+            KeyCode::Enter => self.run_prompt(prompt),
+            KeyCode::Backspace => {
+                prompt.input.pop();
+                self.prompt = Some(prompt);
+            }
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                prompt.input.clear();
+                self.prompt = Some(prompt);
+            }
+            KeyCode::Char(c)
+                if !key
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+            {
+                prompt.input.push(c);
+                self.prompt = Some(prompt);
+            }
+            _ => self.prompt = Some(prompt),
+        }
     }
 
     fn save_editor(&mut self) -> bool {
@@ -326,12 +514,38 @@ impl App {
             if key.kind != KeyEventKind::Press {
                 continue;
             }
+            if self.prompt.is_some() {
+                self.handle_prompt_key(key);
+                continue;
+            }
             if self.editor.is_some() {
                 self.handle_editor_key(key);
                 continue;
             }
             match key.code {
                 KeyCode::Char('q') => return Ok(()),
+                KeyCode::Char('n') => self.begin_prompt(PromptKind::NewNote),
+                KeyCode::Char('N') => self.begin_prompt(PromptKind::NewFolder),
+                KeyCode::Char('r') => {
+                    if let Some(source) = self.selected_path() {
+                        self.begin_prompt(PromptKind::Rename { source });
+                    }
+                }
+                KeyCode::Char('m') => {
+                    if let Some(source) = self.selected_path() {
+                        self.begin_prompt(PromptKind::Move { source });
+                    }
+                }
+                KeyCode::Char('d') => {
+                    if let Some(source) = self.selected_path() {
+                        self.begin_prompt(PromptKind::Trash { source });
+                    }
+                }
+                KeyCode::Char('R') => {
+                    if let Err(e) = self.refresh() {
+                        self.message = format!("Refresh failed: {e}");
+                    }
+                }
                 KeyCode::Char('j') | KeyCode::Down => self.move_down(),
                 KeyCode::Char('k') | KeyCode::Up => self.move_up(),
                 KeyCode::Char('l') | KeyCode::Enter | KeyCode::Right => self.enter()?,
