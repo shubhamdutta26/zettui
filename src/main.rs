@@ -340,7 +340,7 @@ impl App {
         };
         let header = Line::from(vec![
             Span::styled(
-                " ZETTUI v0.6.1 ",
+                format!(" ZETTUI v{} ", env!("CARGO_PKG_VERSION")),
                 Style::default()
                     .fg(theme.background)
                     .bg(theme.accent)

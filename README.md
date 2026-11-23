@@ -1,64 +1,68 @@
-# Zettui (Lesson 6, v0.6.0)
+# Zettui
 
-Zettui is a **local-first Rust terminal notes manager** built in incremental lessons.
-Lesson 6 adds color themes and a filename finder to the existing file browser,
-Vim-style editor, wiki links/backlinks, safe file management, and Zotero citation picker.
+A local-first, Vim-style terminal app for managing plain-text notes. Browse folders, edit Markdown and other text files, follow wiki links, view backlinks, and insert Zotero citations. Your notes stay on disk.
 
-## Quick start
+## Features
+
+- Vim-style editing with unsaved-change and external-modification protection
+- Create, rename, move, and Trash notes or directories
+- `[[wiki links]]`, Markdown links, backlinks, and link navigation history
+- Zotero/Better BibTeX JSON citation search and `[@citekey]` insertion
+- Current-folder filename search and automatic light/dark themes (including Omarchy)
+
+## Install
+
+**Linux x86-64:** Download the matching files from the [GitHub Releases page](https://github.com/OWNER/zettui/releases) (replace `OWNER` with the repository owner).
+
+| System | Install |
+| --- | --- |
+| Debian / Ubuntu | `sudo apt install ./zettui_0.7.1_linux_x86_64.deb` |
+| Fedora | `sudo dnf install ./zettui_0.7.1_linux_x86_64.rpm` |
+| Arch / Omarchy | Download `PKGBUILD` and the matching `.tar.gz` into one directory; review the recipe and run `makepkg -si` |
+
+**Other x86-64 Linux distributions:** Download `zettui_0.7.1_linux_x86_64.tar.gz`, then:
 
 ```bash
-cargo fmt --check
-cargo check
-cargo test
-cargo run -- examples/notes --bibliography examples/references.json --theme catppuccin
+tar -xzf zettui_0.7.1_linux_x86_64.tar.gz
+mkdir -p ~/.local/bin
+install -m755 zettui ~/.local/bin/zettui
 ```
 
-### Browser shortcuts
+Make sure `~/.local/bin` is in your `PATH`.
 
-- `j`/`k` move, `Enter` open, `h` parent, `q` exit.
-- `/` search filenames **in the current folder** (type to filter, Up/Down to select,
-  Enter jumps to the file in the browser, then Enter opens it; Esc cancels).
-- `Ctrl+G` cycle Gruvbox Dark, Catppuccin Mocha, Tokyo Night, Paper Light.
-- `n` new note, `N` new folder, `r` rename, `m` move, `d` Trash.
-- `o` outgoing links, `b` backlinks, `R` refresh.
+**From source (Rust 1.88+):** In the cloned repository, run `cargo install --path . --locked`.
 
-### Editor shortcuts
+## Run and configure
 
-- `i` Insert; `Esc` Normal; Vim motions from EdTUI; `:w`, `:q`, `:q!`, `:wq`.
-- `Ctrl+S` save; `Ctrl+O` outgoing links; `Ctrl+B` backlinks;
-  `Ctrl+T` back in link navigation history; `Ctrl+P` Zotero picker.
-- `Ctrl+G` cycle themes without altering note contents.
+```bash
+zettui ~/Documents/Notes
+zettui ~/Documents/Notes --bibliography ~/Documents/Zotero/references.json --theme auto
+```
 
-## Theme configuration
-
-Create `~/.config/zettui/config.toml` (or `$XDG_CONFIG_HOME/zettui/config.toml`):
+Alternatively, create `~/.config/zettui/config.toml` (or `$XDG_CONFIG_HOME/zettui/config.toml`):
 
 ```toml
-notes_dir = "/home/YOUR_USER/Documents/Notes"
-bibliography = "/home/YOUR_USER/Documents/Zotero/references.json"
-theme = "tokyo-night"
-
-[colors]
-accent = "#B89CF4"
-selected_bg = "#364A82"
+notes_dir = "/home/USER/Documents/Notes"
+bibliography = "/home/USER/Documents/Zotero/references.json"
+theme = "auto" # auto, dark, or light
 ```
 
-The `[colors]` keys are optional overrides; use `#RRGGBB` syntax.
-Other names: `gruvbox`, `catppuccin`, `paper`. For a temporary theme, use
-`--theme NAME`. Changing the theme via `Ctrl+G` is **session-only**; Zettui
-never edits your configuration file. Restarting restores the selected
-configuration/CLI theme. The terminal must support true color for accurate RGB.
+Use a **Better CSL JSON** export from Zotero's Better BibTeX extension, or a compatible BetterBibTeX JSON export containing citation keys. Zettui reads the export; it does not edit it. `auto` follows Omarchy's theme changes while running; elsewhere it detects the terminal's appearance at startup.
 
-For a documented update from Lesson 5, see [LESSON-6.md](LESSON-6.md).
+## Keybindings
 
-## Important limitations
+| Browser | Action | Editor | Action |
+| --- | --- | --- | --- |
+| `j` / `k` | Move selection | `i` / `Esc` | Insert / Normal |
+| `Enter` / `l` | Open | `hjkl`, `w`, `b`, `gg`, `G` | Vim navigation |
+| `h` | Parent directory | `:w` / `Ctrl+S` | Save |
+| `n` / `N` | New note / folder | `:q` / `:q!` | Close / discard changes |
+| `r` / `m` / `d` | Rename / move / Trash | `:wq` | Save and close |
+| `/` | Find in current folder | `Ctrl+P` | Zotero citations |
+| `o` / `b` | Outgoing links / backlinks | `Ctrl+O` / `Ctrl+B` | Outgoing links / backlinks |
+| `R` / `q` | Refresh / quit | `Ctrl+T` | Previous linked note |
+| `Ctrl+G` | Cycle auto / dark / light | `Ctrl+G` | Cycle theme mode |
 
-- The filename finder searches only the *current folder*, not note contents
-  or nested directories. Full-vault content search is planned for later.
-- Themes style the application and the editor's base text, cursor, line numbers
-  and selections, but do **not** implement Markdown/YAML syntax highlighting.
-- Plain citation insertion (`[@citekey]`) is not citation rendering.
-- Link updates after rename/move are not automatic.
-- No Linux installer/package yet (Lesson 7).
-- Do not push personal notes, bibliographies, or local config files to GitHub.
-- Test the updated application on copied notes first.
+**Current limitations:** No full-vault content search or Markdown syntax highlighting yet; renaming/moving a note does not update incoming links. See [ROADMAP.md](ROADMAP.md).
+
+Licensed under [MIT](LICENSE).
