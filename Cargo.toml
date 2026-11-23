@@ -1,0 +1,11 @@
+[package]
+name = "zettui"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+description = "A beginner-friendly, local-first terminal notes manager built in Rust"
+license = "MIT"
+
+[dependencies]
+ratatui = "0.30"
+crossterm = "0.29"
