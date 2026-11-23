@@ -15,6 +15,7 @@ Development milestones are listed below; older milestone numbers do not necessar
 | **0.6.1** | Automatic Omarchy light/dark detection and terminal-background matching |
 | **0.7.0** | GitHub CI/release workflows and x86-64 Linux packaging (tar.gz, DEB, RPM, Arch recipe) |
 | **0.7.1** | Streamlined README, versioned roadmap, archived lessons, automatic version label in TUI |
+| **0.7.2** | Insert-mode `[[` note autocomplete with safe disambiguation; consolidated Lesson 6 documentation |
 
 ## Planned (tentative order)
 

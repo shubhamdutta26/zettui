@@ -1,29 +1,29 @@
 # Zettui
 
-A local-first, Vim-style terminal app for managing plain-text notes. Browse folders, edit Markdown and other text files, follow wiki links, view backlinks, and insert Zotero citations. Your notes stay on disk.
+A local-first, Vim-style terminal app for managing plain-text notes. Browse folders, edit Markdown and other text files, follow wiki links, view backlinks, autocomplete `[[wiki links]]`, and insert Zotero citations. Your notes stay on disk.
 
 ## Features
 
 - Vim-style editing with unsaved-change and external-modification protection
 - Create, rename, move, and Trash notes or directories
-- `[[wiki links]]`, Markdown links, backlinks, and link navigation history
+- Type `[[` in Insert mode to search and link existing notes; backlinks and navigation history
 - Zotero/Better BibTeX JSON citation search and `[@citekey]` insertion
 - Current-folder filename search and automatic light/dark themes (including Omarchy)
 
 ## Install
 
-**Linux x86-64:** Download the matching files from the [GitHub Releases page](https://github.com/OWNER/zettui/releases) (replace `OWNER` with the repository owner).
+**Linux x86-64:** Download the matching files from the [GitHub Releases page](https://github.com/shubhamdutta26/zettui/releases).
 
 | System | Install |
 | --- | --- |
-| Debian / Ubuntu | `sudo apt install ./zettui_0.7.1_linux_x86_64.deb` |
-| Fedora | `sudo dnf install ./zettui_0.7.1_linux_x86_64.rpm` |
+| Debian / Ubuntu | `sudo apt install ./zettui_0.7.2_linux_x86_64.deb` |
+| Fedora | `sudo dnf install ./zettui_0.7.2_linux_x86_64.rpm` |
 | Arch / Omarchy | Download `PKGBUILD` and the matching `.tar.gz` into one directory; review the recipe and run `makepkg -si` |
 
-**Other x86-64 Linux distributions:** Download `zettui_0.7.1_linux_x86_64.tar.gz`, then:
+**Other x86-64 Linux distributions:** Download `zettui_0.7.2_linux_x86_64.tar.gz`, then:
 
 ```bash
-tar -xzf zettui_0.7.1_linux_x86_64.tar.gz
+tar -xzf zettui_0.7.2_linux_x86_64.tar.gz
 mkdir -p ~/.local/bin
 install -m755 zettui ~/.local/bin/zettui
 ```
@@ -62,6 +62,8 @@ Use a **Better CSL JSON** export from Zotero's Better BibTeX extension, or a com
 | `o` / `b` | Outgoing links / backlinks | `Ctrl+O` / `Ctrl+B` | Outgoing links / backlinks |
 | `R` / `q` | Refresh / quit | `Ctrl+T` | Previous linked note |
 | `Ctrl+G` | Cycle auto / dark / light | `Ctrl+G` | Cycle theme mode |
+
+**Wiki-link autocomplete:** In a Markdown note, press `i` and type `[[`. Search by filename, folder, title, or Zettelkasten ID; use Up/Down and Enter to insert a link. Esc cancels and leaves the literal `[[` in the note. Save with `:w`.
 
 **Current limitations:** No full-vault content search or Markdown syntax highlighting yet; renaming/moving a note does not update incoming links. See [ROADMAP.md](ROADMAP.md).
 

@@ -17,6 +17,14 @@ pub struct LinkItem {
     pub target: Option<PathBuf>,
 }
 
+/// A safe-to-insert link to an already existing text note.
+/// `link` is the text between `[[` and `]]`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NoteSuggestion {
+    pub label: String,
+    pub link: String,
+}
+
 #[derive(Debug, Clone)]
 struct Note {
     path: PathBuf,
@@ -385,6 +393,47 @@ impl Index {
         Ok(parse_links(&fs::read_to_string(source)?))
     }
 
+    /// Suggest notes for the wiki-link completion picker. Do not suggest a
+    /// target unless the existing link resolver will resolve it uniquely.
+    /// The result uses the short filename where safe, otherwise a folder path
+    /// or a unique Zettelkasten ID. It never creates any files.
+    pub fn suggestions(&self, source: &Path) -> Vec<NoteSuggestion> {
+        let mut result = Vec::new();
+        for note in &self.notes {
+            if note.path == source {
+                continue;
+            }
+            let mut candidates = vec![
+                note.stem.clone(),
+                note.relative_without_ext(),
+                note.relative.clone(),
+            ];
+            if let Some(id) = &note.id {
+                candidates.push(id.clone());
+            }
+            let link = candidates.into_iter().find(|candidate| {
+                !candidate.is_empty()
+                    && !candidate
+                        .chars()
+                        .any(|c| matches!(c, '|' | '[' | ']' | '#' | '\n' | '\r'))
+                    && self.resolve_wiki(source, candidate) == Resolution::Found(note.path.clone())
+            });
+            if let Some(link) = link {
+                let title = note.title.as_deref().unwrap_or(&note.stem);
+                result.push(NoteSuggestion {
+                    label: format!(
+                        "{}  —  {}  [{}]",
+                        title,
+                        note.relative,
+                        note.id.as_deref().unwrap_or("no id")
+                    ),
+                    link,
+                });
+            }
+        }
+        result
+    }
+
     pub fn outgoing(&self, source: &Path) -> io::Result<Vec<LinkItem>> {
         let mut result = Vec::new();
         for link in self.read_source(source)? {
@@ -570,6 +619,47 @@ mod tests {
                     .all(|n| !n.relative.ends_with("linked.md"))
             );
         }
+    }
+
+    #[test]
+    fn completion_uses_short_name_when_unique_and_path_when_duplicated() {
+        let dir = setup();
+        let index = Index::build(dir.path()).unwrap();
+        let items = index.suggestions(&dir.path().join("welcome.md"));
+        let vhh = items
+            .iter()
+            .find(|item| item.label.contains("Antibody/VHH.md"))
+            .unwrap();
+        assert_eq!(vhh.link, "VHH");
+        fs::write(dir.path().join("Readings/VHH.md"), "# Different VHH\n").unwrap();
+        let index = Index::build(dir.path()).unwrap();
+        let items = index.suggestions(&dir.path().join("welcome.md"));
+        let first = items
+            .iter()
+            .find(|item| item.label.contains("Antibody/VHH.md"))
+            .unwrap();
+        let second = items
+            .iter()
+            .find(|item| item.label.contains("Readings/VHH.md"))
+            .unwrap();
+        assert_eq!(first.link, "Antibody/VHH");
+        assert_eq!(second.link, "Readings/VHH");
+        assert!(items.iter().all(|item| !item.label.contains("welcome.md")));
+    }
+
+    #[test]
+    fn completion_finds_titles_and_ids_without_modifying_files() {
+        let dir = setup();
+        let path = dir.path().join("Antibody/VHH.md");
+        let before = fs::read(&path).unwrap();
+        let index = Index::build(dir.path()).unwrap();
+        let suggestions = index.suggestions(&dir.path().join("welcome.md"));
+        let item = suggestions
+            .iter()
+            .find(|item| item.label.contains("VHH Humanization"))
+            .unwrap();
+        assert!(item.label.contains("20260001"));
+        assert_eq!(fs::read(&path).unwrap(), before);
     }
 
     #[test]

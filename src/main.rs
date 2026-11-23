@@ -1,4 +1,4 @@
-//! Zettui v0.6.1: system-aware light/dark themes, browsing, editing, links and Zotero.
+//! Zettui: local notes, Vim editing, wiki-link completion, Zotero, and themes.
 
 mod bibliography;
 mod config;
@@ -22,7 +22,7 @@ use ratatui::{
 use crate::bibliography::Bibliography;
 use crate::config::Config;
 use crate::editor::OpenNote;
-use crate::links::{Index, LinkItem};
+use crate::links::{Index, LinkItem, NoteSuggestion};
 use crate::theme::{
     Appearance, ColorOverrides, THEME_CHOICES, Theme, ThemeChoice, omarchy_appearance,
 };
@@ -55,6 +55,44 @@ struct CitationDialog {
     query: String,
     matches: Vec<usize>,
     selected: usize,
+}
+
+/// Insert-mode wiki-link completion, opened immediately after typing `[[`.
+/// Search text belongs to this dialog; the editor still contains literal `[[`.
+struct WikiCompletionDialog {
+    suggestions: Vec<NoteSuggestion>,
+    query: String,
+    matches: Vec<usize>,
+    selected: usize,
+}
+
+impl WikiCompletionDialog {
+    fn new(suggestions: Vec<NoteSuggestion>) -> Self {
+        let mut dialog = Self {
+            suggestions,
+            query: String::new(),
+            matches: Vec::new(),
+            selected: 0,
+        };
+        dialog.filter();
+        dialog
+    }
+
+    fn filter(&mut self) {
+        let query = self.query.to_lowercase();
+        self.matches = self
+            .suggestions
+            .iter()
+            .enumerate()
+            .filter(|(_, item)| {
+                item.label.to_lowercase().contains(&query)
+                    || item.link.to_lowercase().contains(&query)
+            })
+            .take(200)
+            .map(|(index, _)| index)
+            .collect();
+        self.selected = 0;
+    }
 }
 
 impl CitationDialog {
@@ -125,6 +163,8 @@ struct App {
     prompt: Option<Prompt>,
     links: Option<LinkDialog>,
     citation_picker: Option<CitationDialog>,
+    wiki_completion: Option<WikiCompletionDialog>,
+    pending_open_bracket: bool,
     find_dialog: Option<FindDialog>,
     bibliography_path: Option<PathBuf>,
     theme: Theme,
@@ -166,6 +206,8 @@ impl App {
             prompt: None,
             links: None,
             citation_picker: None,
+            wiki_completion: None,
+            pending_open_bracket: false,
             find_dialog: None,
             bibliography_path,
             theme,
@@ -262,6 +304,8 @@ impl App {
                 Ok(note) => {
                     self.editor = Some(note);
                     self.editor_keys = EditorEventHandler::default();
+                    self.pending_open_bracket = false;
+                    self.wiki_completion = None;
                     self.command = None;
                     self.message = "Editor opened. Press i to insert text.".to_owned();
                 }
@@ -436,7 +480,7 @@ impl App {
             let help = if let Some(command) = &self.command {
                 format!(":{command}   Enter: run | Esc: cancel")
             } else {
-                "Esc Normal | :w save | :q close | Ctrl+P cite | Ctrl+O links | Ctrl+B backlinks | Ctrl+T back | Ctrl+G mode".to_owned()
+                "Insert: [[ link | Esc Normal | :w save | Ctrl+P cite | Ctrl+O links | Ctrl+B backlinks | Ctrl+T back".to_owned()
             };
             format!(
                 "{} | {}{}\n{}\n{}",
@@ -544,6 +588,9 @@ impl App {
         }
         if self.find_dialog.is_some() {
             self.draw_find_dialog(frame);
+        }
+        if self.wiki_completion.is_some() {
+            self.draw_wiki_completion(frame);
         }
     }
 
@@ -676,6 +723,74 @@ Ctrl+U clear search | Backspace delete"
         );
     }
 
+    fn draw_wiki_completion(&self, frame: &mut Frame) {
+        let Some(dialog) = &self.wiki_completion else {
+            return;
+        };
+        let theme = self.theme;
+        let screen = frame.area();
+        let width = screen.width.saturating_sub(2).min(100);
+        let height = screen.height.saturating_sub(2).min(20);
+        if width < 18 || height < 7 {
+            return;
+        }
+        let popup = Rect::new(
+            screen.x + (screen.width - width) / 2,
+            screen.y + (screen.height - height) / 2,
+            width,
+            height,
+        );
+        frame.render_widget(Clear, popup);
+        frame.render_widget(
+            Block::default().style(Style::default().bg(theme.surface)),
+            popup,
+        );
+        let block = Block::bordered()
+            .title(" Link a note — [[ ")
+            .border_style(Style::default().fg(theme.accent));
+        let inner = block.inner(popup);
+        frame.render_widget(block, popup);
+        let areas = Layout::vertical([
+            Constraint::Length(2),
+            Constraint::Min(1),
+            Constraint::Length(2),
+        ])
+        .split(inner);
+        frame.render_widget(
+            Paragraph::new(format!("Search note: {}▏", dialog.query))
+                .style(Style::default().fg(theme.accent).bg(theme.surface)),
+            areas[0],
+        );
+        let items: Vec<ListItem> = dialog
+            .matches
+            .iter()
+            .map(|index| {
+                let item = &dialog.suggestions[*index];
+                ListItem::new(Line::styled(
+                    item.label.clone(),
+                    Style::default().fg(theme.foreground),
+                ))
+            })
+            .collect();
+        let mut state = ListState::default();
+        if !dialog.matches.is_empty() {
+            state.select(Some(dialog.selected));
+        }
+        frame.render_stateful_widget(
+            List::new(items)
+                .highlight_style(Style::default().fg(theme.selected_fg).bg(theme.selected_bg))
+                .highlight_symbol("> "),
+            areas[1],
+            &mut state,
+        );
+        frame.render_widget(
+            Paragraph::new(format!(
+                "{} matches (max 200) | Type to filter | Up/Down select | Enter insert\nEsc cancel (keeps [[) | Backspace erase | Ctrl+U clear",
+                dialog.matches.len()
+            )).style(Style::default().fg(theme.muted).bg(theme.surface)), areas[2]
+        );
+    }
+
     fn draw_find_dialog(&self, frame: &mut Frame) {
         let Some(dialog) = &self.find_dialog else {
             return;
@@ -791,6 +906,97 @@ Ctrl+U clear search | Backspace delete"
                 self.find_dialog = Some(dialog);
             }
             _ => self.find_dialog = Some(dialog),
+        }
+    }
+
+    /// Build the index on demand so newly created or renamed notes are visible.
+    fn open_wiki_completion(&mut self) {
+        let Some(note) = &self.editor else {
+            return;
+        };
+        if note.state.mode != EditorMode::Insert {
+            return;
+        }
+        let source = note.path.clone();
+        match Index::build(&self.root) {
+            Ok(index) => {
+                let suggestions = index.suggestions(&source);
+                if suggestions.is_empty() {
+                    self.message = "No resolvable notes to link. Type a link manually.".to_owned();
+                } else {
+                    self.wiki_completion = Some(WikiCompletionDialog::new(suggestions));
+                    self.message.clear();
+                }
+            }
+            Err(e) => self.message = format!("Cannot scan notes for links: {e}"),
+        }
+    }
+
+    /// The editor already contains the opening `[[` characters. Add only the
+    /// resolved target and closing `]]`, through EdTUI for correct undo history.
+    fn insert_wiki_completion(&mut self, link: &str) {
+        let Some(note) = &mut self.editor else {
+            return;
+        };
+        if note.state.mode != EditorMode::Insert {
+            return;
+        }
+        for character in format!("{link}]]").chars() {
+            self.editor_keys.on_key_event(
+                KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE),
+                &mut note.state,
+            );
+        }
+        self.message = format!("Inserted [[{link}]] — use :w to save.");
+    }
+
+    fn handle_wiki_completion_key(&mut self, key: KeyEvent) {
+        let Some(mut dialog) = self.wiki_completion.take() else {
+            return;
+        };
+        match key.code {
+            KeyCode::Esc => {
+                self.message = "Link picker canceled; [[ remains in the note.".to_owned();
+            }
+            KeyCode::Up => {
+                dialog.selected = dialog.selected.saturating_sub(1);
+                self.wiki_completion = Some(dialog);
+            }
+            KeyCode::Down => {
+                if dialog.selected + 1 < dialog.matches.len() {
+                    dialog.selected += 1;
+                }
+                self.wiki_completion = Some(dialog);
+            }
+            KeyCode::Enter => {
+                if let Some(&index) = dialog.matches.get(dialog.selected) {
+                    let link = dialog.suggestions[index].link.clone();
+                    self.insert_wiki_completion(&link);
+                } else {
+                    self.message = "No matching note. Change the search or press Esc.".to_owned();
+                    self.wiki_completion = Some(dialog);
+                }
+            }
+            KeyCode::Backspace => {
+                dialog.query.pop();
+                dialog.filter();
+                self.wiki_completion = Some(dialog);
+            }
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                dialog.query.clear();
+                dialog.filter();
+                self.wiki_completion = Some(dialog);
+            }
+            KeyCode::Char(c)
+                if !key
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+            {
+                dialog.query.push(c);
+                dialog.filter();
+                self.wiki_completion = Some(dialog);
+            }
+            _ => self.wiki_completion = Some(dialog),
         }
     }
 
@@ -992,6 +1198,8 @@ Ctrl+U clear search | Backspace delete"
         }
         self.editor = Some(new_note);
         self.editor_keys = EditorEventHandler::default();
+        self.pending_open_bracket = false;
+        self.wiki_completion = None;
         self.command = None;
         self.message = format!("Opened linked note: {}", target.display());
     }
@@ -1172,6 +1380,8 @@ Ctrl+U clear search | Backspace delete"
             return;
         }
         self.editor = None;
+        self.wiki_completion = None;
+        self.pending_open_bracket = false;
         self.command = None;
         self.update_preview();
         self.message = "Returned to file browser.".to_owned();
@@ -1195,6 +1405,15 @@ Ctrl+U clear search | Backspace delete"
     }
 
     fn handle_editor_key(&mut self, key: KeyEvent) {
+        // Only two consecutive `[` keystrokes in Insert mode trigger a picker.
+        // A navigation key, modifier shortcut or editor command resets it.
+        if key.code != KeyCode::Char('[')
+            || key
+                .modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+        {
+            self.pending_open_bracket = false;
+        }
         // Once a colon command is started, keys go into the command bar.
         if let Some(command) = &mut self.command {
             match key.code {
@@ -1265,8 +1484,27 @@ Ctrl+U clear search | Backspace delete"
             return;
         }
 
+        let opening_bracket = self.editor.as_ref().is_some_and(|note| {
+            note.state.mode == EditorMode::Insert
+                && note
+                    .path
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .is_some_and(|ext| {
+                        matches!(ext.to_ascii_lowercase().as_str(), "md" | "markdown")
+                    })
+                && key.code == KeyCode::Char('[')
+                && !key
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+        });
+        let open_picker = opening_bracket && self.pending_open_bracket;
         if let Some(note) = &mut self.editor {
             self.editor_keys.on_key_event(key, &mut note.state);
+        }
+        self.pending_open_bracket = opening_bracket && !open_picker;
+        if open_picker {
+            self.open_wiki_completion();
         }
     }
 
@@ -1291,6 +1529,10 @@ Ctrl+U clear search | Backspace delete"
             }
             if self.citation_picker.is_some() {
                 self.handle_citation_key(key);
+                continue;
+            }
+            if self.wiki_completion.is_some() {
+                self.handle_wiki_completion_key(key);
                 continue;
             }
             if self.prompt.is_some() {
@@ -1439,6 +1681,89 @@ fn main() -> io::Result<()> {
 #[cfg(test)]
 mod lesson6_tests {
     use super::*;
+
+    #[test]
+    fn wiki_completion_filters_by_path_title_and_id() {
+        let mut dialog = WikiCompletionDialog::new(vec![
+            NoteSuggestion {
+                label: "Humanization — Antibody/VHH.md [123]".into(),
+                link: "Antibody/VHH".into(),
+            },
+            NoteSuggestion {
+                label: "SEC — Analytics/SEC.md [456]".into(),
+                link: "Analytics/SEC".into(),
+            },
+        ]);
+        assert_eq!(dialog.matches.len(), 2);
+        dialog.query = "human".into();
+        dialog.filter();
+        assert_eq!(dialog.matches, vec![0]);
+        dialog.query = "analytics".into();
+        dialog.filter();
+        assert_eq!(dialog.matches, vec![1]);
+    }
+
+    #[test]
+    fn double_bracket_in_insert_mode_inserts_selected_existing_note() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("Current.md");
+        fs::write(&source, "# Current\n").unwrap();
+        fs::write(dir.path().join("Target.md"), "# Target\n").unwrap();
+        let mut app = App::new(
+            dir.path().to_path_buf(),
+            None,
+            ThemeChoice::Dark,
+            ColorOverrides::default(),
+            Appearance::Dark,
+        )
+        .unwrap();
+        app.select_path(&source);
+        app.enter().unwrap();
+        app.handle_editor_key(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE));
+        for _ in 0..2 {
+            app.handle_editor_key(KeyEvent::new(KeyCode::Char('['), KeyModifiers::NONE));
+        }
+        assert!(app.wiki_completion.is_some());
+        app.handle_wiki_completion_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(app.wiki_completion.is_none());
+        assert!(
+            app.editor
+                .as_ref()
+                .unwrap()
+                .state
+                .lines
+                .to_string()
+                .contains("[[Target]]")
+        );
+        assert!(app.editor.as_ref().unwrap().is_dirty());
+    }
+
+    #[test]
+    fn canceling_wiki_completion_leaves_literal_brackets() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("Current.md");
+        fs::write(&source, "# Current\n").unwrap();
+        fs::write(dir.path().join("Target.md"), "# Target\n").unwrap();
+        let mut app = App::new(
+            dir.path().to_path_buf(),
+            None,
+            ThemeChoice::Dark,
+            ColorOverrides::default(),
+            Appearance::Dark,
+        )
+        .unwrap();
+        app.select_path(&source);
+        app.enter().unwrap();
+        app.handle_editor_key(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE));
+        for _ in 0..2 {
+            app.handle_editor_key(KeyEvent::new(KeyCode::Char('['), KeyModifiers::NONE));
+        }
+        app.handle_wiki_completion_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(app.wiki_completion.is_none());
+        let text = app.editor.as_ref().unwrap().state.lines.to_string();
+        assert!(text.contains("[["));
+        assert!(!text.contains("[[Target]]"));
+    }
 
     #[test]
     fn filename_search_is_case_insensitive_and_non_destructive() {
