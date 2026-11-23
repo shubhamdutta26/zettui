@@ -13,11 +13,27 @@ pub struct Config {
     pub bibliography: Option<PathBuf>,
     pub notes_dir: Option<PathBuf>,
     pub theme: Option<String>,
+    /// Desired percent of terminal width used by the left file pane.
+    pub browser_width_percent: Option<u16>,
     #[serde(default)]
     pub colors: ColorOverrides,
 }
 
 impl Config {
+    pub fn browser_width(&self) -> io::Result<u16> {
+        use crate::layout::{DEFAULT_BROWSER_PERCENT, valid_browser_percent};
+        let width = self
+            .browser_width_percent
+            .unwrap_or(DEFAULT_BROWSER_PERCENT);
+        if !valid_browser_percent(width) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("browser_width_percent must be between 20 and 70 (got {width})"),
+            ));
+        }
+        Ok(width)
+    }
+
     /// A missing config file is fine; an invalid one is an actionable error.
     pub fn load() -> io::Result<Self> {
         let Some(config_file) = default_config_path() else {
@@ -94,5 +110,24 @@ notes_dir = "/tmp/notes"
             ),
             PathBuf::from("/home/test/.config/zettui/refs.json")
         );
+    }
+}
+
+#[cfg(test)]
+mod lesson73_config_tests {
+    use super::*;
+
+    #[test]
+    fn uses_default_and_parses_custom_width() {
+        let cfg: Config = toml::from_str("theme = 'auto'").unwrap();
+        assert_eq!(cfg.browser_width().unwrap(), 35);
+        let cfg: Config = toml::from_str("browser_width_percent = 50").unwrap();
+        assert_eq!(cfg.browser_width().unwrap(), 50);
+    }
+
+    #[test]
+    fn rejects_width_outside_allowed_range() {
+        let cfg: Config = toml::from_str("browser_width_percent = 75").unwrap();
+        assert!(cfg.browser_width().is_err());
     }
 }

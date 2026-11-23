@@ -1,70 +1,48 @@
 # Zettui
 
-A local-first, Vim-style terminal app for managing plain-text notes. Browse folders, edit Markdown and other text files, follow wiki links, view backlinks, autocomplete `[[wiki links]]`, and insert Zotero citations. Your notes stay on disk.
-
-## Features
-
-- Vim-style editing with unsaved-change and external-modification protection
-- Create, rename, move, and Trash notes or directories
-- Type `[[` in Insert mode to search and link existing notes; backlinks and navigation history
-- Zotero/Better BibTeX JSON citation search and `[@citekey]` insertion
-- Current-folder filename search and automatic light/dark themes (including Omarchy)
+A local-first, Vim-style terminal notes manager. Browse and edit Markdown or other text files, navigate wiki links and backlinks, autocomplete `[[note links]]`, and insert citations from Zotero JSON exports. Your notes stay on disk.
 
 ## Install
 
-**Linux x86-64:** Download the matching files from the [GitHub Releases page](https://github.com/shubhamdutta26/zettui/releases).
+Get x86-64 Linux packages from [GitHub Releases](https://github.com/shubhamdutta26/zettui/releases):
 
-| System | Install |
+| System | Command |
 | --- | --- |
-| Debian / Ubuntu | `sudo apt install ./zettui_0.7.2_linux_x86_64.deb` |
-| Fedora | `sudo dnf install ./zettui_0.7.2_linux_x86_64.rpm` |
-| Arch / Omarchy | Download `PKGBUILD` and the matching `.tar.gz` into one directory; review the recipe and run `makepkg -si` |
+| Debian / Ubuntu | `sudo apt install ./zettui_0.7.3_linux_x86_64.deb` |
+| Fedora | `sudo dnf install ./zettui_0.7.3_linux_x86_64.rpm` |
+| Arch / Omarchy | Download `PKGBUILD` and matching `.tar.gz`, inspect, run `makepkg -si` |
 
-**Other x86-64 Linux distributions:** Download `zettui_0.7.2_linux_x86_64.tar.gz`, then:
+For other Linux distributions, extract `zettui_0.7.3_linux_x86_64.tar.gz` and install the `zettui` executable into `~/.local/bin`. From source: `cargo install --path . --locked` (Rust 1.88+).
 
-```bash
-tar -xzf zettui_0.7.2_linux_x86_64.tar.gz
-mkdir -p ~/.local/bin
-install -m755 zettui ~/.local/bin/zettui
-```
-
-Make sure `~/.local/bin` is in your `PATH`.
-
-**From source (Rust 1.88+):** In the cloned repository, run `cargo install --path . --locked`.
-
-## Run and configure
+## Usage and settings
 
 ```bash
 zettui ~/Documents/Notes
-zettui ~/Documents/Notes --bibliography ~/Documents/Zotero/references.json --theme auto
 ```
 
-Alternatively, create `~/.config/zettui/config.toml` (or `$XDG_CONFIG_HOME/zettui/config.toml`):
+Configure `~/.config/zettui/config.toml`:
 
 ```toml
 notes_dir = "/home/USER/Documents/Notes"
 bibliography = "/home/USER/Documents/Zotero/references.json"
-theme = "auto" # auto, dark, or light
+theme = "auto" # auto | dark | light
+browser_width_percent = 35 # width of file pane; 20 to 70; note pane takes the rest
 ```
 
-Use a **Better CSL JSON** export from Zotero's Better BibTeX extension, or a compatible BetterBibTeX JSON export containing citation keys. Zettui reads the export; it does not edit it. `auto` follows Omarchy's theme changes while running; elsewhere it detects the terminal's appearance at startup.
+Use Zotero Better CSL JSON (or a compatible BetterBibTeX JSON export). In Auto theme mode, Omarchy theme changes are followed while Zettui runs.
 
 ## Keybindings
 
 | Browser | Action | Editor | Action |
 | --- | --- | --- | --- |
-| `j` / `k` | Move selection | `i` / `Esc` | Insert / Normal |
-| `Enter` / `l` | Open | `hjkl`, `w`, `b`, `gg`, `G` | Vim navigation |
-| `h` | Parent directory | `:w` / `Ctrl+S` | Save |
-| `n` / `N` | New note / folder | `:q` / `:q!` | Close / discard changes |
-| `r` / `m` / `d` | Rename / move / Trash | `:wq` | Save and close |
-| `/` | Find in current folder | `Ctrl+P` | Zotero citations |
-| `o` / `b` | Outgoing links / backlinks | `Ctrl+O` / `Ctrl+B` | Outgoing links / backlinks |
+| `j` / `k` | Select | `i` / `Esc` | Insert / Normal |
+| `Enter` / `h` | Open / parent | `hjkl`, `w`, `b`, `gg`, `G` | Move cursor |
+| `n` / `N` | Create note / folder | `:w`, `:wq`, `:q!` | Save, close, discard |
+| `r` / `m` / `d` | Rename / move / Trash | `[[` in Insert mode | Link autocomplete |
+| `/` | Search current folder | `Ctrl+P` | Search Zotero citations |
+| `o` / `b` | Outgoing / backlinks | `Ctrl+O` / `Ctrl+B` | Outgoing / backlinks |
 | `R` / `q` | Refresh / quit | `Ctrl+T` | Previous linked note |
-| `Ctrl+G` | Cycle auto / dark / light | `Ctrl+G` | Cycle theme mode |
 
-**Wiki-link autocomplete:** In a Markdown note, press `i` and type `[[`. Search by filename, folder, title, or Zettelkasten ID; use Up/Down and Enter to insert a link. Esc cancels and leaves the literal `[[` in the note. Save with `:w`.
+**In both browser and editor:** `Alt+h` / `Alt+Left` narrows the file pane; `Alt+l` / `Alt+Right` widens it (5% steps). `Ctrl+G` cycles Auto/Dark/Light themes. Hotkey changes last until Zettui exits; edit `config.toml` for a permanent default.
 
-**Current limitations:** No full-vault content search or Markdown syntax highlighting yet; renaming/moving a note does not update incoming links. See [ROADMAP.md](ROADMAP.md).
-
-Licensed under [MIT](LICENSE).
+See [ROADMAP.md](ROADMAP.md) and [docs/lessons](docs/lessons/). Licensed under [MIT](LICENSE).

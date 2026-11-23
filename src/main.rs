@@ -4,6 +4,7 @@ mod bibliography;
 mod config;
 mod editor;
 mod file_ops;
+mod layout;
 mod links;
 mod theme;
 
@@ -22,6 +23,7 @@ use ratatui::{
 use crate::bibliography::Bibliography;
 use crate::config::Config;
 use crate::editor::OpenNote;
+use crate::layout::{DEFAULT_BROWSER_PERCENT, resize_browser_percent, split_panes};
 use crate::links::{Index, LinkItem, NoteSuggestion};
 use crate::theme::{
     Appearance, ColorOverrides, THEME_CHOICES, Theme, ThemeChoice, omarchy_appearance,
@@ -171,6 +173,7 @@ struct App {
     theme_choice: ThemeChoice,
     fallback_appearance: Appearance,
     theme_overrides: ColorOverrides,
+    browser_width_percent: u16,
     history: Vec<PathBuf>,
     message: String,
 }
@@ -214,6 +217,7 @@ impl App {
             theme_choice,
             fallback_appearance,
             theme_overrides,
+            browser_width_percent: DEFAULT_BROWSER_PERCENT,
             history: Vec::new(),
             message: String::new(),
         };
@@ -365,6 +369,24 @@ impl App {
     }
 
     /// All panels share one palette, including EdTUI's cursor and selection.
+    fn resize_columns(&mut self, key: KeyEvent) -> bool {
+        if key.modifiers != KeyModifiers::ALT {
+            return false;
+        }
+        let grow = match key.code {
+            KeyCode::Char('h') | KeyCode::Left => false,
+            KeyCode::Char('l') | KeyCode::Right => true,
+            _ => return false,
+        };
+        self.browser_width_percent = resize_browser_percent(self.browser_width_percent, grow);
+        self.message = format!(
+            "Files: {}% | Notes: {}% (session only; set browser_width_percent in config.toml)",
+            self.browser_width_percent,
+            100 - self.browser_width_percent,
+        );
+        true
+    }
+
     fn draw(&mut self, frame: &mut Frame) {
         let theme = self.theme;
         frame.render_widget(Block::default().style(theme.base_style()), frame.area());
@@ -374,8 +396,7 @@ impl App {
             Constraint::Length(3),
         ])
         .split(frame.area());
-        let panes = Layout::horizontal([Constraint::Percentage(35), Constraint::Percentage(65)])
-            .split(areas[1]);
+        let panes = split_panes(areas[1], self.browser_width_percent);
 
         let location = if self.editor.is_some() {
             "EDITOR"
@@ -1543,6 +1564,9 @@ Ctrl+U clear search | Backspace delete"
                 self.handle_find_key(key);
                 continue;
             }
+            if self.resize_columns(key) {
+                continue;
+            }
             if self.editor.is_some() {
                 self.handle_editor_key(key);
                 continue;
@@ -1602,8 +1626,10 @@ fn arguments() -> io::Result<(
     ThemeChoice,
     ColorOverrides,
     Appearance,
+    u16,
 )> {
     let config = Config::load()?;
+    let browser_width = config.browser_width()?;
     let mut notes_dir = None;
     let mut bibliography = None;
     let mut theme_override = None;
@@ -1669,12 +1695,14 @@ fn arguments() -> io::Result<(
         choice,
         config.colors,
         system,
+        browser_width,
     ))
 }
 
 fn main() -> io::Result<()> {
-    let (root, bibliography, choice, overrides, fallback) = arguments()?;
+    let (root, bibliography, choice, overrides, fallback, browser_width) = arguments()?;
     let mut app = App::new(root, bibliography, choice, overrides, fallback)?;
+    app.browser_width_percent = browser_width;
     ratatui::run(|terminal| app.run(terminal))
 }
 
@@ -1792,5 +1820,30 @@ mod lesson6_tests {
         dialog.filter(&entries);
         assert_eq!(dialog.matches, vec![2]);
         assert_eq!(entries[0].name, "CD4-SEC.md");
+    }
+}
+
+#[cfg(test)]
+mod lesson73_app_tests {
+    use super::*;
+    #[test]
+    fn hotkeys_resize_in_both_directions_without_editing_notes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Note.md");
+        fs::write(&path, "# Original\n").unwrap();
+        let mut app = App::new(
+            dir.path().to_path_buf(),
+            None,
+            ThemeChoice::Dark,
+            ColorOverrides::default(),
+            Appearance::Dark,
+        )
+        .unwrap();
+        assert!(app.resize_columns(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::ALT)));
+        assert_eq!(app.browser_width_percent, 40);
+        assert!(app.resize_columns(KeyEvent::new(KeyCode::Left, KeyModifiers::ALT)));
+        assert_eq!(app.browser_width_percent, 35);
+        assert!(!app.resize_columns(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE)));
+        assert_eq!(fs::read_to_string(&path).unwrap(), "# Original\n");
     }
 }
