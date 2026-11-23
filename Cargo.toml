@@ -1,12 +1,13 @@
 [package]
 name = "zettui"
-version = "0.7.3"
+version = "0.7.4"
 edition = "2024"
 rust-version = "1.88"
 description = "A local-first terminal notes manager written in Rust"
 license = "MIT"
 
 [dependencies]
+chrono = "0.4"
 ratatui = "0.30"
 crossterm = "0.29"
 edtui = "=0.11.7"

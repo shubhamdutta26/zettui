@@ -12,6 +12,7 @@ use std::{
 pub struct Config {
     pub bibliography: Option<PathBuf>,
     pub notes_dir: Option<PathBuf>,
+    pub snippets_dir: Option<PathBuf>,
     pub theme: Option<String>,
     /// Desired percent of terminal width used by the left file pane.
     pub browser_width_percent: Option<u16>,
@@ -52,6 +53,7 @@ impl Config {
         let config_dir = config_file.parent().unwrap_or(Path::new("."));
         cfg.bibliography = cfg.bibliography.map(|p| expand_path(p, config_dir));
         cfg.notes_dir = cfg.notes_dir.map(|p| expand_path(p, config_dir));
+        cfg.snippets_dir = cfg.snippets_dir.map(|p| expand_path(p, config_dir));
         Ok(cfg)
     }
 }

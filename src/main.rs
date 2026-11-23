@@ -6,6 +6,7 @@ mod editor;
 mod file_ops;
 mod layout;
 mod links;
+mod snippets;
 mod theme;
 
 use std::{env, fs, io, path::PathBuf, time::Duration};
@@ -25,9 +26,11 @@ use crate::config::Config;
 use crate::editor::OpenNote;
 use crate::layout::{DEFAULT_BROWSER_PERCENT, resize_browser_percent, split_panes};
 use crate::links::{Index, LinkItem, NoteSuggestion};
+use crate::snippets::{Field, Snippet, load_snippets};
 use crate::theme::{
     Appearance, ColorOverrides, THEME_CHOICES, Theme, ThemeChoice, omarchy_appearance,
 };
+use edtui::Index2;
 
 /// Temporary, single-line prompt shown over the file browser.
 #[derive(Clone)]
@@ -95,6 +98,47 @@ impl WikiCompletionDialog {
             .collect();
         self.selected = 0;
     }
+}
+
+struct SnippetPicker {
+    items: Vec<Snippet>,
+    query: String,
+    matches: Vec<usize>,
+    selected: usize,
+}
+
+impl SnippetPicker {
+    fn new(items: Vec<Snippet>) -> Self {
+        let mut picker = Self {
+            items,
+            query: String::new(),
+            matches: Vec::new(),
+            selected: 0,
+        };
+        picker.filter();
+        picker
+    }
+
+    fn filter(&mut self) {
+        let query = self.query.to_lowercase();
+        self.matches = self
+            .items
+            .iter()
+            .enumerate()
+            .filter(|(_, item)| item.name.to_lowercase().contains(&query))
+            .map(|(i, _)| i)
+            .collect();
+        self.selected = 0;
+    }
+}
+
+/// Each numbered snippet field is edited here before inserting the template.
+/// This keeps existing note contents safe and avoids partially expanded YAML.
+struct SnippetForm {
+    snippet: Snippet,
+    fields: Vec<Field>,
+    active: usize,
+    replace_on_type: bool,
 }
 
 impl CitationDialog {
@@ -165,6 +209,9 @@ struct App {
     prompt: Option<Prompt>,
     links: Option<LinkDialog>,
     citation_picker: Option<CitationDialog>,
+    snippet_picker: Option<SnippetPicker>,
+    snippet_form: Option<SnippetForm>,
+    snippets_dir: PathBuf,
     wiki_completion: Option<WikiCompletionDialog>,
     pending_open_bracket: bool,
     find_dialog: Option<FindDialog>,
@@ -209,6 +256,9 @@ impl App {
             prompt: None,
             links: None,
             citation_picker: None,
+            snippet_picker: None,
+            snippet_form: None,
+            snippets_dir: snippets::default_snippets_dir(),
             wiki_completion: None,
             pending_open_bracket: false,
             find_dialog: None,
@@ -501,7 +551,7 @@ impl App {
             let help = if let Some(command) = &self.command {
                 format!(":{command}   Enter: run | Esc: cancel")
             } else {
-                "Insert: [[ link | Esc Normal | :w save | Ctrl+P cite | Ctrl+O links | Ctrl+B backlinks | Ctrl+T back".to_owned()
+                "Insert: [[ link | Esc Normal | :w save | Ctrl+P cite | Ctrl+E snippet | Ctrl+O links | Ctrl+B backlinks | Ctrl+T back".to_owned()
             };
             format!(
                 "{} | {}{}\n{}\n{}",
@@ -612,6 +662,12 @@ impl App {
         }
         if self.wiki_completion.is_some() {
             self.draw_wiki_completion(frame);
+        }
+        if self.snippet_picker.is_some() {
+            self.draw_snippet_picker(frame);
+        }
+        if self.snippet_form.is_some() {
+            self.draw_snippet_form(frame);
         }
     }
 
@@ -810,6 +866,124 @@ Ctrl+U clear search | Backspace delete"
                 dialog.matches.len()
             )).style(Style::default().fg(theme.muted).bg(theme.surface)), areas[2]
         );
+    }
+
+    fn draw_snippet_picker(&self, frame: &mut Frame) {
+        let Some(dialog) = &self.snippet_picker else {
+            return;
+        };
+        let theme = self.theme;
+        let screen = frame.area();
+        let width = screen.width.saturating_sub(2).min(86);
+        let height = screen.height.saturating_sub(2).min(18);
+        if width < 18 || height < 7 {
+            return;
+        }
+        let popup = Rect::new(
+            screen.x + (screen.width - width) / 2,
+            screen.y + (screen.height - height) / 2,
+            width,
+            height,
+        );
+        frame.render_widget(Clear, popup);
+        frame.render_widget(
+            Block::default().style(Style::default().bg(theme.surface)),
+            popup,
+        );
+        let block = Block::bordered()
+            .title(" Apply snippet — Ctrl+E ")
+            .border_style(Style::default().fg(theme.accent));
+        let inner = block.inner(popup);
+        frame.render_widget(block, popup);
+        let areas = Layout::vertical([
+            Constraint::Length(2),
+            Constraint::Min(1),
+            Constraint::Length(2),
+        ])
+        .split(inner);
+        frame.render_widget(
+            Paragraph::new(format!("Search: {}▏", dialog.query))
+                .style(Style::default().fg(theme.accent).bg(theme.surface)),
+            areas[0],
+        );
+        let items: Vec<ListItem> = dialog
+            .matches
+            .iter()
+            .map(|index| ListItem::new(dialog.items[*index].name.clone()))
+            .collect();
+        let mut state = ListState::default();
+        if !dialog.matches.is_empty() {
+            state.select(Some(dialog.selected));
+        }
+        frame.render_stateful_widget(
+            List::new(items)
+                .highlight_style(Style::default().fg(theme.selected_fg).bg(theme.selected_bg))
+                .highlight_symbol("> "),
+            areas[1],
+            &mut state,
+        );
+        frame.render_widget(
+            Paragraph::new(
+                "Type to filter | Up/Down select | Enter choose\nEsc cancel | Ctrl+U clear",
+            )
+            .style(Style::default().fg(theme.muted).bg(theme.surface)),
+            areas[2],
+        );
+    }
+
+    fn draw_snippet_form(&self, frame: &mut Frame) {
+        let Some(form) = &self.snippet_form else {
+            return;
+        };
+        let theme = self.theme;
+        let screen = frame.area();
+        let width = screen.width.saturating_sub(2).min(88);
+        let height = screen.height.saturating_sub(2).min(16);
+        if width < 20 || height < 8 {
+            return;
+        }
+        let popup = Rect::new(
+            screen.x + (screen.width - width) / 2,
+            screen.y + (screen.height - height) / 2,
+            width,
+            height,
+        );
+        frame.render_widget(Clear, popup);
+        frame.render_widget(
+            Block::default().style(Style::default().bg(theme.surface)),
+            popup,
+        );
+        let block = Block::bordered()
+            .title(format!(" Snippet: {} ", form.snippet.name))
+            .border_style(Style::default().fg(theme.accent));
+        let inner = block.inner(popup);
+        frame.render_widget(block, popup);
+        let areas = Layout::vertical([Constraint::Min(1), Constraint::Length(3)]).split(inner);
+        let rows: Vec<Line> = form
+            .fields
+            .iter()
+            .enumerate()
+            .map(|(i, field)| {
+                Line::styled(
+                    format!(
+                        "{} ${}: {}{}",
+                        if i == form.active { ">" } else { " " },
+                        field.index,
+                        field.value,
+                        if i == form.active { "▏" } else { "" }
+                    ),
+                    Style::default().fg(if i == form.active {
+                        theme.accent
+                    } else {
+                        theme.foreground
+                    }),
+                )
+            })
+            .collect();
+        frame.render_widget(Paragraph::new(rows).wrap(Wrap { trim: false }), areas[0]);
+        frame.render_widget(Paragraph::new(
+            "Type to replace default | Tab/Enter next or apply\nShift+Tab previous | Ctrl+U clear | Esc cancel"
+        ).style(Style::default().fg(theme.muted).bg(theme.surface)), areas[1]);
     }
 
     fn draw_find_dialog(&self, frame: &mut Frame) {
@@ -1023,6 +1197,180 @@ Ctrl+U clear search | Backspace delete"
 
     /// Re-read the file every time Ctrl+P is pressed, so Zotero auto-exports
     /// become available immediately without restarting the application.
+    fn open_snippet_picker(&mut self) {
+        let Some(note) = &self.editor else {
+            return;
+        };
+        if !note.state.lines.to_string().is_empty() {
+            self.message =
+                "Snippets currently apply only to completely empty notes (no content changed)."
+                    .to_owned();
+            return;
+        }
+        match load_snippets(&self.snippets_dir) {
+            Ok(items) if !items.is_empty() => {
+                self.snippet_picker = Some(SnippetPicker::new(items));
+                self.message.clear();
+            }
+            Ok(_) => self.message = format!("No snippets found in {}", self.snippets_dir.display()),
+            Err(e) => self.message = format!("Snippet error: {e}"),
+        }
+    }
+
+    fn apply_snippet(&mut self, snippet: &Snippet, fields: &[Field]) {
+        let expanded = match snippets::expand(&snippet.source, fields, chrono::Local::now()) {
+            Ok(value) => value,
+            Err(e) => {
+                self.message = format!("Snippet expansion failed: {e}");
+                return;
+            }
+        };
+        let Some(note) = &mut self.editor else {
+            return;
+        };
+        // Never erase or merge with an existing note, even if it changed while
+        // the dialog was open. All insertion goes through EdTUI's event handler.
+        if !note.state.lines.to_string().is_empty() {
+            self.message = "Note is no longer empty; snippet was not applied.".to_owned();
+            return;
+        }
+        if note.state.mode != EditorMode::Insert {
+            self.editor_keys.on_key_event(
+                KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE),
+                &mut note.state,
+            );
+        }
+        for ch in expanded.text.chars() {
+            let code = match ch {
+                '\n' => KeyCode::Enter,
+                '\t' => KeyCode::Tab,
+                c => KeyCode::Char(c),
+            };
+            self.editor_keys
+                .on_key_event(KeyEvent::new(code, KeyModifiers::NONE), &mut note.state);
+        }
+        note.state.cursor = Index2::new(expanded.cursor_row, expanded.cursor_col);
+        self.pending_open_bracket = false;
+        self.message = format!(
+            "Inserted snippet '{}' (unsaved). Press Esc, then :w to save.",
+            snippet.name
+        );
+    }
+
+    fn handle_snippet_picker_key(&mut self, key: KeyEvent) {
+        let Some(mut picker) = self.snippet_picker.take() else {
+            return;
+        };
+        match key.code {
+            KeyCode::Esc => {
+                self.message = "Snippet picker canceled.".to_owned();
+            }
+            KeyCode::Up => {
+                picker.selected = picker.selected.saturating_sub(1);
+                self.snippet_picker = Some(picker);
+            }
+            KeyCode::Down => {
+                if picker.selected + 1 < picker.matches.len() {
+                    picker.selected += 1;
+                }
+                self.snippet_picker = Some(picker);
+            }
+            KeyCode::Enter => {
+                if let Some(&index) = picker.matches.get(picker.selected) {
+                    let snippet = picker.items[index].clone();
+                    match snippets::fields(&snippet.source) {
+                        Ok(fields) if fields.is_empty() => self.apply_snippet(&snippet, &fields),
+                        Ok(fields) => {
+                            self.snippet_form = Some(SnippetForm {
+                                snippet,
+                                fields,
+                                active: 0,
+                                replace_on_type: true,
+                            })
+                        }
+                        Err(e) => self.message = format!("Invalid snippet: {e}"),
+                    }
+                } else {
+                    self.snippet_picker = Some(picker);
+                }
+            }
+            KeyCode::Backspace => {
+                picker.query.pop();
+                picker.filter();
+                self.snippet_picker = Some(picker);
+            }
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                picker.query.clear();
+                picker.filter();
+                self.snippet_picker = Some(picker);
+            }
+            KeyCode::Char(ch)
+                if !key
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+            {
+                picker.query.push(ch);
+                picker.filter();
+                self.snippet_picker = Some(picker);
+            }
+            _ => self.snippet_picker = Some(picker),
+        }
+    }
+
+    fn handle_snippet_form_key(&mut self, key: KeyEvent) {
+        let Some(mut form) = self.snippet_form.take() else {
+            return;
+        };
+        match key.code {
+            KeyCode::Esc => {
+                self.message = "Snippet canceled (no changes made).".to_owned();
+            }
+            KeyCode::BackTab => {
+                form.active = form.active.saturating_sub(1);
+                form.replace_on_type = true;
+                self.snippet_form = Some(form);
+            }
+            KeyCode::Enter | KeyCode::Tab => {
+                if form.active + 1 < form.fields.len() {
+                    form.active += 1;
+                    form.replace_on_type = true;
+                    self.snippet_form = Some(form);
+                } else {
+                    self.apply_snippet(&form.snippet, &form.fields);
+                }
+            }
+            KeyCode::Backspace => {
+                let field = &mut form.fields[form.active];
+                if form.replace_on_type {
+                    field.value.clear();
+                } else {
+                    field.value.pop();
+                }
+                form.replace_on_type = false;
+                self.snippet_form = Some(form);
+            }
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                form.fields[form.active].value.clear();
+                form.replace_on_type = false;
+                self.snippet_form = Some(form);
+            }
+            KeyCode::Char(ch)
+                if !key
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+            {
+                let field = &mut form.fields[form.active];
+                if form.replace_on_type {
+                    field.value.clear();
+                }
+                field.value.push(ch);
+                form.replace_on_type = false;
+                self.snippet_form = Some(form);
+            }
+            _ => self.snippet_form = Some(form),
+        }
+    }
+
     fn open_citation_picker(&mut self) {
         if self.editor.is_none() {
             self.message = "Open a note before inserting a citation.".to_owned();
@@ -1478,6 +1826,10 @@ Ctrl+U clear search | Backspace delete"
                     self.open_citation_picker();
                     return;
                 }
+                KeyCode::Char('e') => {
+                    self.open_snippet_picker();
+                    return;
+                }
                 KeyCode::Char('g') => {
                     self.cycle_theme();
                     return;
@@ -1542,6 +1894,14 @@ Ctrl+U clear search | Backspace delete"
                 continue;
             };
             if key.kind != KeyEventKind::Press {
+                continue;
+            }
+            if self.snippet_form.is_some() {
+                self.handle_snippet_form_key(key);
+                continue;
+            }
+            if self.snippet_picker.is_some() {
+                self.handle_snippet_picker_key(key);
                 continue;
             }
             if self.links.is_some() {
@@ -1627,9 +1987,14 @@ fn arguments() -> io::Result<(
     ColorOverrides,
     Appearance,
     u16,
+    PathBuf,
 )> {
     let config = Config::load()?;
     let browser_width = config.browser_width()?;
+    let snippets_dir = config
+        .snippets_dir
+        .clone()
+        .unwrap_or_else(snippets::default_snippets_dir);
     let mut notes_dir = None;
     let mut bibliography = None;
     let mut theme_override = None;
@@ -1696,13 +2061,16 @@ fn arguments() -> io::Result<(
         config.colors,
         system,
         browser_width,
+        snippets_dir,
     ))
 }
 
 fn main() -> io::Result<()> {
-    let (root, bibliography, choice, overrides, fallback, browser_width) = arguments()?;
+    let (root, bibliography, choice, overrides, fallback, browser_width, snippets_dir) =
+        arguments()?;
     let mut app = App::new(root, bibliography, choice, overrides, fallback)?;
     app.browser_width_percent = browser_width;
+    app.snippets_dir = snippets_dir;
     ratatui::run(|terminal| app.run(terminal))
 }
 
@@ -1845,5 +2213,79 @@ mod lesson73_app_tests {
         assert_eq!(app.browser_width_percent, 35);
         assert!(!app.resize_columns(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE)));
         assert_eq!(fs::read_to_string(&path).unwrap(), "# Original\n");
+    }
+}
+
+#[cfg(test)]
+mod lesson74_snippet_app_tests {
+    use super::*;
+
+    #[test]
+    fn applies_template_to_empty_note_without_automatic_save() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Empty.md");
+        fs::write(&path, "").unwrap();
+        let mut app = App::new(
+            dir.path().to_path_buf(),
+            None,
+            ThemeChoice::Dark,
+            ColorOverrides::default(),
+            Appearance::Dark,
+        )
+        .unwrap();
+        app.select_path(&path);
+        app.enter().unwrap();
+        let snippet = Snippet {
+            name: "test".into(),
+            source: "---
+title: ${1:Untitled}
+id: $ZKN_ID
+---
+
+$0"
+            .into(),
+        };
+        let mut fields = snippets::fields(&snippet.source).unwrap();
+        fields[0].value = "New Note".into();
+        app.apply_snippet(&snippet, &fields);
+        let note = app.editor.as_ref().unwrap();
+        assert!(note.is_dirty());
+        assert!(note.state.lines.to_string().contains("title: New Note"));
+        assert_eq!(fs::read_to_string(path).unwrap(), "");
+    }
+
+    #[test]
+    fn refuses_template_on_existing_note() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Existing.md");
+        fs::write(
+            &path,
+            "# Preserve me
+",
+        )
+        .unwrap();
+        let mut app = App::new(
+            dir.path().to_path_buf(),
+            None,
+            ThemeChoice::Dark,
+            ColorOverrides::default(),
+            Appearance::Dark,
+        )
+        .unwrap();
+        app.select_path(&path);
+        app.enter().unwrap();
+        app.apply_snippet(
+            &Snippet {
+                name: "test".into(),
+                source: "Changed".into(),
+            },
+            &[],
+        );
+        assert_eq!(
+            app.editor.as_ref().unwrap().state.lines.to_string(),
+            "# Preserve me
+"
+        );
+        assert!(!app.editor.as_ref().unwrap().is_dirty());
     }
 }

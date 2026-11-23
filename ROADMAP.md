@@ -1,31 +1,31 @@
-# Zettui roadmap
+# Roadmap
 
-Milestones indicate when features were developed; not all historical versions had a published release tag.
+Milestone numbers reflect when a feature was developed, not necessarily a separate published GitHub tag.
 
 ## Completed
 
-| Version | Feature |
+| Version | Features |
 | --- | --- |
 | 0.1.0 | Read-only file browser and previews |
-| 0.2.0 | Vim editor, save, unsaved-change protection |
-| 0.3.0 | Create, rename, move, Trash notes and folders |
-| 0.4.0 | Wiki links, Markdown links, backlinks, note history |
-| 0.5.0 | Configurable Zotero JSON citation picker |
-| 0.6.0 | Themes, custom colors, current-folder filename search |
-| 0.6.1 | Automatic Omarchy light/dark matching |
-| 0.7.0 | GitHub CI and Linux release packages |
-| 0.7.1 | Repository cleanup and streamlined documentation |
-| 0.7.2 | `[[` link autocomplete and consolidated Lesson 6 |
-| **0.7.3** | Configurable two-pane split and live Alt+h/Alt+l resizing |
+| 0.2.0 | Vim editing, saving, protection from external edits |
+| 0.3.0 | Create, rename, move, and Trash files/folders |
+| 0.4.0 | Wiki links, Markdown links, backlinks, navigation history |
+| 0.5.0 | Configurable Zotero JSON reference search/insertion |
+| 0.6.0 | Themes, custom colors, current-folder filename finder |
+| 0.6.1 | System-aware Omarchy light/dark appearance |
+| 0.7.0 | Linux packaging, CI, GitHub Releases |
+| 0.7.1 | Repository and documentation cleanup |
+| 0.7.2 | `[[` wiki-link autocomplete |
+| 0.7.3 | Configurable and live-resizable file/editor panes |
+| **0.7.4** | Reusable Zettlr-style snippets, numbered form fields, date/ZKN ID expansion, cursor marker |
 
 ## Planned
 
-| Version | Planned work |
+| Version | Work |
 | --- | --- |
-| 0.8.x | Full-vault content search across subdirectories; result previews |
-| 0.9.x | Link-aware file renaming and moving, broken-link reporting |
-| 0.10.x | Markdown/YAML syntax highlighting and editor improvements |
-| 0.11.x | Note templates, generated Zettelkasten IDs and YAML metadata |
-| Later | Custom keymaps, citation previews, ARM64 Linux packages |
+| 0.8.x | Full-vault text search and results with context |
+| 0.9.x | Link-aware rename/move and broken-link reports |
+| 0.10.x | Markdown/YAML syntax highlighting and richer editing |
+| Later | In-editor snippet tab stops; custom ZKN ID patterns; YAML-aware field editing; ARM64 packages |
 
-**Principles:** keep notes as normal files; preserve metadata; prevent silent data loss; keep keyboard-first workflows testable and easy to install.
+**Principles:** local-first, normal text files, no silent overwrites, keyboard-first workflows.
