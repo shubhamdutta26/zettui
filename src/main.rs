@@ -1,7 +1,8 @@
-//! Zettui Lesson 3: browse, edit, and manage local notes safely.
+//! Zettui Lesson 4: browse, edit, manage and follow local note links.
 
 mod editor;
 mod file_ops;
+mod links;
 
 use std::{env, fs, io, path::PathBuf};
 
@@ -15,6 +16,7 @@ use ratatui::{
 };
 
 use crate::editor::OpenNote;
+use crate::links::{Index, LinkItem};
 
 /// Temporary, single-line prompt shown over the file browser.
 #[derive(Clone)]
@@ -29,6 +31,13 @@ enum PromptKind {
 struct Prompt {
     kind: PromptKind,
     input: String,
+}
+
+/// A modal showing outgoing links or backlinks. Esc closes without changing notes.
+struct LinkDialog {
+    title: String,
+    items: Vec<LinkItem>,
+    selected: usize,
 }
 
 struct Entry {
@@ -48,6 +57,8 @@ struct App {
     editor_keys: EditorEventHandler,
     command: Option<String>,
     prompt: Option<Prompt>,
+    links: Option<LinkDialog>,
+    history: Vec<PathBuf>,
     message: String,
 }
 
@@ -70,6 +81,8 @@ impl App {
             editor_keys: EditorEventHandler::default(),
             command: None,
             prompt: None,
+            links: None,
+            history: Vec::new(),
             message: String::new(),
         };
         app.refresh()?;
@@ -228,8 +241,7 @@ impl App {
             let instruction = if let Some(command) = &self.command {
                 format!(":{command}   (Enter to run, Esc to cancel)")
             } else {
-                "Esc: Normal | :w save | :q close | :q! discard | :wq save+close | Ctrl+S save"
-                    .to_owned()
+                "Esc: Normal | :w save | :q close | Ctrl+O links | Ctrl+B backlinks | Ctrl+T previous note".to_owned()
             };
             format!(
                 "{} | {}{}\n{}\n{}",
@@ -245,7 +257,7 @@ impl App {
                 .wrap(Wrap { trim: false });
             frame.render_widget(preview, panes[1]);
             format!(
-                "{}\nj/k move | Enter open | h parent | n note | N folder | r rename | m move | d Trash | R refresh | q quit\n{}",
+                "{}\nj/k move | Enter open | h parent | o links | b backlinks | n note | N folder | r rename | m move | d Trash | q quit\n{}",
                 self.current_dir.display(),
                 self.message
             )
@@ -313,6 +325,201 @@ impl App {
                 popup,
             );
         }
+        if self.links.is_some() {
+            self.draw_link_dialog(frame);
+        }
+    }
+
+    /// Display links on demand. Only this dialog captures j/k/Enter/Esc.
+    fn draw_link_dialog(&mut self, frame: &mut Frame) {
+        let Some(dialog) = &self.links else {
+            return;
+        };
+        let screen = frame.area();
+        let width = screen.width.saturating_sub(2).min(94);
+        let height = screen.height.saturating_sub(2).min(18);
+        if width < 12 || height < 5 {
+            return;
+        }
+        let popup = Rect::new(
+            screen.x + (screen.width - width) / 2,
+            screen.y + (screen.height - height) / 2,
+            width,
+            height,
+        );
+        frame.render_widget(Clear, popup);
+        let block = Block::bordered().title(dialog.title.as_str());
+        let inner = block.inner(popup);
+        frame.render_widget(block, popup);
+        let areas = Layout::vertical([Constraint::Min(1), Constraint::Length(2)]).split(inner);
+        let entries: Vec<ListItem> = dialog
+            .items
+            .iter()
+            .map(|item| {
+                let symbol = if item.target.is_some() { "  " } else { "! " };
+                ListItem::new(format!("{symbol}{}", item.label))
+            })
+            .collect();
+        let list = List::new(entries)
+            .highlight_style(Style::default().bg(Color::Blue).fg(Color::White))
+            .highlight_symbol("> ");
+        let mut state = ListState::default();
+        if !dialog.items.is_empty() {
+            state.select(Some(dialog.selected));
+        }
+        frame.render_stateful_widget(list, areas[0], &mut state);
+        frame.render_widget(
+            Paragraph::new(
+                "j/k select | Enter open | Esc close\n! means missing or ambiguous; no auto-create",
+            ),
+            areas[1],
+        );
+    }
+
+    /// Build an index only when requested; it does not change any note files.
+    fn show_links(&mut self, backlinks: bool) {
+        let source = if let Some(note) = &self.editor {
+            if note.is_dirty() {
+                self.message =
+                    "Save with :w before following links; unsaved edits are protected.".to_owned();
+                return;
+            }
+            note.path.clone()
+        } else {
+            let Some(entry) = self.entries.get(self.selected) else {
+                self.message = "Select a text note first.".to_owned();
+                return;
+            };
+            if entry.is_dir {
+                self.message = "Select a note, not a directory.".to_owned();
+                return;
+            }
+            entry.path.clone()
+        };
+        let result = Index::build(&self.root).and_then(|index| {
+            if backlinks {
+                index.backlinks(&source)
+            } else {
+                index.outgoing(&source)
+            }
+        });
+        match result {
+            Ok(items) if !items.is_empty() => {
+                self.links = Some(LinkDialog {
+                    title: format!(
+                        "{}: {}",
+                        if backlinks {
+                            "Backlinks"
+                        } else {
+                            "Outgoing links"
+                        },
+                        source
+                            .file_name()
+                            .map(|name| name.to_string_lossy().into_owned())
+                            .unwrap_or_else(|| "note".to_owned())
+                    ),
+                    items,
+                    selected: 0,
+                });
+                self.message.clear();
+            }
+            Ok(_) => {
+                self.message = if backlinks {
+                    "No backlinks found."
+                } else {
+                    "No outgoing links found."
+                }
+                .to_owned()
+            }
+            Err(e) => self.message = format!("Link scan failed: {e}"),
+        }
+    }
+
+    /// Open a linked note; refuse to discard unsaved edits. History is kept
+    /// only for note-to-note navigation (Ctrl+T), not ordinary browser entry.
+    fn open_link_target(&mut self, target: PathBuf, record_history: bool) {
+        if self.editor.as_ref().is_some_and(OpenNote::is_dirty) {
+            self.message = "Unsaved changes: save with :w before opening another note.".to_owned();
+            return;
+        }
+        if self.editor.as_ref().is_some_and(|note| note.path == target) {
+            self.message = "Already editing this note.".to_owned();
+            return;
+        }
+        // Load BEFORE changing the file browser or current editor.
+        let new_note = match OpenNote::load(target.clone()) {
+            Ok(note) => note,
+            Err(e) => {
+                self.message = format!("Cannot open linked note: {e}");
+                return;
+            }
+        };
+        if record_history {
+            if let Some(old) = &self.editor {
+                self.history.push(old.path.clone());
+            }
+        }
+        if let Some(parent) = target.parent() {
+            self.current_dir = parent.to_path_buf();
+            if let Err(e) = self.refresh() {
+                self.message = format!("Link opened, but browser refresh failed: {e}");
+            }
+            self.select_path(&target);
+        }
+        self.editor = Some(new_note);
+        self.editor_keys = EditorEventHandler::default();
+        self.command = None;
+        self.message = format!("Opened linked note: {}", target.display());
+    }
+
+    fn previous_note(&mut self) {
+        if self.editor.as_ref().is_some_and(OpenNote::is_dirty) {
+            self.message = "Save with :w before returning to the previous note.".to_owned();
+            return;
+        }
+        let Some(path) = self.history.last().cloned() else {
+            self.message = "No previous linked note in history.".to_owned();
+            return;
+        };
+        if path.exists() {
+            self.history.pop();
+            self.open_link_target(path, false);
+        } else {
+            self.message = "Previous note no longer exists; history unchanged.".to_owned();
+        }
+    }
+
+    fn handle_link_key(&mut self, key: KeyEvent) {
+        let Some(dialog) = &mut self.links else {
+            return;
+        };
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.links = None;
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                if dialog.selected + 1 < dialog.items.len() {
+                    dialog.selected += 1;
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                if dialog.selected > 0 {
+                    dialog.selected -= 1;
+                }
+            }
+            KeyCode::Enter => {
+                let item = dialog.items.get(dialog.selected).cloned();
+                if let Some(item) = item {
+                    if let Some(target) = item.target {
+                        self.links = None;
+                        self.open_link_target(target, true);
+                    } else {
+                        self.message = "Unresolved/ambiguous link. Use a folder-qualified name or unique note ID.".to_owned();
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 
     fn begin_prompt(&mut self, kind: PromptKind) {
@@ -357,7 +564,15 @@ impl App {
                 match self.refresh() {
                     Ok(()) => {
                         self.select_path(&result_path);
-                        self.message = format!("{action}: {}", result_path.display());
+                        self.message = format!(
+                            "{action}: {}{}",
+                            result_path.display(),
+                            if action == "Renamed" || action == "Moved" {
+                                " (existing links are NOT automatically updated)"
+                            } else {
+                                ""
+                            }
+                        );
                     }
                     Err(e) => self.message = format!("{action}, but browser refresh failed: {e}"),
                 }
@@ -481,6 +696,24 @@ impl App {
             return;
         }
 
+        if key.modifiers.contains(KeyModifiers::CONTROL) {
+            match key.code {
+                KeyCode::Char('o') => {
+                    self.show_links(false);
+                    return;
+                }
+                KeyCode::Char('b') => {
+                    self.show_links(true);
+                    return;
+                }
+                KeyCode::Char('t') => {
+                    self.previous_note();
+                    return;
+                }
+                _ => {}
+            }
+        }
+
         if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('s') {
             self.save_editor();
             return;
@@ -514,6 +747,10 @@ impl App {
             if key.kind != KeyEventKind::Press {
                 continue;
             }
+            if self.links.is_some() {
+                self.handle_link_key(key);
+                continue;
+            }
             if self.prompt.is_some() {
                 self.handle_prompt_key(key);
                 continue;
@@ -524,6 +761,11 @@ impl App {
             }
             match key.code {
                 KeyCode::Char('q') => return Ok(()),
+                KeyCode::Char('o') => self.show_links(false),
+                KeyCode::Char('b') => self.show_links(true),
+                KeyCode::Char('t') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.previous_note()
+                }
                 KeyCode::Char('n') => self.begin_prompt(PromptKind::NewNote),
                 KeyCode::Char('N') => self.begin_prompt(PromptKind::NewFolder),
                 KeyCode::Char('r') => {
