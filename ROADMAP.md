@@ -19,7 +19,7 @@ Versions identify development milestones; not all have a separate published rele
 | 0.7.3 | Configurable and keyboard-resizable panes |
 | 0.7.4 | Zettlr-style reusable note snippets |
 | **0.7.5** | Full-vault text search, YAML tag search, Insert-mode blinking underline cursor |
-
+| 0.7.6 | Theme addition, fixed editor cursor visibility, search within notes |
 ## Planned
 
 | Milestone | Possible work |
