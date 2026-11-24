@@ -46,6 +46,12 @@ The header shows the notes workspace and current directory as a breadcrumb (for 
 
 Search, tag, filename, citation, wiki-link and snippet pickers share a theme-aware popup layout with a query field, result counts, highlighted selection and contextual help. Vault results show note excerpts and root-relative locations; citation results show citation keys. The snippet picker shows a read-only template preview on wide terminals, and the snippet form keeps the active field visible. Smaller terminals use a compact layout. Search behavior, insertion semantics and keyboard shortcuts are unchanged.
 
+## Markdown highlighting (v0.7.9 development)
+
+Markdown notes use theme-aware source highlighting in the browser preview and editor. Headings, emphasis, inline code, fenced code, YAML frontmatter, links, wiki links, tags, Pandoc citations, math, task markers, blockquotes and comments have distinct styles. Formatting delimiters remain visible but muted. Fenced code uses lightweight language-aware lexical coloring for common languages; unknown languages remain plain. This is source highlighting, not a complete Markdown renderer or language parser. Existing themes and `[colors]` overrides supply the palette; no new configuration is required.
+
+The active Files panel or opened-note editor uses heavy Unicode border characters; the read-only Preview remains inactive. Enter still opens notes, and `l` still only enters directories. Search matches are overlaid on syntax highlighting. No changes to the stored Markdown are made by highlighting.
+
 ## Keyboard shortcuts
 
 | Context | Keys | Action |

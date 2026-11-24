@@ -7,6 +7,7 @@ mod editor_search;
 mod file_ops;
 mod layout;
 mod links;
+mod markdown;
 mod search;
 mod snippets;
 mod theme;
@@ -24,7 +25,7 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Clear, List, ListItem, ListState, Padding, Paragraph, Wrap},
+    widgets::{Block, BorderType, Clear, List, ListItem, ListState, Padding, Paragraph, Wrap},
 };
 
 use crate::bibliography::Bibliography;
@@ -632,6 +633,7 @@ impl App {
         } else {
             match OpenNote::load(path) {
                 Ok(note) => {
+                    self.note_search.reset_matches();
                     self.editor = Some(note);
                     self.editor_keys = EditorEventHandler::default();
                     self.pending_open_bracket = false;
@@ -803,6 +805,11 @@ impl App {
             .block(
                 Block::bordered()
                     .title(" Files ")
+                    .border_type(if browser_active {
+                        BorderType::Thick
+                    } else {
+                        BorderType::Plain
+                    })
                     .padding(Padding::horizontal(1))
                     .border_style(Style::default().fg(if browser_active {
                         theme.accent
@@ -836,6 +843,11 @@ impl App {
             let title = format!(" {filename}{dirty} ");
             let border = Block::bordered()
                 .title(title)
+                .border_type(if editor_active {
+                    BorderType::Thick
+                } else {
+                    BorderType::Plain
+                })
                 .padding(Padding::horizontal(1))
                 .border_style(Style::default().fg(if editor_active {
                     theme.accent
@@ -868,6 +880,14 @@ impl App {
                     Style::default().fg(theme.background).bg(theme.accent)
                 })
                 .hide_status_line();
+            let source = note.state.lines.to_string();
+            note.state.set_highlights(markdown::editor_highlights(
+                &source,
+                theme,
+                markdown::is_markdown(&note.path),
+                &self.note_search.painted,
+                self.note_search.active,
+            ));
             frame.render_widget(
                 EditorView::new(&mut note.state)
                     .wrap(true)
@@ -912,16 +932,24 @@ impl App {
             );
             (mode, filename, help, stats, Some(modified))
         } else {
-            let preview = Paragraph::new(self.preview.as_str())
-                .block(
-                    Block::bordered()
-                        .title(" Preview ")
-                        .padding(Padding::horizontal(1))
-                        .border_style(Style::default().fg(theme.border))
-                        .title_style(Style::default().fg(theme.muted)),
-                )
-                .style(theme.base_style())
-                .wrap(Wrap { trim: false });
+            let preview = if self
+                .entries
+                .get(self.selected)
+                .is_some_and(|e| !e.is_dir && markdown::is_markdown(&e.path))
+            {
+                Paragraph::new(markdown::preview(&self.preview, theme))
+            } else {
+                Paragraph::new(self.preview.as_str())
+            }
+            .block(
+                Block::bordered()
+                    .title(" Preview ")
+                    .padding(Padding::horizontal(1))
+                    .border_style(Style::default().fg(theme.border))
+                    .title_style(Style::default().fg(theme.muted)),
+            )
+            .style(theme.base_style())
+            .wrap(Wrap { trim: false });
             frame.render_widget(preview, panes[1]);
             (
                 "BROWSER".to_owned(),
@@ -2161,6 +2189,7 @@ impl App {
             }
             self.select_path(&target);
         }
+        self.note_search.reset_matches();
         self.editor = Some(new_note);
         self.editor_keys = EditorEventHandler::default();
         self.pending_open_bracket = false;
@@ -2344,6 +2373,7 @@ impl App {
             self.message = "Unsaved changes! Use :w to save or :q! to discard.".to_owned();
             return;
         }
+        self.note_search.reset_matches();
         self.editor = None;
         self.wiki_completion = None;
         self.pending_open_bracket = false;
@@ -2546,6 +2576,7 @@ impl App {
             return;
         }
         // Ordinary editing can invalidate the previous match coordinates.
+        self.note_search.painted.clear();
         if let Some(note) = &mut self.editor {
             note.state.clear_highlights();
         }

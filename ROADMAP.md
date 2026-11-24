@@ -32,7 +32,8 @@ Versions identify development milestones; not all have a separate published rele
 
 | Milestone | Possible work |
 | --- | --- |
-| 0.8.0 | Advanced UI: Markdown syntax highlighting, sidebar visibility and distraction-free editor mode, optional note metadata panel, configurable UI elements; refine existing sidebar resizing |
+| 0.7.9 | Theme-aware Markdown source highlighting and active panel borders (implementation draft; build and regression verification pending); distraction-free / Focus mode (next phase) |
+| 0.8.0 | Optional note metadata panel, configurable UI elements; refine existing sidebar resizing |
 | 0.8.x | Search highlighting, ranked results, faster indexing, optional inline hashtag index |
 | 0.9.x | Link-aware rename/move and broken-link reports |
 | 0.10.x | Expanded Markdown and YAML syntax highlighting |

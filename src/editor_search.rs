@@ -37,6 +37,7 @@ pub struct NoteSearch {
     pub last: Option<(String, Direction)>,
     pub count: usize,
     pub active: usize,
+    pub painted: Vec<(Index2, Index2)>,
 }
 
 fn matches(text: &str, query: &str) -> Vec<(Index2, Index2)> {
@@ -82,6 +83,13 @@ fn choose(hits: &[(Index2, Index2)], origin: &Index2, direction: Direction) -> O
 }
 
 impl NoteSearch {
+    pub fn reset_matches(&mut self) {
+        self.input = None;
+        self.count = 0;
+        self.active = 0;
+        self.painted.clear();
+    }
+
     pub fn begin(&mut self, state: &EditorState, direction: Direction) {
         self.input = Some(SearchInput {
             query: String::new(),
@@ -91,6 +99,7 @@ impl NoteSearch {
         });
         self.count = 0;
         self.active = 0;
+        self.painted.clear();
     }
 
     pub fn jump(
@@ -104,6 +113,7 @@ impl NoteSearch {
     ) {
         let hits = matches(&state.lines.to_string(), query);
         self.count = hits.len();
+        self.painted = hits.clone();
         self.active = 0;
         let chosen = choose(&hits, &origin, direction);
         state.cursor = origin;
@@ -148,6 +158,7 @@ impl NoteSearch {
         state.clear_highlights();
         self.count = 0;
         self.active = 0;
+        self.painted.clear();
     }
 }
 
