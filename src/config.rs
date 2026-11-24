@@ -14,6 +14,8 @@ pub struct Config {
     pub notes_dir: Option<PathBuf>,
     pub snippets_dir: Option<PathBuf>,
     pub theme: Option<String>,
+    pub light_theme: Option<String>,
+    pub dark_theme: Option<String>,
     /// Desired percent of terminal width used by the left file pane.
     pub browser_width_percent: Option<u16>,
     #[serde(default)]
@@ -21,6 +23,14 @@ pub struct Config {
 }
 
 impl Config {
+    pub fn auto_themes(&self) -> io::Result<crate::theme::AutoThemes> {
+        crate::theme::AutoThemes::named(
+            self.light_theme.as_deref().unwrap_or("light"),
+            self.dark_theme.as_deref().unwrap_or("dark"),
+        )
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error.to_string()))
+    }
+
     pub fn browser_width(&self) -> io::Result<u16> {
         use crate::layout::{DEFAULT_BROWSER_PERCENT, valid_browser_percent};
         let width = self
@@ -94,6 +104,30 @@ notes_dir = "/tmp/notes"
         )
         .unwrap();
         assert_eq!(cfg.bibliography.unwrap(), PathBuf::from("/tmp/refs.json"));
+    }
+
+    #[test]
+    fn parses_auto_theme_presets() {
+        let cfg: Config = toml::from_str(
+            "theme = 'auto'\nlight_theme = 'catppuccin-latte'\ndark_theme = 'everforest'\n",
+        )
+        .unwrap();
+        let presets = cfg.auto_themes().unwrap();
+        use crate::theme::{Appearance, ThemeChoice};
+        assert_eq!(
+            presets.resolve(ThemeChoice::Auto, Appearance::Light),
+            Appearance::CatppuccinLatte
+        );
+        assert_eq!(
+            presets.resolve(ThemeChoice::Auto, Appearance::Dark),
+            Appearance::Everforest
+        );
+        assert!(
+            toml::from_str::<Config>("dark_theme = 'auto'")
+                .unwrap()
+                .auto_themes()
+                .is_err()
+        );
     }
 
     #[test]

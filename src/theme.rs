@@ -24,6 +24,7 @@ pub const THEME_CHOICES: &[&str] = &[
     "rose-pine-dawn",
     "gruvbox",
     "tokyo-night",
+    "midnight",
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -40,6 +41,7 @@ pub enum Appearance {
     RosePineDawn,
     Gruvbox,
     TokyoNight,
+    Midnight,
 }
 
 impl Appearance {
@@ -57,6 +59,7 @@ impl Appearance {
             Self::RosePineDawn => "rose-pine-dawn",
             Self::Gruvbox => "gruvbox",
             Self::TokyoNight => "tokyo-night",
+            Self::Midnight => "midnight",
         }
     }
 }
@@ -76,6 +79,7 @@ pub enum ThemeChoice {
     RosePineDawn,
     Gruvbox,
     TokyoNight,
+    Midnight,
 }
 
 impl ThemeChoice {
@@ -94,6 +98,7 @@ impl ThemeChoice {
             "rose-pine-dawn" => Ok(Self::RosePineDawn),
             "gruvbox" => Ok(Self::Gruvbox),
             "tokyo-night" => Ok(Self::TokyoNight),
+            "midnight" => Ok(Self::Midnight),
             _ => Err(ThemeError(format!(
                 "Unknown theme '{value}'. Choose one of: {}",
                 THEME_CHOICES.join(", ")
@@ -123,6 +128,7 @@ impl ThemeChoice {
             Self::RosePineDawn => Appearance::RosePineDawn,
             Self::Gruvbox => Appearance::Gruvbox,
             Self::TokyoNight => Appearance::TokyoNight,
+            Self::Midnight => Appearance::Midnight,
         }
     }
     pub fn as_str(self) -> &'static str {
@@ -140,6 +146,60 @@ impl ThemeChoice {
             Self::RosePineDawn => "rose-pine-dawn",
             Self::Gruvbox => "gruvbox",
             Self::TokyoNight => "tokyo-night",
+            Self::Midnight => "midnight",
+        }
+    }
+}
+
+/// Preferred fixed palettes for automatic light/dark mode.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AutoThemes {
+    light: Appearance,
+    dark: Appearance,
+}
+
+impl Default for AutoThemes {
+    fn default() -> Self {
+        Self {
+            light: Appearance::Light,
+            dark: Appearance::Dark,
+        }
+    }
+}
+
+impl AutoThemes {
+    pub fn named(light: &str, dark: &str) -> Result<Self, ThemeError> {
+        fn preset(name: &str, light: bool) -> Result<Appearance, ThemeError> {
+            let key = if light { "light_theme" } else { "dark_theme" };
+            let choice = ThemeChoice::named(name).map_err(|e| ThemeError(format!("{key}: {e}")))?;
+            let appearance = choice.resolve(Appearance::Dark);
+            let is_light = matches!(
+                appearance,
+                Appearance::Light | Appearance::CatppuccinLatte | Appearance::RosePineDawn
+            );
+            if choice == ThemeChoice::Auto || is_light != light {
+                return Err(ThemeError(format!(
+                    "{key}: '{name}' must be a fixed {} palette",
+                    if light { "light" } else { "dark" }
+                )));
+            }
+            Ok(appearance)
+        }
+        Ok(Self {
+            light: preset(light, true)?,
+            dark: preset(dark, false)?,
+        })
+    }
+
+    pub fn resolve(self, choice: ThemeChoice, system: Appearance) -> Appearance {
+        if choice != ThemeChoice::Auto {
+            return choice.resolve(system);
+        }
+        match system {
+            Appearance::Light | Appearance::CatppuccinLatte | Appearance::RosePineDawn => {
+                self.light
+            }
+            _ => self.dark,
         }
     }
 }
@@ -403,6 +463,20 @@ impl Theme {
                 warning: rgb(0xf7768e),
                 success: rgb(0x9ece6a),
             },
+            ThemeChoice::Midnight => Self {
+                name: "midnight",
+                background: rgb(0x181922),
+                surface: rgb(0x22232d),
+                foreground: rgb(0xbfc5df),
+                muted: rgb(0x9297ad),
+                border: rgb(0x3d3f4b),
+                accent: rgb(0x82baff),
+                directory: rgb(0x9297ad),
+                selected_bg: rgb(0x292b36),
+                selected_fg: rgb(0xd5daf0),
+                warning: rgb(0xe5b66c),
+                success: rgb(0xa6cf79),
+            },
             ThemeChoice::Auto => return Err(ThemeError("Use a resolved dark/light mode".into())),
         };
         Ok(result)
@@ -467,6 +541,35 @@ impl FromStr for Theme {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn auto_presets_resolve_and_validate() {
+        let defaults = AutoThemes::default();
+        assert_eq!(
+            defaults.resolve(ThemeChoice::Auto, Appearance::Light),
+            Appearance::Light
+        );
+        assert_eq!(
+            defaults.resolve(ThemeChoice::Auto, Appearance::Dark),
+            Appearance::Dark
+        );
+        let presets = AutoThemes::named("rose-pine-dawn", "midnight").unwrap();
+        assert_eq!(
+            presets.resolve(ThemeChoice::Auto, Appearance::Light),
+            Appearance::RosePineDawn
+        );
+        assert_eq!(
+            presets.resolve(ThemeChoice::Auto, Appearance::Dark),
+            Appearance::Midnight
+        );
+        assert_eq!(
+            presets.resolve(ThemeChoice::Nord, Appearance::Light),
+            Appearance::Nord
+        );
+        assert!(AutoThemes::named("auto", "midnight").is_err());
+        assert!(AutoThemes::named("midnight", "light").is_err());
+        assert!(AutoThemes::named("light", "unknown").is_err());
+    }
 
     #[test]
     fn original_modes_and_full_cycle() {

@@ -21,12 +21,18 @@ Edit `~/.config/zettui/config.toml`:
 ```toml
 notes_dir = "/home/USER/Documents/Notes"
 bibliography = "/home/USER/Documents/Zotero/references.json"
-theme = "auto"                    # auto | dark | light
+theme = "auto"                    # auto | dark | light | midnight | ...
 browser_width_percent = 35       # 20–70
 # snippets_dir = "/home/USER/.config/zettui/snippets"
 ```
 
 `auto` follows your system's light/dark appearance, including Omarchy. Theme and pane-width keyboard adjustments are session-only; edit TOML to make them permanent. Zotero exports should include citation keys (Better CSL JSON recommended).
+
+## Appearance (v0.7.7)
+
+The interface uses a compact workspace header, accent-colored active panel borders, muted inactive borders, a vertical file selection marker, compact directory markers, padded panels and a lighter status area. The browser remains a current-directory list; Enter opens a folder and h returns to its parent.
+
+Set `theme = "midnight"` for the new Noodle-inspired dark palette, or cycle themes with `Ctrl+G`. Existing palettes and custom color overrides are retained. Available themes: `auto`, `dark`, `light`, `nord`, `dracula`, `everforest`, `rose-pine`, `kanagawa`, `solarized-dark`, `catppuccin-latte`, `rose-pine-dawn`, `gruvbox`, `tokyo-night`, `midnight`.
 
 ## Keyboard shortcuts
 
@@ -38,6 +44,7 @@ browser_width_percent = 35       # 20–70
 | Browser | `r`, `m`, `d` | Rename, move, send to Trash (confirmation) |
 | Browser | `R`, `/`, `q` | Refresh; search filenames in current folder; quit |
 | Browser | `o` / `b` | Outgoing links / backlinks for selected note |
+| Editor (Normal) | `/`, `?`, `n`, `N` | In-note search forward/backward and repeat matches |
 | Editor | `i`, `Esc` | Enter Insert mode / return to Normal mode |
 | Editor | `h` / `j` / `k` / `l`, `w` / `b`, `gg` / `G` | Vim cursor navigation |
 | Editor | `u`, `Ctrl+R`, `v` | Undo, redo, Visual mode |
@@ -47,7 +54,7 @@ browser_width_percent = 35       # 20–70
 | Editor | `Ctrl+P`, `Ctrl+E` | Zotero citation picker; snippet picker (empty note only) |
 | Anywhere | `Ctrl+F`, `Alt+T` | Full-text search; search YAML tags |
 | Anywhere | `Alt+h` / `Alt+l` (or `Alt+←` / `Alt+→`) | Narrow / widen file-browser pane |
-| Anywhere | `Ctrl+G` | Cycle Auto / Dark / Light themes |
+| Anywhere | `Ctrl+G` | Cycle all built-in themes |
 | Search popup | `Tab`, `↑` / `↓`, `Enter`, `Esc` | Toggle text/tags, select result, open, cancel |
 | Pickers | `↑` / `↓`, `Enter`, `Esc`, `Ctrl+U` | Select, confirm, cancel, clear search (where supported) |
 | Snippet fields | `Tab` / `Enter`, `Shift+Tab` | Next / previous field |

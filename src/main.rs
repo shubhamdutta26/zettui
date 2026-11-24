@@ -20,7 +20,7 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Clear, List, ListItem, ListState, Paragraph, Wrap},
+    widgets::{Block, Clear, List, ListItem, ListState, Padding, Paragraph, Wrap},
 };
 
 use crate::bibliography::Bibliography;
@@ -32,7 +32,7 @@ use crate::links::{Index, LinkItem, NoteSuggestion};
 use crate::search::{SearchHit, SearchMode, VaultIndex};
 use crate::snippets::{Field, Snippet, load_snippets};
 use crate::theme::{
-    Appearance, ColorOverrides, THEME_CHOICES, Theme, ThemeChoice, omarchy_appearance,
+    Appearance, AutoThemes, ColorOverrides, THEME_CHOICES, Theme, ThemeChoice, omarchy_appearance,
 };
 use crossterm::cursor::SetCursorStyle;
 use edtui::Index2;
@@ -253,6 +253,7 @@ struct App {
     theme: Theme,
     theme_choice: ThemeChoice,
     fallback_appearance: Appearance,
+    auto_themes: AutoThemes,
     theme_overrides: ColorOverrides,
     browser_width_percent: u16,
     history: Vec<PathBuf>,
@@ -266,8 +267,12 @@ impl App {
         theme_choice: ThemeChoice,
         theme_overrides: ColorOverrides,
         fallback_appearance: Appearance,
+        auto_themes: AutoThemes,
     ) -> io::Result<Self> {
-        let appearance = theme_choice.resolve(omarchy_appearance().unwrap_or(fallback_appearance));
+        let appearance = auto_themes.resolve(
+            theme_choice,
+            omarchy_appearance().unwrap_or(fallback_appearance),
+        );
         let theme = Theme::named(appearance.as_str())
             .and_then(|theme| theme.with_overrides(&theme_overrides))
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e.to_string()))?;
@@ -302,6 +307,7 @@ impl App {
             theme,
             theme_choice,
             fallback_appearance,
+            auto_themes,
             theme_overrides,
             browser_width_percent: DEFAULT_BROWSER_PERCENT,
             history: Vec::new(),
@@ -423,7 +429,10 @@ impl App {
         if self.theme_choice != ThemeChoice::Auto {
             return;
         }
-        let appearance = omarchy_appearance().unwrap_or(self.fallback_appearance);
+        let appearance = self.auto_themes.resolve(
+            self.theme_choice,
+            omarchy_appearance().unwrap_or(self.fallback_appearance),
+        );
         if self.theme.name != appearance.as_str() {
             if let Ok(theme) = Theme::named(appearance.as_str())
                 .and_then(|t| t.with_overrides(&self.theme_overrides))
@@ -433,10 +442,13 @@ impl App {
         }
     }
 
-    /// Auto -> Dark -> Light -> Auto. This never changes local settings.
+    /// Cycle all built-in palettes. This never changes local settings.
     fn cycle_theme(&mut self) {
         let next = self.theme_choice.next();
-        let appearance = next.resolve(omarchy_appearance().unwrap_or(self.fallback_appearance));
+        let appearance = self.auto_themes.resolve(
+            next,
+            omarchy_appearance().unwrap_or(self.fallback_appearance),
+        );
         match Theme::named(appearance.as_str())
             .and_then(|theme| theme.with_overrides(&self.theme_overrides))
         {
@@ -497,42 +509,33 @@ impl App {
         .split(frame.area());
         let panes = split_panes(areas[1], self.browser_width_percent);
 
-        let location = if self.editor.is_some() {
-            "EDITOR"
-        } else {
-            "BROWSER"
-        };
+        let browser_active = self.editor.is_none() && !self.has_active_popup();
+        let editor_active = self.editor.is_some() && !self.has_active_popup();
+        let workspace = self
+            .root
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("Notes");
         let header = Line::from(vec![
             Span::styled(
-                format!(" ZETTUI v{} ", env!("CARGO_PKG_VERSION")),
+                " Zettui",
                 Style::default()
-                    .fg(theme.background)
-                    .bg(theme.accent)
+                    .fg(theme.accent)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                format!("  {location}  "),
-                Style::default().fg(theme.foreground),
-            ),
-            Span::styled(
-                format!(
-                    "theme: {} ({})   Ctrl+G: mode",
-                    self.theme_choice.as_str(),
-                    theme.name
-                ),
+                format!(" v{}  /  ", env!("CARGO_PKG_VERSION")),
                 Style::default().fg(theme.muted),
             ),
+            Span::styled(workspace, Style::default().fg(theme.foreground)),
         ]);
-        frame.render_widget(
-            Paragraph::new(header).style(Style::default().bg(theme.surface)),
-            areas[0],
-        );
+        frame.render_widget(Paragraph::new(header), areas[0]);
 
         let items: Vec<ListItem> = self
             .entries
             .iter()
             .map(|entry| {
-                let prefix = if entry.is_dir { "[D] " } else { "    " };
+                let prefix = if entry.is_dir { "▸ " } else { "  " };
                 let color = if entry.is_dir {
                     theme.directory
                 } else {
@@ -548,11 +551,20 @@ impl App {
             .block(
                 Block::bordered()
                     .title(" Files ")
-                    .border_style(Style::default().fg(theme.border))
-                    .title_style(Style::default().fg(theme.accent)),
+                    .padding(Padding::horizontal(1))
+                    .border_style(Style::default().fg(if browser_active {
+                        theme.accent
+                    } else {
+                        theme.border
+                    }))
+                    .title_style(Style::default().fg(if browser_active {
+                        theme.accent
+                    } else {
+                        theme.muted
+                    })),
             )
             .highlight_style(Style::default().bg(theme.selected_bg).fg(theme.selected_fg))
-            .highlight_symbol("❯ ");
+            .highlight_symbol("▏ ");
         let mut state = ListState::default();
         if !self.entries.is_empty() {
             state.select(Some(self.selected));
@@ -569,25 +581,33 @@ impl App {
             let title = format!(" {filename}{dirty} ");
             let border = Block::bordered()
                 .title(title)
-                .border_style(Style::default().fg(theme.border))
+                .padding(Padding::horizontal(1))
+                .border_style(Style::default().fg(if editor_active {
+                    theme.accent
+                } else {
+                    theme.border
+                }))
                 .title_style(Style::default().fg(if note.is_dirty() {
                     theme.warning
-                } else {
+                } else if editor_active {
                     theme.accent
+                } else {
+                    theme.muted
                 }));
             let inner = border.inner(panes[1]);
             frame.render_widget(border, panes[1]);
             let editor_theme = EditorTheme::default()
                 .base(theme.base_style())
                 .line_numbers_style(
-                    Style::default()
-                        .fg(theme.muted)
-                        .bg(ratatui::style::Color::Reset),
+                    Style::default().fg(theme.muted).bg(theme
+                        .base_style()
+                        .bg
+                        .unwrap_or(ratatui::style::Color::Reset)),
                 )
                 .selection_style(Style::default().fg(theme.selected_fg).bg(theme.selected_bg))
                 .cursor_style(if note.state.mode == EditorMode::Insert {
                     // Neutralize EdTUI's painted block cursor so the real
-                    // terminal can render its blinking horizontal underline.
+                    // terminal can render its blinking vertical bar.
                     theme.base_style()
                 } else {
                     Style::default().fg(theme.background).bg(theme.accent)
@@ -631,9 +651,10 @@ impl App {
             let preview = Paragraph::new(self.preview.as_str())
                 .block(
                     Block::bordered()
-                        .title(" Preview — Enter to edit ")
+                        .title(" Preview ")
+                        .padding(Padding::horizontal(1))
                         .border_style(Style::default().fg(theme.border))
-                        .title_style(Style::default().fg(theme.accent)),
+                        .title_style(Style::default().fg(theme.muted)),
                 )
                 .style(theme.base_style())
                 .wrap(Wrap { trim: false });
@@ -644,8 +665,40 @@ impl App {
                 self.message,
             )
         };
+        // Keep the three existing status rows, but remove the heavy surface band.
+        // Style shortcut keys separately from their descriptions.
+        let mut rows = footer.splitn(3, '\n');
+        let location = rows.next().unwrap_or_default();
+        let help = rows.next().unwrap_or_default();
+        let message = rows.next().unwrap_or_default();
+        let mut shortcuts = Vec::new();
+        if self.command.is_some() || self.note_search.input.is_some() {
+            shortcuts.push(Span::styled(help, Style::default().fg(theme.accent)));
+        } else {
+            for (i, item) in help.split(" | ").enumerate() {
+                if i > 0 {
+                    shortcuts.push(Span::raw("   "));
+                }
+                let (key, description) = item.split_once(' ').unwrap_or((item, ""));
+                shortcuts.push(Span::styled(
+                    key,
+                    Style::default()
+                        .fg(theme.foreground)
+                        .add_modifier(Modifier::BOLD),
+                ));
+                shortcuts.push(Span::styled(
+                    format!(" {description}"),
+                    Style::default().fg(theme.muted),
+                ));
+            }
+        }
         frame.render_widget(
-            Paragraph::new(footer).style(Style::default().fg(theme.foreground).bg(theme.surface)),
+            Paragraph::new(vec![
+                Line::from(Span::styled(location, Style::default().fg(theme.muted))),
+                Line::from(shortcuts),
+                Line::from(Span::styled(message, Style::default().fg(theme.foreground))),
+            ])
+            .style(theme.base_style()),
             areas[2],
         );
 
@@ -2414,11 +2467,13 @@ fn arguments() -> io::Result<(
     ThemeChoice,
     ColorOverrides,
     Appearance,
+    AutoThemes,
     u16,
     PathBuf,
 )> {
     let config = Config::load()?;
     let browser_width = config.browser_width()?;
+    let auto_themes = config.auto_themes()?;
     let snippets_dir = config
         .snippets_dir
         .clone()
@@ -2488,15 +2543,16 @@ fn arguments() -> io::Result<(
         choice,
         config.colors,
         system,
+        auto_themes,
         browser_width,
         snippets_dir,
     ))
 }
 
 fn main() -> io::Result<()> {
-    let (root, bibliography, choice, overrides, fallback, browser_width, snippets_dir) =
+    let (root, bibliography, choice, overrides, fallback, auto_themes, browser_width, snippets_dir) =
         arguments()?;
-    let mut app = App::new(root, bibliography, choice, overrides, fallback)?;
+    let mut app = App::new(root, bibliography, choice, overrides, fallback, auto_themes)?;
     app.browser_width_percent = browser_width;
     app.snippets_dir = snippets_dir;
     ratatui::run(|terminal| app.run(terminal))
@@ -2539,6 +2595,7 @@ mod lesson6_tests {
             ThemeChoice::Dark,
             ColorOverrides::default(),
             Appearance::Dark,
+            AutoThemes::default(),
         )
         .unwrap();
         app.select_path(&source);
@@ -2574,6 +2631,7 @@ mod lesson6_tests {
             ThemeChoice::Dark,
             ColorOverrides::default(),
             Appearance::Dark,
+            AutoThemes::default(),
         )
         .unwrap();
         app.select_path(&source);
@@ -2633,6 +2691,7 @@ mod lesson73_app_tests {
             ThemeChoice::Dark,
             ColorOverrides::default(),
             Appearance::Dark,
+            AutoThemes::default(),
         )
         .unwrap();
         assert!(app.resize_columns(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::ALT)));
@@ -2659,6 +2718,7 @@ mod lesson74_snippet_app_tests {
             ThemeChoice::Dark,
             ColorOverrides::default(),
             Appearance::Dark,
+            AutoThemes::default(),
         )
         .unwrap();
         app.select_path(&path);
@@ -2698,6 +2758,7 @@ $0"
             ThemeChoice::Dark,
             ColorOverrides::default(),
             Appearance::Dark,
+            AutoThemes::default(),
         )
         .unwrap();
         app.select_path(&path);
@@ -2737,6 +2798,7 @@ mod lesson75_search_app_tests {
             ThemeChoice::Dark,
             ColorOverrides::default(),
             Appearance::Dark,
+            AutoThemes::default(),
         )
         .unwrap();
         app.open_vault_search(SearchMode::Text);
@@ -2762,6 +2824,7 @@ mod lesson75_search_app_tests {
             ThemeChoice::Dark,
             ColorOverrides::default(),
             Appearance::Dark,
+            AutoThemes::default(),
         )
         .unwrap();
         app.select_path(&first);
