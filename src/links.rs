@@ -271,7 +271,7 @@ impl Index {
         let root = root.canonicalize()?;
         let mut notes = Vec::new();
         visit(&root, &root, &mut notes)?;
-        notes.sort_by(|a, b| a.relative.to_lowercase().cmp(&b.relative.to_lowercase()));
+        notes.sort_by_key(|a| a.relative.to_lowercase());
         Ok(Self { root, notes })
     }
 

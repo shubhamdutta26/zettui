@@ -86,7 +86,7 @@ impl NoteSearch {
         self.input = Some(SearchInput {
             query: String::new(),
             direction,
-            origin: state.cursor.clone(),
+            origin: state.cursor,
             viewport: state.viewport_offset(),
         });
         self.count = 0;
@@ -108,7 +108,7 @@ impl NoteSearch {
         let chosen = choose(&hits, &origin, direction);
         state.cursor = origin;
         if let Some(i) = chosen {
-            state.cursor = hits[i].0.clone();
+            state.cursor = hits[i].0;
             self.active = i + 1;
         }
         state.set_highlights(
@@ -132,7 +132,7 @@ impl NoteSearch {
     pub fn preview(&mut self, state: &mut EditorState, style: Style, current_style: Style) {
         if let Some(input) = &self.input {
             let query = input.query.clone();
-            let origin = input.origin.clone();
+            let origin = input.origin;
             let direction = input.direction;
             let (x, y) = input.viewport;
             state.set_viewport_offset(x, y);

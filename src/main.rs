@@ -646,13 +646,13 @@ impl App {
     }
 
     fn go_back(&mut self) -> io::Result<()> {
-        if self.current_dir != self.root {
-            if let Some(parent) = self.current_dir.parent() {
-                let child = self.current_dir.clone();
-                self.current_dir = parent.to_path_buf();
-                self.refresh()?;
-                self.select_path(&child);
-            }
+        if self.current_dir != self.root
+            && let Some(parent) = self.current_dir.parent()
+        {
+            let child = self.current_dir.clone();
+            self.current_dir = parent.to_path_buf();
+            self.refresh()?;
+            self.select_path(&child);
         }
         Ok(())
     }
@@ -667,12 +667,11 @@ impl App {
             self.theme_choice,
             omarchy_appearance().unwrap_or(self.fallback_appearance),
         );
-        if self.theme.name != appearance.as_str() {
-            if let Ok(theme) = Theme::named(appearance.as_str())
+        if self.theme.name != appearance.as_str()
+            && let Ok(theme) = Theme::named(appearance.as_str())
                 .and_then(|t| t.with_overrides(&self.theme_overrides))
-            {
-                self.theme = theme;
-            }
+        {
+            self.theme = theme;
         }
     }
 
@@ -877,10 +876,8 @@ impl App {
                 inner,
             );
             // Only show the hardware cursor when the editor has input focus.
-            if show_editor_cursor {
-                if let Some(cursor) = note.state.cursor_screen_position() {
-                    frame.set_cursor_position((cursor.x, cursor.y));
-                }
+            if show_editor_cursor && let Some(cursor) = note.state.cursor_screen_position() {
+                frame.set_cursor_position((cursor.x, cursor.y));
             }
             let mode = if self.note_search.input.is_some() {
                 "SEARCH".to_owned()
@@ -1450,7 +1447,7 @@ impl App {
             frame,
             theme,
             inner,
-            &dialog.mode.label(),
+            dialog.mode.label(),
             &dialog.query,
             &format!(
                 "{} matches · {} indexed · {} skipped{}",
@@ -1588,14 +1585,14 @@ impl App {
         {
             self.open_link_target(hit.path.clone(), true);
         }
-        if let Some(note) = &mut self.editor {
-            if note.path == hit.path {
-                note.state.cursor = Index2::new(hit.line.saturating_sub(1), 0);
-                note.state
-                    .set_viewport_offset(0, hit.line.saturating_sub(2));
-                self.message = format!("Search result: {}:{}", hit.path.display(), hit.line);
-                return true;
-            }
+        if let Some(note) = &mut self.editor
+            && note.path == hit.path
+        {
+            note.state.cursor = Index2::new(hit.line.saturating_sub(1), 0);
+            note.state
+                .set_viewport_offset(0, hit.line.saturating_sub(2));
+            self.message = format!("Search result: {}:{}", hit.path.display(), hit.line);
+            return true;
         }
         false
     }
@@ -2154,10 +2151,8 @@ impl App {
                 return;
             }
         };
-        if record_history {
-            if let Some(old) = &self.editor {
-                self.history.push(old.path.clone());
-            }
+        if record_history && let Some(old) = &self.editor {
+            self.history.push(old.path.clone());
         }
         if let Some(parent) = target.parent() {
             self.current_dir = parent.to_path_buf();
@@ -2482,7 +2477,7 @@ impl App {
                     } else {
                         direction
                     };
-                    let origin = note.state.cursor.clone();
+                    let origin = note.state.cursor;
                     self.note_search.jump(
                         &mut note.state,
                         &query,

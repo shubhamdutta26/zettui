@@ -18,16 +18,24 @@ Versions identify development milestones; not all have a separate published rele
 | 0.7.2 | `[[` wiki-link autocomplete |
 | 0.7.3 | Configurable and keyboard-resizable panes |
 | 0.7.4 | Zettlr-style reusable note snippets |
-| **0.7.5** | Full-vault text search, YAML tag search, Insert-mode blinking underline cursor |
+| 0.7.5 | Full-vault text search, YAML tag search, Insert-mode blinking underline cursor |
 | 0.7.6 | Theme addition, fixed editor cursor visibility, search within notes |
-| 0.7.7 | Updated UI elements |
+| 0.7.7 | Refined header, active-panel borders, directory and selection indicators, panel padding, cleaner footer, Midnight theme, configurable automatic light/dark presets |
+
+## Release preparation
+
+| Version | Features | Status |
+| --- | --- | --- |
+| **0.7.8** | Vim-style mode indicators, contextual shortcuts, live word count and cursor position, saved/modified indicators, dynamic breadcrumbs, relative paths, redesigned search/tag/citation/snippet/link dialogs, snippet template previews | Implementation complete; final regression tests and release verification pending |
+
 ## Planned
 
 | Milestone | Possible work |
 | --- | --- |
+| 0.8.0 | Advanced UI: Markdown syntax highlighting, sidebar visibility and distraction-free editor mode, optional note metadata panel, configurable UI elements; refine existing sidebar resizing |
 | 0.8.x | Search highlighting, ranked results, faster indexing, optional inline hashtag index |
 | 0.9.x | Link-aware rename/move and broken-link reports |
-| 0.10.x | Markdown and YAML syntax highlighting |
+| 0.10.x | Expanded Markdown and YAML syntax highlighting |
 | Later | In-editor snippet tab stops, ARM64 packages, configurable ZKN IDs |
 
 **Principles:** plain files, local-first, no silent overwrites, safe keyboard-driven workflows.

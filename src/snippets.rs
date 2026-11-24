@@ -88,7 +88,7 @@ pub fn load_snippets(dir: &Path) -> io::Result<Vec<Snippet>> {
             .to_string();
         snippets.push(Snippet { name, source });
     }
-    snippets.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    snippets.sort_by_key(|a| a.name.to_lowercase());
     Ok(snippets)
 }
 
@@ -124,13 +124,13 @@ pub fn fields(source: &str) -> io::Result<Vec<Field>> {
                 "Use $0 for the final cursor position",
             ));
         }
-        if let Some(previous) = values.insert(index, default.to_owned()) {
-            if previous != default {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("Conflicting defaults for tab stop {index}"),
-                ));
-            }
+        if let Some(previous) = values.insert(index, default.to_owned())
+            && previous != default
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Conflicting defaults for tab stop {index}"),
+            ));
         }
         rest = &rest[end + 1..];
     }

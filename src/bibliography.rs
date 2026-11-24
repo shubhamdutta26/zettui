@@ -120,7 +120,7 @@ impl Bibliography {
                 "No citation keys found. Export as Better CSL JSON, or ensure BetterBibTeX items have citationKey fields",
             ));
         }
-        references.sort_by(|a, b| a.key.to_lowercase().cmp(&b.key.to_lowercase()));
+        references.sort_by_key(|a| a.key.to_lowercase());
         Ok(Self { references })
     }
 
@@ -207,14 +207,13 @@ fn year_of(item: &Value) -> String {
         return year.to_string();
     }
     for field in ["year", "date"] {
-        if let Some(date) = item.get(field).and_then(Value::as_str) {
-            if let Some(year) = date
+        if let Some(date) = item.get(field).and_then(Value::as_str)
+            && let Some(year) = date
                 .as_bytes()
                 .windows(4)
                 .find(|w| w.iter().all(|byte| byte.is_ascii_digit()))
-            {
-                return String::from_utf8_lossy(year).into_owned();
-            }
+        {
+            return String::from_utf8_lossy(year).into_owned();
         }
     }
     "n.d.".to_owned()

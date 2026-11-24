@@ -219,13 +219,13 @@ pub fn omarchy_appearance() -> Option<Appearance> {
 
 fn appearance_from_theme_dir(dir: &Path) -> Option<Appearance> {
     let colors = dir.join("colors.toml");
-    if let Ok(content) = fs::read_to_string(&colors) {
-        if let Ok(doc) = content.parse::<toml::Value>() {
-            match doc.get("mode").and_then(toml::Value::as_str) {
-                Some("light") => return Some(Appearance::Light),
-                Some("dark") => return Some(Appearance::Dark),
-                _ => {}
-            }
+    if let Ok(content) = fs::read_to_string(&colors)
+        && let Ok(doc) = content.parse::<toml::Value>()
+    {
+        match doc.get("mode").and_then(toml::Value::as_str) {
+            Some("light") => return Some(Appearance::Light),
+            Some("dark") => return Some(Appearance::Dark),
+            _ => {}
         }
     }
     // Older Omarchy themes use this marker; otherwise an active theme is dark.

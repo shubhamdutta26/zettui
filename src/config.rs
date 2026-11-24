@@ -79,10 +79,10 @@ fn expand_path(path: PathBuf, config_dir: &Path) -> PathBuf {
     if path == Path::new("~") {
         return env::var_os("HOME").map(PathBuf::from).unwrap_or(path);
     }
-    if let Ok(rest) = path.strip_prefix("~/") {
-        if let Some(home) = env::var_os("HOME") {
-            return PathBuf::from(home).join(rest);
-        }
+    if let Ok(rest) = path.strip_prefix("~/")
+        && let Some(home) = env::var_os("HOME")
+    {
+        return PathBuf::from(home).join(rest);
     }
     if path.is_relative() {
         config_dir.join(path)
