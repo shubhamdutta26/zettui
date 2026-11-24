@@ -44,6 +44,8 @@ The status bar shows the current mode, saved or modified state, contextual short
 
 The header shows the notes workspace and current directory as a breadcrumb (for example, `Notes › Antibody › VHH`). Opening a note through a link or search uses the note's actual parent directory. The filename remains in the editor panel title. On narrow terminals, older ancestors are omitted and the current folder is prioritized. The browser status bar uses a root-relative path (`.` at the workspace root). Breadcrumbs are display-only; existing navigation keys are unchanged.
 
+Search, tag, filename, citation, wiki-link and snippet pickers share a theme-aware popup layout with a query field, result counts, highlighted selection and contextual help. Vault results show note excerpts and root-relative locations; citation results show citation keys. The snippet picker shows a read-only template preview on wide terminals, and the snippet form keeps the active field visible. Smaller terminals use a compact layout. Search behavior, insertion semantics and keyboard shortcuts are unchanged.
+
 ## Keyboard shortcuts
 
 | Context | Keys | Action |

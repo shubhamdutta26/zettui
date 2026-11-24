@@ -319,6 +319,149 @@ fn fit_breadcrumb(parts: &[String], width: usize) -> Vec<String> {
     result
 }
 
+/// Shared popup chrome. All dimensions are terminal cells; small screens retain
+/// a visible list row and a compact help line whenever possible.
+fn popup_inner(
+    frame: &mut Frame,
+    theme: Theme,
+    title: &str,
+    max_width: u16,
+    max_height: u16,
+) -> Option<Rect> {
+    let screen = frame.area();
+    let width = screen.width.saturating_sub(2).min(max_width);
+    let height = screen.height.saturating_sub(2).min(max_height);
+    if width < 12 || height < 5 {
+        return None;
+    }
+    let area = Rect::new(
+        screen.x + (screen.width - width) / 2,
+        screen.y + (screen.height - height) / 2,
+        width,
+        height,
+    );
+    frame.render_widget(Clear, area);
+    let block = Block::bordered()
+        .title(format!(" {title} "))
+        .padding(Padding::horizontal(1))
+        .style(Style::default().fg(theme.foreground).bg(theme.surface))
+        .border_style(Style::default().fg(theme.accent))
+        .title_style(
+            Style::default()
+                .fg(theme.accent)
+                .add_modifier(Modifier::BOLD),
+        );
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    Some(inner)
+}
+
+fn popup_help(frame: &mut Frame, theme: Theme, area: Rect, controls: &[(&str, &str)]) {
+    let mut spans = Vec::new();
+    for (i, (key, description)) in controls.iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::raw("   "));
+        }
+        spans.push(Span::styled(
+            *key,
+            Style::default()
+                .fg(theme.foreground)
+                .add_modifier(Modifier::BOLD),
+        ));
+        spans.push(Span::styled(
+            format!(" {description}"),
+            Style::default().fg(theme.muted),
+        ));
+    }
+    frame.render_widget(
+        Paragraph::new(Line::from(spans)).wrap(Wrap { trim: true }),
+        area,
+    );
+}
+
+fn popup_list(
+    frame: &mut Frame,
+    theme: Theme,
+    area: Rect,
+    items: Vec<ListItem<'_>>,
+    selected: usize,
+    empty: &str,
+) {
+    if items.is_empty() {
+        frame.render_widget(
+            Paragraph::new(empty)
+                .style(Style::default().fg(theme.muted))
+                .wrap(Wrap { trim: false }),
+            area,
+        );
+        return;
+    }
+    let mut state = ListState::default();
+    state.select(Some(selected.min(items.len() - 1)));
+    frame.render_stateful_widget(
+        List::new(items)
+            .highlight_symbol("▏ ")
+            .highlight_style(Style::default().fg(theme.selected_fg).bg(theme.selected_bg)),
+        area,
+        &mut state,
+    );
+}
+
+/// Draw a query, result count, and controls; return the remaining list area.
+fn picker_body(
+    frame: &mut Frame,
+    theme: Theme,
+    inner: Rect,
+    label: &str,
+    query: &str,
+    metadata: &str,
+    controls: &[(&str, &str)],
+) -> Rect {
+    let rich = inner.height >= 7;
+    let header_height = if rich {
+        4
+    } else if inner.height >= 4 {
+        2
+    } else {
+        1
+    };
+    let footer_height = if rich { 2 } else { 1 };
+    let areas = Layout::vertical([
+        Constraint::Length(header_height),
+        Constraint::Min(1),
+        Constraint::Length(footer_height),
+    ])
+    .split(inner);
+    let field_height = if rich { 3 } else { 1 };
+    let header =
+        Layout::vertical([Constraint::Length(field_height), Constraint::Min(0)]).split(areas[0]);
+    let value = tail_label(
+        &format!("{query}▏"),
+        usize::from(header[0].width.saturating_sub(if rich { 2 } else { 0 })),
+    );
+    let field =
+        Paragraph::new(value).style(Style::default().fg(theme.foreground).bg(theme.background));
+    if rich {
+        frame.render_widget(
+            field.block(
+                Block::bordered()
+                    .title(format!(" {label} "))
+                    .border_style(Style::default().fg(theme.border))
+                    .title_style(Style::default().fg(theme.accent)),
+            ),
+            header[0],
+        );
+    } else {
+        frame.render_widget(field, header[0]);
+    }
+    frame.render_widget(
+        Paragraph::new(metadata).style(Style::default().fg(theme.muted)),
+        header[1],
+    );
+    popup_help(frame, theme, areas[2], controls);
+    areas[1]
+}
+
 /// The file browser and editor share one application state.
 struct App {
     root: PathBuf,
@@ -970,7 +1113,13 @@ impl App {
                     Paragraph::new(contents)
                         .block(
                             Block::bordered()
-                                .title(title)
+                                .title(format!(" {title} "))
+                                .padding(Padding::horizontal(1))
+                                .title_style(
+                                    Style::default()
+                                        .fg(theme.accent)
+                                        .add_modifier(Modifier::BOLD),
+                                )
                                 .border_style(Style::default().fg(theme.accent)),
                         )
                         .style(Style::default().fg(theme.foreground).bg(theme.surface))
@@ -1007,60 +1156,52 @@ impl App {
         let Some(dialog) = &self.links else {
             return;
         };
-        let screen = frame.area();
-        let width = screen.width.saturating_sub(2).min(94);
-        let height = screen.height.saturating_sub(2).min(18);
-        if width < 12 || height < 5 {
-            return;
-        }
-        let popup = Rect::new(
-            screen.x + (screen.width - width) / 2,
-            screen.y + (screen.height - height) / 2,
-            width,
-            height,
-        );
-        frame.render_widget(Clear, popup);
         let theme = self.theme;
-        let block = Block::bordered()
-            .title(dialog.title.as_str())
-            .border_style(Style::default().fg(theme.accent));
-        let inner = block.inner(popup);
+        let Some(inner) = popup_inner(frame, theme, &dialog.title, 94, 18) else {
+            return;
+        };
+        let areas = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Min(1),
+            Constraint::Length(1),
+        ])
+        .split(inner);
         frame.render_widget(
-            Block::default().style(Style::default().bg(theme.surface)),
-            popup,
+            Paragraph::new(format!(
+                "{} links · ! missing or ambiguous",
+                dialog.items.len()
+            ))
+            .style(Style::default().fg(theme.muted)),
+            areas[0],
         );
-        frame.render_widget(block, popup);
-        let areas = Layout::vertical([Constraint::Min(1), Constraint::Length(2)]).split(inner);
-        let entries: Vec<ListItem> = dialog
+        let items = dialog
             .items
             .iter()
             .map(|item| {
-                let symbol = if item.target.is_some() { "  " } else { "! " };
-                let color = if item.target.is_some() {
-                    theme.foreground
+                let (prefix, color) = if item.target.is_some() {
+                    ("  ", theme.foreground)
                 } else {
-                    theme.warning
+                    ("! ", theme.warning)
                 };
-                ListItem::new(Line::from(vec![
-                    Span::styled(symbol.to_owned(), Style::default().fg(color)),
-                    Span::styled(item.label.clone(), Style::default().fg(color)),
-                ]))
+                ListItem::new(Line::styled(
+                    format!("{prefix}{}", item.label),
+                    Style::default().fg(color),
+                ))
             })
             .collect();
-        let list = List::new(entries)
-            .highlight_style(Style::default().bg(theme.selected_bg).fg(theme.selected_fg))
-            .highlight_symbol("> ");
-        let mut state = ListState::default();
-        if !dialog.items.is_empty() {
-            state.select(Some(dialog.selected));
-        }
-        frame.render_stateful_widget(list, areas[0], &mut state);
-        frame.render_widget(
-            Paragraph::new(
-                "j/k select | Enter open | Esc close\n! means missing or ambiguous; no auto-create",
-            )
-            .style(Style::default().fg(theme.muted).bg(theme.surface)),
+        popup_list(
+            frame,
+            theme,
             areas[1],
+            items,
+            dialog.selected,
+            "No links found.",
+        );
+        popup_help(
+            frame,
+            theme,
+            areas[2],
+            &[("Esc", "Close"), ("j/k", "Select"), ("Enter", "Open")],
         );
     }
 
@@ -1068,66 +1209,51 @@ impl App {
         let Some(dialog) = &self.citation_picker else {
             return;
         };
-        let screen = frame.area();
-        let width = screen.width.saturating_sub(2).min(110);
-        let height = screen.height.saturating_sub(2).min(22);
-        if width < 18 || height < 7 {
-            return;
-        }
-        let popup = Rect::new(
-            screen.x + (screen.width - width) / 2,
-            screen.y + (screen.height - height) / 2,
-            width,
-            height,
-        );
-        frame.render_widget(Clear, popup);
         let theme = self.theme;
-        let block = Block::bordered()
-            .title("Zotero citations — type to search")
-            .border_style(Style::default().fg(theme.accent));
-        let inner = block.inner(popup);
-        frame.render_widget(
-            Block::default().style(Style::default().bg(theme.surface)),
-            popup,
+        let Some(inner) = popup_inner(frame, theme, "Zotero citations", 110, 24) else {
+            return;
+        };
+        let area = picker_body(
+            frame,
+            theme,
+            inner,
+            "Search references",
+            &dialog.query,
+            &format!("{} results · max 200", dialog.matches.len()),
+            &[
+                ("Esc", "Cancel"),
+                ("↑↓", "Select"),
+                ("Enter", "Insert"),
+                ("Ctrl+U", "Clear"),
+            ],
         );
-        frame.render_widget(block, popup);
-        let areas = Layout::vertical([
-            Constraint::Length(2),
-            Constraint::Min(1),
-            Constraint::Length(2),
-        ])
-        .split(inner);
-        frame.render_widget(
-            Paragraph::new(format!("Search: {}▏", dialog.query))
-                .style(Style::default().fg(theme.accent).bg(theme.surface)),
-            areas[0],
-        );
-        let results: Vec<ListItem> = dialog
+        let items = dialog
             .matches
             .iter()
             .map(|&index| {
-                ListItem::new(Line::styled(
-                    dialog.bibliography.references[index].summary(),
-                    Style::default().fg(theme.foreground),
-                ))
+                let reference = &dialog.bibliography.references[index];
+                let title =
+                    Line::styled(reference.summary(), Style::default().fg(theme.foreground));
+                if area.height >= 2 {
+                    ListItem::new(vec![
+                        title,
+                        Line::styled(
+                            format!("  @{}", reference.key),
+                            Style::default().fg(theme.muted),
+                        ),
+                    ])
+                } else {
+                    ListItem::new(title)
+                }
             })
             .collect();
-        let results = List::new(results)
-            .highlight_style(Style::default().bg(theme.selected_bg).fg(theme.selected_fg))
-            .highlight_symbol("> ");
-        let mut state = ListState::default();
-        if !dialog.matches.is_empty() {
-            state.select(Some(dialog.selected));
-        }
-        frame.render_stateful_widget(results, areas[1], &mut state);
-        let count = dialog.matches.len();
-        frame.render_widget(
-            Paragraph::new(format!(
-                "{count} results (max 200) | Up/Down select | Enter insert | Esc cancel
-Ctrl+U clear search | Backspace delete"
-            ))
-            .style(Style::default().fg(theme.muted).bg(theme.surface)),
-            areas[2],
+        popup_list(
+            frame,
+            theme,
+            area,
+            items,
+            dialog.selected,
+            "No matching citations.",
         );
     }
 
@@ -1136,66 +1262,41 @@ Ctrl+U clear search | Backspace delete"
             return;
         };
         let theme = self.theme;
-        let screen = frame.area();
-        let width = screen.width.saturating_sub(2).min(100);
-        let height = screen.height.saturating_sub(2).min(20);
-        if width < 18 || height < 7 {
+        let Some(inner) = popup_inner(frame, theme, "Link a note — [[", 100, 20) else {
             return;
-        }
-        let popup = Rect::new(
-            screen.x + (screen.width - width) / 2,
-            screen.y + (screen.height - height) / 2,
-            width,
-            height,
+        };
+        let area = picker_body(
+            frame,
+            theme,
+            inner,
+            "Search notes",
+            &dialog.query,
+            &format!("{} matches · max 200", dialog.matches.len()),
+            &[
+                ("Esc", "Cancel (keeps [[)"),
+                ("↑↓", "Select"),
+                ("Enter", "Insert"),
+                ("Ctrl+U", "Clear"),
+            ],
         );
-        frame.render_widget(Clear, popup);
-        frame.render_widget(
-            Block::default().style(Style::default().bg(theme.surface)),
-            popup,
-        );
-        let block = Block::bordered()
-            .title(" Link a note — [[ ")
-            .border_style(Style::default().fg(theme.accent));
-        let inner = block.inner(popup);
-        frame.render_widget(block, popup);
-        let areas = Layout::vertical([
-            Constraint::Length(2),
-            Constraint::Min(1),
-            Constraint::Length(2),
-        ])
-        .split(inner);
-        frame.render_widget(
-            Paragraph::new(format!("Search note: {}▏", dialog.query))
-                .style(Style::default().fg(theme.accent).bg(theme.surface)),
-            areas[0],
-        );
-        let items: Vec<ListItem> = dialog
+        let items = dialog
             .matches
             .iter()
-            .map(|index| {
-                let item = &dialog.suggestions[*index];
+            .map(|&index| {
+                let item = &dialog.suggestions[index];
                 ListItem::new(Line::styled(
                     item.label.clone(),
                     Style::default().fg(theme.foreground),
                 ))
             })
             .collect();
-        let mut state = ListState::default();
-        if !dialog.matches.is_empty() {
-            state.select(Some(dialog.selected));
-        }
-        frame.render_stateful_widget(
-            List::new(items)
-                .highlight_style(Style::default().fg(theme.selected_fg).bg(theme.selected_bg))
-                .highlight_symbol("> "),
-            areas[1],
-            &mut state,
-        );
-        frame.render_widget(
-            Paragraph::new(format!(
-                "{} matches (max 200) | Type to filter | Up/Down select | Enter insert\nEsc cancel (keeps [[) | Backspace erase | Ctrl+U clear",
-                dialog.matches.len()
-            )).style(Style::default().fg(theme.muted).bg(theme.surface)), areas[2]
+        popup_list(
+            frame,
+            theme,
+            area,
+            items,
+            dialog.selected,
+            "No matching notes.",
         );
     }
 
@@ -1204,62 +1305,67 @@ Ctrl+U clear search | Backspace delete"
             return;
         };
         let theme = self.theme;
-        let screen = frame.area();
-        let width = screen.width.saturating_sub(2).min(86);
-        let height = screen.height.saturating_sub(2).min(18);
-        if width < 18 || height < 7 {
+        let Some(inner) = popup_inner(frame, theme, "Apply snippet", 100, 22) else {
             return;
-        }
-        let popup = Rect::new(
-            screen.x + (screen.width - width) / 2,
-            screen.y + (screen.height - height) / 2,
-            width,
-            height,
+        };
+        let area = picker_body(
+            frame,
+            theme,
+            inner,
+            "Search snippets",
+            &dialog.query,
+            &format!("{} snippets", dialog.matches.len()),
+            &[
+                ("Esc", "Cancel"),
+                ("↑↓", "Select"),
+                ("Enter", "Choose"),
+                ("Ctrl+U", "Clear"),
+            ],
         );
-        frame.render_widget(Clear, popup);
-        frame.render_widget(
-            Block::default().style(Style::default().bg(theme.surface)),
-            popup,
-        );
-        let block = Block::bordered()
-            .title(" Apply snippet — Ctrl+E ")
-            .border_style(Style::default().fg(theme.accent));
-        let inner = block.inner(popup);
-        frame.render_widget(block, popup);
-        let areas = Layout::vertical([
-            Constraint::Length(2),
-            Constraint::Min(1),
-            Constraint::Length(2),
-        ])
-        .split(inner);
-        frame.render_widget(
-            Paragraph::new(format!("Search: {}▏", dialog.query))
-                .style(Style::default().fg(theme.accent).bg(theme.surface)),
-            areas[0],
-        );
-        let items: Vec<ListItem> = dialog
+        let items = dialog
             .matches
             .iter()
-            .map(|index| ListItem::new(dialog.items[*index].name.clone()))
+            .map(|&index| ListItem::new(dialog.items[index].name.clone()))
             .collect();
-        let mut state = ListState::default();
-        if !dialog.matches.is_empty() {
-            state.select(Some(dialog.selected));
+        if area.width >= 60 && area.height >= 5 {
+            let columns =
+                Layout::horizontal([Constraint::Percentage(40), Constraint::Percentage(60)])
+                    .split(area);
+            popup_list(
+                frame,
+                theme,
+                columns[0],
+                items,
+                dialog.selected,
+                "No matching snippets.",
+            );
+            let preview = dialog
+                .matches
+                .get(dialog.selected)
+                .and_then(|&index| dialog.items.get(index))
+                .map(|item| item.source.as_str())
+                .unwrap_or("");
+            frame.render_widget(
+                Paragraph::new(preview)
+                    .wrap(Wrap { trim: false })
+                    .style(Style::default().fg(theme.foreground))
+                    .block(
+                        Block::bordered()
+                            .title(" Template preview ")
+                            .border_style(Style::default().fg(theme.border)),
+                    ),
+                columns[1],
+            );
+        } else {
+            popup_list(
+                frame,
+                theme,
+                area,
+                items,
+                dialog.selected,
+                "No matching snippets.",
+            );
         }
-        frame.render_stateful_widget(
-            List::new(items)
-                .highlight_style(Style::default().fg(theme.selected_fg).bg(theme.selected_bg))
-                .highlight_symbol("> "),
-            areas[1],
-            &mut state,
-        );
-        frame.render_widget(
-            Paragraph::new(
-                "Type to filter | Up/Down select | Enter choose\nEsc cancel | Ctrl+U clear",
-            )
-            .style(Style::default().fg(theme.muted).bg(theme.surface)),
-            areas[2],
-        );
     }
 
     fn draw_snippet_form(&self, frame: &mut Frame) {
@@ -1267,54 +1373,63 @@ Ctrl+U clear search | Backspace delete"
             return;
         };
         let theme = self.theme;
-        let screen = frame.area();
-        let width = screen.width.saturating_sub(2).min(88);
-        let height = screen.height.saturating_sub(2).min(16);
-        if width < 20 || height < 8 {
+        let Some(inner) = popup_inner(
+            frame,
+            theme,
+            &format!("Snippet: {}", form.snippet.name),
+            88,
+            18,
+        ) else {
             return;
-        }
-        let popup = Rect::new(
-            screen.x + (screen.width - width) / 2,
-            screen.y + (screen.height - height) / 2,
-            width,
-            height,
-        );
-        frame.render_widget(Clear, popup);
+        };
+        let areas = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Min(1),
+            Constraint::Length(if inner.height >= 6 { 2 } else { 1 }),
+        ])
+        .split(inner);
         frame.render_widget(
-            Block::default().style(Style::default().bg(theme.surface)),
-            popup,
+            Paragraph::new(format!(
+                "Field {} of {} · Type to replace default",
+                (form.active + 1).min(form.fields.len()),
+                form.fields.len()
+            ))
+            .style(Style::default().fg(theme.muted)),
+            areas[0],
         );
-        let block = Block::bordered()
-            .title(format!(" Snippet: {} ", form.snippet.name))
-            .border_style(Style::default().fg(theme.accent));
-        let inner = block.inner(popup);
-        frame.render_widget(block, popup);
-        let areas = Layout::vertical([Constraint::Min(1), Constraint::Length(3)]).split(inner);
-        let rows: Vec<Line> = form
+        let items = form
             .fields
             .iter()
             .enumerate()
             .map(|(i, field)| {
-                Line::styled(
-                    format!(
-                        "{} ${}: {}{}",
-                        if i == form.active { ">" } else { " " },
-                        field.index,
-                        field.value,
-                        if i == form.active { "▏" } else { "" }
-                    ),
-                    Style::default().fg(if i == form.active {
-                        theme.accent
-                    } else {
-                        theme.foreground
-                    }),
-                )
+                let label = format!("${}: ", field.index);
+                let value = if i == form.active {
+                    tail_label(
+                        &format!("{}▏", field.value),
+                        usize::from(areas[1].width)
+                            .saturating_sub(2 + Span::raw(label.as_str()).width()),
+                    )
+                } else {
+                    field.value.clone()
+                };
+                ListItem::new(Line::from(vec![
+                    Span::styled(label, Style::default().fg(theme.accent)),
+                    Span::raw(value),
+                ]))
             })
             .collect();
-        frame.render_widget(Paragraph::new(rows).wrap(Wrap { trim: false }), areas[0]);
-        frame.render_widget(Paragraph::new(
-            "Type to replace default | Tab/Enter next or apply\nShift+Tab previous | Ctrl+U clear | Esc cancel"
-        ).style(Style::default().fg(theme.muted).bg(theme.surface)), areas[1]);
+        popup_list(frame, theme, areas[1], items, form.active, "No fields.");
+        popup_help(
+            frame,
+            theme,
+            areas[2],
+            &[
+                ("Esc", "Cancel"),
+                ("Tab/Enter", "Next/apply"),
+                ("Shift+Tab", "Previous"),
+                ("Ctrl+U", "Clear"),
+            ],
+        );
     }
 
     fn draw_vault_search(&self, frame: &mut Frame) {
@@ -1322,44 +1437,41 @@ Ctrl+U clear search | Backspace delete"
             return;
         };
         let theme = self.theme;
-        let screen = frame.area();
-        let width = screen.width.saturating_sub(2).min(106);
-        let height = screen.height.saturating_sub(2).min(23);
-        if width < 24 || height < 7 {
+        let Some(inner) = popup_inner(
+            frame,
+            theme,
+            &format!("Search vault — {}", dialog.mode.label()),
+            106,
+            25,
+        ) else {
             return;
-        }
-        let popup = Rect::new(
-            screen.x + (screen.width - width) / 2,
-            screen.y + (screen.height - height) / 2,
-            width,
-            height,
+        };
+        let area = picker_body(
+            frame,
+            theme,
+            inner,
+            &dialog.mode.label(),
+            &dialog.query,
+            &format!(
+                "{} matches · {} indexed · {} skipped{}",
+                dialog.matches.len(),
+                dialog.index.count(),
+                dialog.index.skipped,
+                if dialog.index.truncated {
+                    " · file limit reached"
+                } else {
+                    ""
+                }
+            ),
+            &[
+                ("Esc", "Cancel"),
+                ("↑↓", "Select"),
+                ("Enter", "Open"),
+                ("Tab", "Text/Tags"),
+                ("Ctrl+U", "Clear"),
+            ],
         );
-        frame.render_widget(Clear, popup);
-        frame.render_widget(
-            Block::default().style(Style::default().bg(theme.surface)),
-            popup,
-        );
-        let block = Block::bordered()
-            .title(format!(" Search vault — {} ", dialog.mode.label()))
-            .border_style(Style::default().fg(theme.accent));
-        let inner = block.inner(popup);
-        frame.render_widget(block, popup);
-        let areas = Layout::vertical([
-            Constraint::Length(2),
-            Constraint::Min(1),
-            Constraint::Length(2),
-        ])
-        .split(inner);
-        frame.render_widget(
-            Paragraph::new(format!(
-                "{} search: {}▏  (Tab changes mode)",
-                dialog.mode.label(),
-                dialog.query
-            ))
-            .style(Style::default().fg(theme.accent).bg(theme.surface)),
-            areas[0],
-        );
-        let items: Vec<ListItem> = dialog
+        let items = dialog
             .matches
             .iter()
             .map(|hit| {
@@ -1367,30 +1479,36 @@ Ctrl+U clear search | Backspace delete"
                     .path
                     .strip_prefix(&dialog.index.root)
                     .unwrap_or(&hit.path);
-                ListItem::new(format!(
-                    "{}:{}  {}",
-                    relative.display(),
-                    hit.line,
-                    hit.excerpt
-                ))
+                let name = relative
+                    .file_name()
+                    .map(|n| n.to_string_lossy())
+                    .unwrap_or_else(|| relative.to_string_lossy());
+                let location = format!("{}:{}", relative.display(), hit.line);
+                if area.height >= 3 && area.width >= 32 {
+                    ListItem::new(vec![
+                        Line::styled(
+                            format!("{} · {}", name, hit.excerpt),
+                            Style::default().fg(theme.foreground),
+                        ),
+                        Line::styled(format!("  {location}"), Style::default().fg(theme.muted)),
+                    ])
+                } else {
+                    ListItem::new(format!("{location}  {}", hit.excerpt))
+                }
             })
             .collect();
-        let mut state = ListState::default();
-        if !dialog.matches.is_empty() {
-            state.select(Some(dialog.selected));
-        }
-        frame.render_stateful_widget(
-            List::new(items)
-                .highlight_style(Style::default().fg(theme.selected_fg).bg(theme.selected_bg))
-                .highlight_symbol("❯ "),
-            areas[1],
-            &mut state,
+        popup_list(
+            frame,
+            theme,
+            area,
+            items,
+            dialog.selected,
+            if dialog.query.is_empty() {
+                "Type a query to search your notes."
+            } else {
+                "No matching notes."
+            },
         );
-        frame.render_widget(Paragraph::new(format!(
-            "{} matches | {} indexed | {} skipped{} | ↑↓ select Enter open Esc cancel\nTab toggle Text/Tags | Ctrl+U clear",
-            dialog.matches.len(), dialog.index.count(), dialog.index.skipped,
-            if dialog.index.truncated { " | file limit reached" } else { "" }
-        )).style(Style::default().fg(theme.muted).bg(theme.surface)), areas[2]);
     }
 
     fn draw_find_dialog(&self, frame: &mut Frame) {
@@ -1398,67 +1516,46 @@ Ctrl+U clear search | Backspace delete"
             return;
         };
         let theme = self.theme;
-        let screen = frame.area();
-        let width = screen.width.saturating_sub(2).min(84);
-        let height = screen.height.saturating_sub(2).min(18);
-        if width < 18 || height < 7 {
+        let Some(inner) = popup_inner(frame, theme, "Find in current folder", 84, 18) else {
             return;
-        }
-        let popup = Rect::new(
-            screen.x + (screen.width - width) / 2,
-            screen.y + (screen.height - height) / 2,
-            width,
-            height,
+        };
+        let area = picker_body(
+            frame,
+            theme,
+            inner,
+            "Filename",
+            &dialog.query,
+            &format!("{} matches", dialog.matches.len()),
+            &[
+                ("Esc", "Cancel"),
+                ("↑↓", "Select"),
+                ("Enter", "Jump to file"),
+                ("Ctrl+U", "Clear"),
+            ],
         );
-        frame.render_widget(Clear, popup);
-        frame.render_widget(
-            Block::default().style(Style::default().bg(theme.surface)),
-            popup,
-        );
-        let block = Block::bordered()
-            .title(" Find in current folder ")
-            .border_style(Style::default().fg(theme.accent));
-        let inner = block.inner(popup);
-        frame.render_widget(block, popup);
-        let areas = Layout::vertical([
-            Constraint::Length(2),
-            Constraint::Min(1),
-            Constraint::Length(2),
-        ])
-        .split(inner);
-        frame.render_widget(
-            Paragraph::new(format!("Name: {}▏", dialog.query))
-                .style(Style::default().fg(theme.accent).bg(theme.surface)),
-            areas[0],
-        );
-        let items: Vec<ListItem> = dialog
+        let items = dialog
             .matches
             .iter()
-            .map(|index| {
-                let entry = &self.entries[*index];
-                let color = if entry.is_dir {
-                    theme.directory
+            .map(|&index| {
+                let entry = &self.entries[index];
+                let (prefix, color) = if entry.is_dir {
+                    ("▸ ", theme.directory)
                 } else {
-                    theme.foreground
+                    ("  ", theme.foreground)
                 };
-                ListItem::new(Line::styled(entry.name.clone(), Style::default().fg(color)))
+                ListItem::new(Line::styled(
+                    format!("{prefix}{}", entry.name),
+                    Style::default().fg(color),
+                ))
             })
             .collect();
-        let list = List::new(items)
-            .highlight_style(Style::default().fg(theme.selected_fg).bg(theme.selected_bg))
-            .highlight_symbol("❯ ");
-        let mut state = ListState::default();
-        if !dialog.matches.is_empty() {
-            state.select(Some(dialog.selected));
-        }
-        frame.render_stateful_widget(list, areas[1], &mut state);
-        frame.render_widget(
-            Paragraph::new(format!(
-                "{} matches | Up/Down: select | Enter: jump to file\nEsc: cancel | Ctrl+U: clear",
-                dialog.matches.len()
-            ))
-            .style(Style::default().fg(theme.muted).bg(theme.surface)),
-            areas[2],
+        popup_list(
+            frame,
+            theme,
+            area,
+            items,
+            dialog.selected,
+            "No matching files or folders.",
         );
     }
 
