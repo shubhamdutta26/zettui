@@ -3,6 +3,7 @@
 mod bibliography;
 mod config;
 mod editor;
+mod editor_search;
 mod file_ops;
 mod layout;
 mod links;
@@ -25,6 +26,7 @@ use ratatui::{
 use crate::bibliography::Bibliography;
 use crate::config::Config;
 use crate::editor::OpenNote;
+use crate::editor_search::{Direction, NoteSearch};
 use crate::layout::{DEFAULT_BROWSER_PERCENT, resize_browser_percent, split_panes};
 use crate::links::{Index, LinkItem, NoteSuggestion};
 use crate::search::{SearchHit, SearchMode, VaultIndex};
@@ -236,6 +238,7 @@ struct App {
     editor: Option<OpenNote>,
     editor_keys: EditorEventHandler,
     command: Option<String>,
+    note_search: NoteSearch,
     prompt: Option<Prompt>,
     links: Option<LinkDialog>,
     citation_picker: Option<CitationDialog>,
@@ -284,6 +287,7 @@ impl App {
             editor: None,
             editor_keys: EditorEventHandler::default(),
             command: None,
+            note_search: NoteSearch::default(),
             prompt: None,
             links: None,
             citation_picker: None,
@@ -482,7 +486,7 @@ impl App {
     }
 
     fn draw(&mut self, frame: &mut Frame) {
-        let show_editor_cursor = !self.has_active_popup();
+        let show_editor_cursor = !self.has_active_popup() && self.note_search.input.is_none();
         let theme = self.theme;
         frame.render_widget(Block::default().style(theme.base_style()), frame.area());
         let areas = Layout::vertical([
@@ -602,7 +606,15 @@ impl App {
                     frame.set_cursor_position((cursor.x, cursor.y));
                 }
             }
-            let help = if let Some(command) = &self.command {
+            let help = if let Some(input) = &self.note_search.input {
+                format!(
+                    "{}{}▏  [{}/{}] | Enter confirm | Esc cancel",
+                    input.direction.prefix(),
+                    input.query,
+                    self.note_search.active,
+                    self.note_search.count
+                )
+            } else if let Some(command) = &self.command {
                 format!(":{command}   Enter: run | Esc: cancel")
             } else {
                 ":w Save | Ctrl+F Search | Alt+T Tags | Ctrl+P Cite | Ctrl+E Snippet".to_owned()
@@ -2003,6 +2015,144 @@ Ctrl+U clear search | Backspace delete"
         }
     }
 
+    fn handle_note_search_key(&mut self, key: KeyEvent) {
+        let Some(note) = &mut self.editor else {
+            self.note_search.input = None;
+            return;
+        };
+        let style = Style::default()
+            .fg(self.theme.selected_fg)
+            .bg(self.theme.selected_bg);
+        let current = Style::default()
+            .fg(self.theme.background)
+            .bg(self.theme.accent);
+        match key.code {
+            KeyCode::Esc => {
+                self.note_search.cancel(&mut note.state);
+                self.message = "Search canceled.".into();
+                return;
+            }
+            KeyCode::Enter => {
+                if let Some(input) = self.note_search.input.take() {
+                    let query = if input.query.is_empty() {
+                        self.note_search
+                            .last
+                            .as_ref()
+                            .map(|(q, _)| q.clone())
+                            .unwrap_or_default()
+                    } else {
+                        input.query
+                    };
+                    if !query.is_empty() {
+                        self.note_search.jump(
+                            &mut note.state,
+                            &query,
+                            input.origin,
+                            input.direction,
+                            style,
+                            current,
+                        );
+                        self.note_search.last = Some((query, input.direction));
+                    }
+                }
+                self.message = if self.note_search.count == 0 {
+                    "No match.".into()
+                } else {
+                    format!(
+                        "Match {}/{} | n next | N previous",
+                        self.note_search.active, self.note_search.count
+                    )
+                };
+                return;
+            }
+            KeyCode::Backspace => {
+                if let Some(input) = &mut self.note_search.input {
+                    input.query.pop();
+                }
+            }
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if let Some(input) = &mut self.note_search.input {
+                    input.query.clear();
+                }
+            }
+            KeyCode::Char(c)
+                if !key
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+            {
+                if let Some(input) = &mut self.note_search.input {
+                    input.query.push(c);
+                }
+            }
+            _ => return,
+        }
+        self.note_search.preview(&mut note.state, style, current);
+    }
+
+    fn intercept_note_search(&mut self, key: KeyEvent) -> bool {
+        if self.note_search.input.is_some() {
+            self.handle_note_search_key(key);
+            return true;
+        }
+        let Some(note) = &mut self.editor else {
+            return false;
+        };
+        if note.state.mode != EditorMode::Normal
+            || key
+                .modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+        {
+            return false;
+        }
+        match key.code {
+            KeyCode::Char('/') | KeyCode::Char('?') => {
+                let direction = if key.code == KeyCode::Char('/') {
+                    Direction::Forward
+                } else {
+                    Direction::Backward
+                };
+                note.state.clear_highlights();
+                self.note_search.begin(&note.state, direction);
+                self.message.clear();
+                true
+            }
+            KeyCode::Char('n') | KeyCode::Char('N') => {
+                if let Some((query, direction)) = self.note_search.last.clone() {
+                    let direction = if key.code == KeyCode::Char('N') {
+                        direction.reverse()
+                    } else {
+                        direction
+                    };
+                    let origin = note.state.cursor.clone();
+                    self.note_search.jump(
+                        &mut note.state,
+                        &query,
+                        origin,
+                        direction,
+                        Style::default()
+                            .fg(self.theme.selected_fg)
+                            .bg(self.theme.selected_bg),
+                        Style::default()
+                            .fg(self.theme.background)
+                            .bg(self.theme.accent),
+                    );
+                    self.message = if self.note_search.count == 0 {
+                        "No match.".into()
+                    } else {
+                        format!(
+                            "Match {}/{} | n next | N previous",
+                            self.note_search.active, self.note_search.count
+                        )
+                    };
+                } else {
+                    self.message = "No previous search. Press / or ?.".into();
+                }
+                true
+            }
+            _ => false,
+        }
+    }
+
     fn handle_editor_key(&mut self, key: KeyEvent) {
         // Only two consecutive `[` keystrokes in Insert mode trigger a picker.
         // A navigation key, modifier shortcut or editor command resets it.
@@ -2036,6 +2186,14 @@ Ctrl+U clear search | Backspace delete"
                 _ => {}
             }
             return;
+        }
+
+        if self.intercept_note_search(key) {
+            return;
+        }
+        // Ordinary editing can invalidate the previous match coordinates.
+        if let Some(note) = &mut self.editor {
+            note.state.clear_highlights();
         }
 
         if key.modifiers.contains(KeyModifiers::CONTROL) {
@@ -2180,6 +2338,10 @@ Ctrl+U clear search | Backspace delete"
             }
             if self.vault_search.is_some() {
                 self.handle_vault_search_key(key);
+                continue;
+            }
+            if self.note_search.input.is_some() {
+                self.handle_note_search_key(key);
                 continue;
             }
             if key.code == KeyCode::Char('f') && key.modifiers.contains(KeyModifiers::CONTROL) {
