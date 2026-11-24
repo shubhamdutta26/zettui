@@ -571,13 +571,16 @@ impl App {
         }
         frame.render_stateful_widget(list, panes[0], &mut state);
 
-        let footer = if let Some(note) = &mut self.editor {
+        let popup_active = self.has_active_popup();
+        let (mode, location, help, stats, dirty_state) = if let Some(note) = &mut self.editor {
             let filename = note
                 .path
                 .file_name()
                 .and_then(|name| name.to_str())
-                .unwrap_or("note");
-            let dirty = if note.is_dirty() { " [+]" } else { "" };
+                .unwrap_or("note")
+                .to_owned();
+            let modified = note.is_dirty();
+            let dirty = if modified { " [+]" } else { "" };
             let title = format!(" {filename}{dirty} ");
             let border = Block::bordered()
                 .title(title)
@@ -587,7 +590,7 @@ impl App {
                 } else {
                     theme.border
                 }))
-                .title_style(Style::default().fg(if note.is_dirty() {
+                .title_style(Style::default().fg(if modified {
                     theme.warning
                 } else if editor_active {
                     theme.accent
@@ -626,6 +629,13 @@ impl App {
                     frame.set_cursor_position((cursor.x, cursor.y));
                 }
             }
+            let mode = if self.note_search.input.is_some() {
+                "SEARCH".to_owned()
+            } else if self.command.is_some() {
+                "COMMAND".to_owned()
+            } else {
+                note.state.mode.name().to_uppercase()
+            };
             let help = if let Some(input) = &self.note_search.input {
                 format!(
                     "{}{}▏  [{}/{}] | Enter confirm | Esc cancel",
@@ -635,18 +645,22 @@ impl App {
                     self.note_search.count
                 )
             } else if let Some(command) = &self.command {
-                format!(":{command}   Enter: run | Esc: cancel")
+                format!(":{command}▏   Enter run | Esc cancel")
+            } else if mode == "NORMAL" {
+                "i Insert | v Visual | / Find | :w Save | :q Close | Ctrl+F Search | Alt+T Tags"
+                    .to_owned()
+            } else if mode == "INSERT" {
+                "Esc Normal | Ctrl+S Save | Ctrl+P Cite | Ctrl+E Snippet | Ctrl+F Search".to_owned()
             } else {
-                ":w Save | Ctrl+F Search | Alt+T Tags | Ctrl+P Cite | Ctrl+E Snippet".to_owned()
+                "Esc Normal | Ctrl+S Save | Ctrl+F Search | Alt+T Tags".to_owned()
             };
-            format!(
-                "{} | {}{}\n{}\n{}",
-                note.path.display(),
-                note.state.mode.name(),
-                dirty,
-                help,
-                self.message,
-            )
+            let stats = format!(
+                "{} words  │  Ln {}, Col {}",
+                note.state.lines.to_string().split_whitespace().count(),
+                note.state.cursor.row + 1,
+                note.state.cursor.col + 1
+            );
+            (mode, filename, help, stats, Some(modified))
         } else {
             let preview = Paragraph::new(self.preview.as_str())
                 .block(
@@ -659,21 +673,93 @@ impl App {
                 .style(theme.base_style())
                 .wrap(Wrap { trim: false });
             frame.render_widget(preview, panes[1]);
-            format!(
-                "{}\nEnter Open | n New note | N New folder | / Find | Ctrl+F Search | q Quit\n{}",
-                self.current_dir.display(),
-                self.message,
+            (
+                "BROWSER".to_owned(),
+                self.current_dir.display().to_string(),
+                "Enter Open | n New note | N New folder | / Find | Ctrl+F Search | q Quit"
+                    .to_owned(),
+                String::new(),
+                None,
             )
         };
-        // Keep the three existing status rows, but remove the heavy surface band.
-        // Style shortcut keys separately from their descriptions.
-        let mut rows = footer.splitn(3, '\n');
-        let location = rows.next().unwrap_or_default();
-        let help = rows.next().unwrap_or_default();
-        let message = rows.next().unwrap_or_default();
+        let mode = if popup_active {
+            "DIALOG"
+        } else {
+            mode.as_str()
+        };
+        let mode_color = match mode {
+            "INSERT" => theme.directory,
+            "VISUAL" => theme.foreground,
+            "COMMAND" | "SEARCH" | "DIALOG" => theme.warning,
+            "NORMAL" => theme.success,
+            _ => theme.accent,
+        };
+        let mut status = vec![Span::styled(
+            format!(" {mode} "),
+            Style::default()
+                .fg(theme.background)
+                .bg(mode_color)
+                .add_modifier(Modifier::BOLD),
+        )];
+        if let Some(modified) = dirty_state {
+            status.push(Span::styled(
+                if modified {
+                    "  ● Modified"
+                } else {
+                    "  ✓ Saved"
+                },
+                Style::default().fg(if modified {
+                    theme.warning
+                } else {
+                    theme.success
+                }),
+            ));
+        }
+        status.push(Span::styled(
+            format!("  {location}"),
+            Style::default().fg(theme.muted),
+        ));
+        let footer_rows = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ])
+        .split(areas[2]);
+        let status_line = Line::from(status);
+        // Give the mode and save state priority on narrow terminals.
+        let stats_line = Line::from(Span::styled(stats, Style::default().fg(theme.muted)));
+        let stats_width = stats_line.width();
+        if stats_width > 0
+            && status_line.width() + stats_width + 2 <= usize::from(footer_rows[0].width)
+        {
+            let columns =
+                Layout::horizontal([Constraint::Min(0), Constraint::Length(stats_width as u16)])
+                    .split(footer_rows[0]);
+            frame.render_widget(
+                Paragraph::new(status_line).style(theme.base_style()),
+                columns[0],
+            );
+            frame.render_widget(
+                Paragraph::new(stats_line).style(theme.base_style()),
+                columns[1],
+            );
+        } else {
+            frame.render_widget(
+                Paragraph::new(status_line).style(theme.base_style()),
+                footer_rows[0],
+            );
+        }
         let mut shortcuts = Vec::new();
-        if self.command.is_some() || self.note_search.input.is_some() {
-            shortcuts.push(Span::styled(help, Style::default().fg(theme.accent)));
+        if popup_active {
+            shortcuts.push(Span::styled(
+                "See dialog for controls",
+                Style::default().fg(theme.muted),
+            ));
+        } else if self.command.is_some() || self.note_search.input.is_some() {
+            shortcuts.push(Span::styled(
+                help.as_str(),
+                Style::default().fg(theme.accent),
+            ));
         } else {
             for (i, item) in help.split(" | ").enumerate() {
                 if i > 0 {
@@ -693,13 +779,12 @@ impl App {
             }
         }
         frame.render_widget(
-            Paragraph::new(vec![
-                Line::from(Span::styled(location, Style::default().fg(theme.muted))),
-                Line::from(shortcuts),
-                Line::from(Span::styled(message, Style::default().fg(theme.foreground))),
-            ])
-            .style(theme.base_style()),
-            areas[2],
+            Paragraph::new(Line::from(shortcuts)).style(theme.base_style()),
+            footer_rows[1],
+        );
+        frame.render_widget(
+            Paragraph::new(self.message.as_str()).style(theme.base_style()),
+            footer_rows[2],
         );
 
         if let Some(prompt) = &self.prompt {

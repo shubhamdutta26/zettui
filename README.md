@@ -22,6 +22,8 @@ Edit `~/.config/zettui/config.toml`:
 notes_dir = "/home/USER/Documents/Notes"
 bibliography = "/home/USER/Documents/Zotero/references.json"
 theme = "auto"                    # auto | dark | light | midnight | ...
+# light_theme = "catppuccin-latte"
+# dark_theme = "everforest"
 browser_width_percent = 35       # 20–70
 # snippets_dir = "/home/USER/.config/zettui/snippets"
 ```
@@ -34,12 +36,18 @@ The interface uses a compact workspace header, accent-colored active panel borde
 
 Set `theme = "midnight"` for the new Noodle-inspired dark palette, or cycle themes with `Ctrl+G`. Existing palettes and custom color overrides are retained. Available themes: `auto`, `dark`, `light`, `nord`, `dracula`, `everforest`, `rose-pine`, `kanagawa`, `solarized-dark`, `catppuccin-latte`, `rose-pine-dawn`, `gruvbox`, `tokyo-night`, `midnight`.
 
+In Auto mode, optional `light_theme` and `dark_theme` select fixed palettes for the corresponding system appearance. Omitting them preserves the original defaults.
+
+## Interface refinement (v0.7.8)
+
+The status bar shows the current mode, saved or modified state, contextual shortcuts, live word count and one-based cursor line and column. Word count uses whitespace-separated tokens in the entire live buffer, including Markdown and YAML. On narrow terminals, cursor statistics may be hidden to preserve the main status.
+
 ## Keyboard shortcuts
 
 | Context | Keys | Action |
 | --- | --- | --- |
 | Browser | `j` / `k`, `↑` / `↓` | Move through files |
-| Browser | `Enter` / `l`, `h` | Open file/folder; go to parent folder |
+| Browser | `Enter`, `l`, `h` | Open file/folder; enter folder only; go to parent folder |
 | Browser | `n` / `N` | Create note / folder |
 | Browser | `r`, `m`, `d` | Rename, move, send to Trash (confirmation) |
 | Browser | `R`, `/`, `q` | Refresh; search filenames in current folder; quit |
