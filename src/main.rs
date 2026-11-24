@@ -11,7 +11,11 @@ mod search;
 mod snippets;
 mod theme;
 
-use std::{env, fs, io, path::PathBuf, time::Duration};
+use std::{
+    env, fs, io,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use edtui::{EditorEventHandler, EditorMode, EditorTheme, EditorView, LineNumbers};
@@ -226,6 +230,93 @@ impl VaultSearchDialog {
         self.matches = self.index.search(self.mode, &self.query, 200);
         self.selected = 0;
     }
+}
+
+/// Keep filenames on one terminal row, including names with control characters.
+fn display_component(value: &str) -> String {
+    value
+        .chars()
+        .map(|c| if c.is_control() { '�' } else { c })
+        .collect()
+}
+
+/// The workspace name followed by directory components relative to the notes root.
+fn breadcrumb_parts(root: &Path, directory: &Path) -> Vec<String> {
+    let label = |path: &Path| display_component(&path.to_string_lossy());
+    match directory.strip_prefix(root) {
+        Ok(relative) => {
+            let mut parts = vec![
+                root.file_name()
+                    .map(|name| display_component(&name.to_string_lossy()))
+                    .unwrap_or_else(|| label(root)),
+            ];
+            parts.extend(
+                relative
+                    .components()
+                    .map(|part| display_component(&part.as_os_str().to_string_lossy())),
+            );
+            parts
+        }
+        // Do not misrepresent a directory outside the workspace as root-relative.
+        Err(_) => directory
+            .components()
+            .map(|part| display_component(&part.as_os_str().to_string_lossy()))
+            .collect(),
+    }
+}
+
+/// Shorten a single label from the left, measuring terminal cells rather than bytes.
+fn tail_label(label: &str, width: usize) -> String {
+    if Span::raw(label).width() <= width {
+        return label.to_owned();
+    }
+    if width == 0 {
+        return String::new();
+    }
+    let mut start = label.len();
+    for (index, _) in label.char_indices().rev() {
+        if Span::raw(&label[index..]).width() + 1 > width {
+            break;
+        }
+        start = index;
+    }
+    format!("…{}", &label[start..])
+}
+
+/// Hide whole ancestors first; always retain as much of the current folder as fits.
+fn fit_breadcrumb(parts: &[String], width: usize) -> Vec<String> {
+    const SEPARATOR: &str = " › ";
+    if width == 0 || parts.is_empty() {
+        return Vec::new();
+    }
+    let separator_width = Span::raw(SEPARATOR).width();
+    let full_width = parts
+        .iter()
+        .map(|p| Span::raw(p.as_str()).width())
+        .sum::<usize>()
+        + separator_width * parts.len().saturating_sub(1);
+    if full_width <= width {
+        return parts.to_vec();
+    }
+    let last = parts.last().expect("nonempty breadcrumb");
+    let last_width = Span::raw(last.as_str()).width();
+    let omitted_width = 1 + separator_width;
+    if last_width + omitted_width > width {
+        return vec![tail_label(last, width)];
+    }
+    let mut first = parts.len() - 1;
+    let mut used = last_width + omitted_width;
+    while first > 0 {
+        let extra = Span::raw(parts[first - 1].as_str()).width() + separator_width;
+        if used + extra > width {
+            break;
+        }
+        used += extra;
+        first -= 1;
+    }
+    let mut result = vec!["…".to_owned()];
+    result.extend_from_slice(&parts[first..]);
+    result
 }
 
 /// The file browser and editor share one application state.
@@ -511,12 +602,14 @@ impl App {
 
         let browser_active = self.editor.is_none() && !self.has_active_popup();
         let editor_active = self.editor.is_some() && !self.has_active_popup();
-        let workspace = self
-            .root
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("Notes");
-        let header = Line::from(vec![
+        // Show the actual directory of the open note, or the current browser folder.
+        let directory = self
+            .editor
+            .as_ref()
+            .and_then(|note| note.path.parent())
+            .unwrap_or(&self.current_dir);
+        let parts = breadcrumb_parts(&self.root, directory);
+        let mut header = vec![
             Span::styled(
                 " Zettui",
                 Style::default()
@@ -527,9 +620,26 @@ impl App {
                 format!(" v{}  /  ", env!("CARGO_PKG_VERSION")),
                 Style::default().fg(theme.muted),
             ),
-            Span::styled(workspace, Style::default().fg(theme.foreground)),
-        ]);
-        frame.render_widget(Paragraph::new(header), areas[0]);
+        ];
+        let prefix_width = header.iter().map(Span::width).sum::<usize>();
+        let available = usize::from(areas[0].width).saturating_sub(prefix_width);
+        let visible = fit_breadcrumb(&parts, available);
+        for (index, part) in visible.iter().enumerate() {
+            if index > 0 {
+                header.push(Span::styled(" › ", Style::default().fg(theme.muted)));
+            }
+            let style = if part == "…" {
+                Style::default().fg(theme.muted)
+            } else if index + 1 == visible.len() {
+                Style::default()
+                    .fg(theme.foreground)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(theme.muted)
+            };
+            header.push(Span::styled(part.as_str(), style));
+        }
+        frame.render_widget(Paragraph::new(Line::from(header)), areas[0]);
 
         let items: Vec<ListItem> = self
             .entries
@@ -675,7 +785,17 @@ impl App {
             frame.render_widget(preview, panes[1]);
             (
                 "BROWSER".to_owned(),
-                self.current_dir.display().to_string(),
+                {
+                    let relative = self
+                        .current_dir
+                        .strip_prefix(&self.root)
+                        .unwrap_or(&self.current_dir);
+                    if relative.as_os_str().is_empty() {
+                        ".".to_owned()
+                    } else {
+                        display_component(&relative.to_string_lossy())
+                    }
+                },
                 "Enter Open | n New note | N New folder | / Find | Ctrl+F Search | q Quit"
                     .to_owned(),
                 String::new(),
@@ -715,10 +835,14 @@ impl App {
                 }),
             ));
         }
-        status.push(Span::styled(
-            format!("  {location}"),
-            Style::default().fg(theme.muted),
-        ));
+        let location_width = usize::from(areas[2].width)
+            .saturating_sub(status.iter().map(Span::width).sum::<usize>() + 2);
+        if location_width > 0 {
+            status.push(Span::styled(
+                format!("  {}", tail_label(&location, location_width)),
+                Style::default().fg(theme.muted),
+            ));
+        }
         let footer_rows = Layout::vertical([
             Constraint::Length(1),
             Constraint::Length(1),
@@ -2935,5 +3059,43 @@ mod lesson75_search_app_tests {
         app.handle_vault_search_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert!(app.vault_search.is_some());
         assert_eq!(app.editor.as_ref().unwrap().path, first);
+    }
+}
+
+#[cfg(test)]
+mod breadcrumb_tests {
+    use super::*;
+
+    #[test]
+    fn workspace_and_nested_directory() {
+        let root = Path::new("/home/sam/Notes");
+        assert_eq!(breadcrumb_parts(root, root), vec!["Notes"]);
+        assert_eq!(
+            breadcrumb_parts(root, &root.join("Antibody/VHH")),
+            vec!["Notes", "Antibody", "VHH"]
+        );
+        assert_eq!(
+            breadcrumb_parts(root, Path::new("/tmp/Other")),
+            vec!["/", "tmp", "Other"]
+        );
+    }
+
+    #[test]
+    fn long_paths_keep_current_folder() {
+        let parts = ["Notes", "Antibody", "VHH"].map(str::to_owned);
+        assert_eq!(fit_breadcrumb(&parts, 80), parts.to_vec());
+        assert_eq!(fit_breadcrumb(&parts, 7), vec!["…", "VHH"]);
+        assert_eq!(fit_breadcrumb(&parts, 2), vec!["…H"]);
+        assert!(fit_breadcrumb(&parts, 0).is_empty());
+    }
+
+    #[test]
+    fn unicode_and_control_characters_are_safe() {
+        let parts = ["Notes", "抗体研究"].map(str::to_owned);
+        for width in 0..25 {
+            let fitted = fit_breadcrumb(&parts, width).join(" › ");
+            assert!(Span::raw(fitted).width() <= width);
+        }
+        assert_eq!(display_component("a\nb"), "a�b");
     }
 }

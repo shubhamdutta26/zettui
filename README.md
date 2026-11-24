@@ -42,6 +42,8 @@ In Auto mode, optional `light_theme` and `dark_theme` select fixed palettes for 
 
 The status bar shows the current mode, saved or modified state, contextual shortcuts, live word count and one-based cursor line and column. Word count uses whitespace-separated tokens in the entire live buffer, including Markdown and YAML. On narrow terminals, cursor statistics may be hidden to preserve the main status.
 
+The header shows the notes workspace and current directory as a breadcrumb (for example, `Notes › Antibody › VHH`). Opening a note through a link or search uses the note's actual parent directory. The filename remains in the editor panel title. On narrow terminals, older ancestors are omitted and the current folder is prioritized. The browser status bar uses a root-relative path (`.` at the workspace root). Breadcrumbs are display-only; existing navigation keys are unchanged.
+
 ## Keyboard shortcuts
 
 | Context | Keys | Action |
