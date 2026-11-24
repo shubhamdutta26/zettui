@@ -469,7 +469,20 @@ impl App {
         true
     }
 
+    /// Check whether a modal window currently has input focus.
+    fn has_active_popup(&self) -> bool {
+        self.prompt.is_some()
+            || self.links.is_some()
+            || self.citation_picker.is_some()
+            || self.snippet_picker.is_some()
+            || self.snippet_form.is_some()
+            || self.wiki_completion.is_some()
+            || self.find_dialog.is_some()
+            || self.vault_search.is_some()
+    }
+
     fn draw(&mut self, frame: &mut Frame) {
+        let show_editor_cursor = !self.has_active_popup();
         let theme = self.theme;
         frame.render_widget(Block::default().style(theme.base_style()), frame.area());
         let areas = Layout::vertical([
@@ -583,13 +596,16 @@ impl App {
                     .theme(editor_theme),
                 inner,
             );
-            if let Some(cursor) = note.state.cursor_screen_position() {
-                frame.set_cursor_position((cursor.x, cursor.y));
+            // Only show the hardware cursor when the editor has input focus.
+            if show_editor_cursor {
+                if let Some(cursor) = note.state.cursor_screen_position() {
+                    frame.set_cursor_position((cursor.x, cursor.y));
+                }
             }
             let help = if let Some(command) = &self.command {
                 format!(":{command}   Enter: run | Esc: cancel")
             } else {
-                "Insert: [[ link | Esc Normal | :w save | Ctrl+P cite | Ctrl+E snippet | Ctrl+F text | Alt+T tags | Ctrl+O links | Ctrl+B backlinks | Ctrl+T back".to_owned()
+                ":w Save | Ctrl+F Search | Alt+T Tags | Ctrl+P Cite | Ctrl+E Snippet".to_owned()
             };
             format!(
                 "{} | {}{}\n{}\n{}",
@@ -611,7 +627,7 @@ impl App {
                 .wrap(Wrap { trim: false });
             frame.render_widget(preview, panes[1]);
             format!(
-                "{}\nj/k move | Enter open | h parent | o links | b backlinks | n/N create | r rename | m move | d Trash | / find | Ctrl+F text | Alt+T tags | Ctrl+G mode | q quit\n{}",
+                "{}\nEnter Open | n New note | N New folder | / Find | Ctrl+F Search | q Quit\n{}",
                 self.current_dir.display(),
                 self.message,
             )
