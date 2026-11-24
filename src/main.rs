@@ -2450,7 +2450,17 @@ Ctrl+U clear search | Backspace delete"
                 }
                 KeyCode::Char('j') | KeyCode::Down => self.move_down(),
                 KeyCode::Char('k') | KeyCode::Up => self.move_up(),
-                KeyCode::Char('l') | KeyCode::Enter | KeyCode::Right => self.enter()?,
+                KeyCode::Enter => self.enter()?,
+
+                KeyCode::Char('l') | KeyCode::Right => {
+                    if self
+                        .entries
+                        .get(self.selected)
+                        .is_some_and(|entry| entry.is_dir)
+                    {
+                        self.enter()?;
+                    }
+                }
                 KeyCode::Char('h') | KeyCode::Backspace | KeyCode::Left => self.go_back()?,
                 _ => {}
             }
