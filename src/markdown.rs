@@ -142,8 +142,205 @@ fn paired(
 struct Context {
     fence: Option<(char, usize, String)>,
     yaml: bool,
+    yaml_context: YamlContext,
     math: bool,
     comment: bool,
+}
+
+/// State for YAML block scalars and flow collections; independent of Markdown.
+#[derive(Default)]
+struct YamlContext {
+    block_indent: Option<usize>,
+    flow_depth: usize,
+    quote: Option<char>,
+}
+
+fn yaml_colon(c: &[char], i: usize, flow: bool) -> bool {
+    c[i] == ':'
+        && (c.get(i + 1).is_none_or(|ch| {
+            ch.is_whitespace() || (flow && matches!(*ch, ',' | ']' | '}' | '[' | '{'))
+        }) || (flow && i > 0 && matches!(c[i - 1], '\'' | '"')))
+}
+
+fn yaml_scalar_style(value: &str, t: Theme) -> Style {
+    let lower = value.to_ascii_lowercase();
+    let numeric = value.replace('_', "");
+    let unsigned = numeric.trim_start_matches(['+', '-']);
+    let radix_number = [("0x", 16), ("0o", 8), ("0b", 2)]
+        .iter()
+        .any(|(prefix, radix)| {
+            unsigned.strip_prefix(*prefix).is_some_and(|digits| {
+                !digits.is_empty() && digits.chars().all(|ch| ch.is_digit(*radix))
+            })
+        });
+    let bytes = value.as_bytes();
+    let date = bytes.len() >= 10
+        && bytes[4] == b'-'
+        && bytes[7] == b'-'
+        && bytes[..4].iter().all(u8::is_ascii_digit)
+        && bytes[5..7].iter().all(u8::is_ascii_digit)
+        && bytes[8..10].iter().all(u8::is_ascii_digit)
+        && (bytes.len() == 10 || matches!(bytes[10], b'T' | b't' | b' '));
+    if matches!(lower.as_str(), "true" | "false" | "null" | "~") {
+        Style::default().fg(t.accent).add_modifier(Modifier::BOLD)
+    } else if numeric.parse::<f64>().is_ok() && unsigned.chars().any(|ch| ch.is_ascii_digit())
+        || radix_number
+        || date
+        || matches!(lower.as_str(), ".inf" | "+.inf" | "-.inf" | ".nan")
+    {
+        Style::default().fg(t.warning)
+    } else {
+        Style::default().fg(t.success)
+    }
+}
+
+fn yaml_quote_end(c: &[char], mut i: usize, quote: char) -> Option<usize> {
+    while i < c.len() {
+        if quote == '"' && c[i] == '\\' {
+            i += 2;
+        } else if c[i] == quote {
+            if quote == '\'' && c.get(i + 1) == Some(&quote) {
+                i += 2;
+            } else {
+                return Some(i + 1);
+            }
+        } else {
+            i += 1;
+        }
+    }
+    None
+}
+
+fn yaml_line(c: &[char], s: &mut [Style], ctx: &mut YamlContext, t: Theme, delimiter: Style) {
+    let n = c.len();
+    let start = c.iter().position(|ch| !ch.is_whitespace()).unwrap_or(n);
+    let string = Style::default().fg(t.success);
+    let key = Style::default().fg(t.directory);
+    let marker = Style::default().fg(t.warning);
+    let reference = Style::default().fg(t.accent);
+    let comment = Style::default().fg(t.muted).add_modifier(Modifier::ITALIC);
+    if let Some(indent) = ctx.block_indent {
+        if start == n || start > indent {
+            paint(s, start, n, string);
+            return;
+        }
+        ctx.block_indent = None;
+    }
+    let mut i = start;
+    let mut parent_indent = start;
+    if let Some(quote) = ctx.quote {
+        if let Some(end) = yaml_quote_end(c, i, quote) {
+            paint(s, i, end, string);
+            ctx.quote = None;
+            i = end;
+        } else {
+            paint(s, i, n, string);
+            return;
+        }
+    }
+    while i < n {
+        if c[i].is_whitespace() {
+            i += 1;
+            continue;
+        }
+        if c[i] == '#' {
+            paint(s, i, n, comment);
+            break;
+        }
+        let flow = ctx.flow_depth > 0;
+        if !flow && matches!(c[i], '-' | '?') && c.get(i + 1).is_none_or(|ch| ch.is_whitespace()) {
+            s[i] = marker;
+            i += 1;
+            parent_indent = c[i..]
+                .iter()
+                .position(|ch| !ch.is_whitespace())
+                .map_or(parent_indent, |offset| i + offset);
+            // A direct sequence scalar is indented relative to the dash, not its content.
+            if c.get(parent_indent)
+                .is_some_and(|ch| matches!(*ch, '|' | '>'))
+            {
+                parent_indent = start;
+            }
+            continue;
+        }
+        if matches!(c[i], '[' | '{') {
+            ctx.flow_depth += 1;
+            s[i] = delimiter;
+            i += 1;
+            continue;
+        }
+        if flow && matches!(c[i], ']' | '}' | ',') {
+            if c[i] != ',' {
+                ctx.flow_depth -= 1;
+            }
+            s[i] = delimiter;
+            i += 1;
+            continue;
+        }
+        if yaml_colon(c, i, flow) {
+            s[i] = delimiter;
+            i += 1;
+            continue;
+        }
+        if matches!(c[i], '\'' | '"') {
+            let quote = c[i];
+            let end = yaml_quote_end(c, i + 1, quote);
+            let stop = end.unwrap_or(n);
+            let next = stop + c[stop..].iter().take_while(|ch| ch.is_whitespace()).count();
+            let is_key = next < n && yaml_colon(c, next, flow);
+            paint(s, i, stop, if is_key { key } else { string });
+            if end.is_none() {
+                ctx.quote = Some(quote);
+            }
+            i = stop;
+            continue;
+        }
+        if matches!(c[i], '&' | '*' | '!') {
+            let a = i;
+            i += 1;
+            while i < n && !c[i].is_whitespace() && !matches!(c[i], ',' | '[' | ']' | '{' | '}') {
+                i += 1;
+            }
+            paint(s, a, i, reference);
+            continue;
+        }
+        if !flow && matches!(c[i], '|' | '>') {
+            let end = i
+                + 1
+                + c[i + 1..]
+                    .iter()
+                    .take_while(|&&ch| matches!(ch, '+' | '-' | '1'..='9'))
+                    .count();
+            if c.get(end).is_none_or(|ch| ch.is_whitespace()) {
+                paint(s, i, end, marker);
+                ctx.block_indent = Some(parent_indent);
+                i = end;
+                continue;
+            }
+        }
+        let a = i;
+        i += 1;
+        while i < n {
+            if yaml_colon(c, i, flow)
+                || (flow && matches!(c[i], ',' | ']' | '}'))
+                || (c[i] == '#' && c[i - 1].is_whitespace())
+            {
+                break;
+            }
+            i += 1;
+        }
+        let end = a + c[a..i]
+            .iter()
+            .rposition(|ch| !ch.is_whitespace())
+            .map_or(0, |p| p + 1);
+        let value: String = c[a..end].iter().collect();
+        let style = if i < n && yaml_colon(c, i, flow) {
+            key
+        } else {
+            yaml_scalar_style(&value, t)
+        };
+        paint(s, a, end, style);
+    }
 }
 
 fn code(c: &[char], styles: &mut [Style], lang: &str, t: Theme) {
@@ -305,7 +502,7 @@ fn line_styles(
         .add_modifier(Modifier::UNDERLINED);
     let trim = line.trim();
     let start = c.iter().position(|x| !x.is_whitespace()).unwrap_or(n);
-    if row == 0 && trim.trim_start_matches('\u{feff}') == "---" {
+    if row == 0 && line.trim_start_matches('\u{feff}').trim_end() == "---" {
         ctx.yaml = true;
         if settings.highlight_frontmatter {
             s.fill(delimiter);
@@ -313,18 +510,14 @@ fn line_styles(
         return (c, s);
     }
     if ctx.yaml {
-        if trim == "---" || trim == "..." {
+        if start == 0 && matches!(trim, "---" | "...") {
             ctx.yaml = false;
+            ctx.yaml_context = YamlContext::default();
             if settings.highlight_frontmatter {
                 s.fill(delimiter);
             }
         } else if settings.highlight_frontmatter {
-            s.fill(green);
-            if let Some(k) = c.iter().position(|&x| x == ':') {
-                paint(&mut s, 0, k, accent);
-                paint(&mut s, k, k + 1, delimiter);
-            }
-            code(&c, &mut s, "yaml", t);
+            yaml_line(&c, &mut s, &mut ctx.yaml_context, t, delimiter);
         }
         return (c, s);
     }
@@ -936,5 +1129,127 @@ mod expanded_markdown_tests {
         assert!(s[6].add_modifier.contains(Modifier::ITALIC));
         assert!(!s[6].add_modifier.contains(Modifier::BOLD));
         assert_eq!(styles("$5 and $10")[0], Style::default());
+    }
+}
+
+#[cfg(test)]
+mod expanded_yaml_tests {
+    use super::*;
+
+    fn check(doc: &str, row: usize, token: &str, color: Color, modifier: Modifier) {
+        let theme = Theme::named("dark").unwrap();
+        let settings = MarkdownSettings::default();
+        let mut ctx = Context::default();
+        for (index, line) in doc.split('\n').enumerate() {
+            let (_, styles) = line_styles(line, index, &mut ctx, theme, &settings);
+            if index == row {
+                let offset = line.find(token).expect("token exists");
+                let start = line[..offset].chars().count();
+                let end = start + token.chars().count();
+                for style in &styles[start..end] {
+                    assert_eq!(style.fg, Some(color), "{token}: {line}");
+                    assert!(style.add_modifier.contains(modifier));
+                }
+                return;
+            }
+        }
+        panic!("row missing");
+    }
+
+    #[test]
+    fn scalar_types_and_unicode_keys() {
+        let t = Theme::named("dark").unwrap();
+        let doc = "---\nβ title: sample 123\nid: 202611251730\nkd: 1e-8\nactive: false\nmissing: null\ndate: 2026-11-25\nquoted: \"false # text\"\n---";
+        for (row, token, color) in [
+            (1, "β title", t.directory),
+            (1, "sample 123", t.success),
+            (2, "202611251730", t.warning),
+            (3, "1e-8", t.warning),
+            (4, "false", t.accent),
+            (5, "null", t.accent),
+            (6, "2026-11-25", t.warning),
+            (7, "false # text", t.success),
+        ] {
+            check(doc, row, token, color, Modifier::empty());
+        }
+    }
+
+    #[test]
+    fn screenshot_regressions() {
+        let t = Theme::named("dark").unwrap();
+        let doc = "---\nupdated: 2026-11-25T17:30:00-05:00\nempty: ~\nnegative: -12\nhex: 0xFF\n\"special:key\": value\nmetadata: {species: rhesus, active: true, count: 3}\ntags:\n  - antibody\n---";
+        for (row, token, color) in [
+            (1, "2026-11-25T17:30:00-05:00", t.warning),
+            (2, "~", t.accent),
+            (3, "-12", t.warning),
+            (4, "0xFF", t.warning),
+            (5, "\"special:key\"", t.directory),
+            (6, "species", t.directory),
+            (6, "active", t.directory),
+            (6, "count", t.directory),
+            (8, "-", t.warning),
+        ] {
+            check(doc, row, token, color, Modifier::empty());
+        }
+    }
+
+    #[test]
+    fn flow_collections_urls_and_comments() {
+        let t = Theme::named("dark").unwrap();
+        let doc = "---\nurl: https://example.org/a#b # comment\nitems: [true, 1.25, 'it''s fine', {name: β}]\nanchor: &base value\ncopy: *base\n---";
+        check(
+            doc,
+            1,
+            "https://example.org/a#b",
+            t.success,
+            Modifier::empty(),
+        );
+        check(doc, 1, "# comment", t.muted, Modifier::ITALIC);
+        for (row, token, color) in [
+            (2, "true", t.accent),
+            (2, "1.25", t.warning),
+            (2, "it''s fine", t.success),
+            (2, "name", t.directory),
+            (2, "β", t.success),
+            (3, "&base", t.accent),
+            (4, "*base", t.accent),
+        ] {
+            check(doc, row, token, color, Modifier::empty());
+        }
+    }
+
+    #[test]
+    fn multiline_scalars_and_frontmatter_boundary() {
+        let t = Theme::named("dark").unwrap();
+        let doc = "---\nnotes: |-\n  # literal comment\n  ---\n  **literal**\nnext: >\n  text: literal\nquoted: \"first\n  # second\"\n...\n# Heading\n---";
+        for (row, token) in [
+            (2, "# literal comment"),
+            (3, "---"),
+            (4, "**literal**"),
+            (6, "text: literal"),
+            (8, "# second"),
+        ] {
+            check(doc, row, token, t.success, Modifier::empty());
+        }
+        check(doc, 5, "next", t.directory, Modifier::empty());
+        check(
+            doc,
+            10,
+            "Heading",
+            heading_color(1, t, &MarkdownSettings::default()),
+            Modifier::BOLD,
+        );
+        check(doc, 11, "---", t.muted, Modifier::empty());
+        let restored = preview(doc, t, &MarkdownSettings::default())
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_eq!(restored, doc);
     }
 }
