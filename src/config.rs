@@ -240,6 +240,16 @@ mod sectioned_config_tests {
         assert!(!cfg.appearance.system_theme.ensure_contrast);
     }
     #[test]
+    fn parses_cosmic_source() {
+        let cfg: Config =
+            toml::from_str("[appearance]\ntheme = 'system'\nsource = 'cosmic'").unwrap();
+        assert_eq!(
+            cfg.appearance.system_theme.source,
+            crate::system_theme::Source::Cosmic
+        );
+    }
+
+    #[test]
     fn invalid_heading_color_is_rejected() {
         assert!(toml::from_str::<Config>("[markdown.heading_colors]\nh1 = 'red'").is_err());
     }

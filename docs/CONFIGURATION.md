@@ -47,8 +47,8 @@ All keys are optional. Restart Zettui after changing the file. Session commands 
 | `workspace` | `bibliography` | Unset; Zotero JSON with citation keys (Better CSL JSON recommended) |
 | `workspace` | `snippets_dir` | Zettui config directory's `snippets/` |
 | `appearance` | `theme` | `"system"`; native, terminal, auto or built-in preset |
-| `appearance` | `source` | `"auto"`; `omarchy` or `terminal` restricts provider |
-| `appearance` | `live_reload` | `true`; periodically refresh Omarchy colors |
+| `appearance` | `source` | `"auto"`; `cosmic`, `omarchy` or `terminal` restricts provider |
+| `appearance` | `live_reload` | `true`; periodically refresh native desktop colors |
 | `appearance` | `ensure_contrast` | `true`; adjust low-contrast RGB text |
 | `appearance` | `light_theme` | `"light"`; fixed palette for Auto light appearance |
 | `appearance` | `dark_theme` | `"dark"`; fixed palette for Auto dark appearance |
@@ -78,16 +78,20 @@ The sectioned configuration is required starting with v0.7.10. Old top-level wor
 
 ## Native system theming
 
-The default `appearance.theme = "system"` reads Omarchy's active `colors.toml` (under `$XDG_STATE_HOME` or `~/.local/state`, then `$XDG_CONFIG_HOME` or `~/.config`). It accepts named semantic colors and older ANSI-style keys. Background, foreground, selection, surface, border, syntax and H1–H6 colors follow the active palette where available. Missing fields use derived or fallback colors. Existing `auto` retains light/dark preset selection; fixed themes and `Ctrl+G` remain available.
+On a COSMIC desktop, `appearance.theme = "system"` reads the active resolved v2 RON palette from `$XDG_CONFIG_HOME/cosmic` (or `~/.config/cosmic`), with per-file defaults from `/usr/share/cosmic` where present. It follows the desktop mode and custom palette while running. Set `source = "cosmic"` to explicitly select this provider. Missing or unsupported palettes fall back; explicit COSMIC mode uses the configured light/dark fallback. Terminal cells approximate alpha with opaque RGB.
+
+On other desktops the default reads Omarchy's active `colors.toml` (under `$XDG_STATE_HOME` or `~/.local/state`, then `$XDG_CONFIG_HOME` or `~/.config`). It accepts named semantic colors and older ANSI-style keys. Background, foreground, selection, surface, border, syntax and H1–H6 colors follow the active palette where available. Missing fields use derived or fallback colors. Existing `auto` retains light/dark preset selection; fixed themes and `Ctrl+G` remain available.
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `appearance.theme` | `system` | Native colors; `terminal`, `auto`, and fixed presets also supported |
-| `appearance.source` | `auto` | `auto` tries Omarchy then terminal; `omarchy` or `terminal` restricts the provider |
-| `appearance.live_reload` | `true` | Poll Omarchy at most every 400 ms; no restart for palette changes |
+| `appearance.source` | `auto` | `auto` tries COSMIC in a COSMIC session, otherwise Omarchy, then terminal; `cosmic`, `omarchy` or `terminal` restricts the provider |
+| `appearance.live_reload` | `true` | Poll native themes at most every 400 ms; no restart for palette changes |
 | `appearance.ensure_contrast` | `true` | Adjust low-contrast RGB foreground/semantic text against the background |
 | `appearance.light_theme` / `dark_theme` | `light` / `dark` | Fixed light/dark fallback palettes |
 
-Terminal mode samples RGB background and foreground at startup using terminal-colorsaurus, and uses the terminal's ANSI color slots for semantic colors. Restart to refresh sampled terminal RGB colors. Full ANSI RGB querying and direct COSMIC integration are not implemented yet. ANSI semantic colors cannot be contrast-checked or hue-preservingly dimmed without their RGB values. Unsupported terminal queries fall back to built-in palettes. `[colors]` and `[markdown.heading_colors]` overrides still take priority, including over contrast correction. The configuration file is never rewritten.
+Terminal mode samples RGB background and foreground at startup using terminal-colorsaurus, and uses the terminal's ANSI color slots for semantic colors. Restart to refresh sampled terminal RGB colors. Full ANSI RGB querying and older COSMIC v1 palettes are not implemented. ANSI semantic colors cannot be contrast-checked or hue-preservingly dimmed without their RGB values. Unsupported terminal queries fall back to built-in palettes. `[colors]` and `[markdown.heading_colors]` overrides still take priority, including over contrast correction. The configuration file is never rewritten.
 
 Test on Omarchy by switching between two dark themes, then between dark and light themes while a note is open. Verify editor, preview, search, selection, dialogs, focus and headings update without modifying the note.
+
+Test on COSMIC by toggling light/dark and changing the accent or custom palette while a note is open. Existing overrides remain in effect.

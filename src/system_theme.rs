@@ -4,12 +4,15 @@ use ratatui::style::Color;
 use serde::Deserialize;
 use std::{env, fs, path::PathBuf};
 
+mod cosmic;
+
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Source {
     #[default]
     Auto,
     Omarchy,
+    Cosmic,
     Terminal,
 }
 
@@ -188,7 +191,7 @@ fn omarchy_roots() -> Option<[PathBuf; 2]> {
 /// Compare actual file contents rather than timestamps: theme switches may
 /// replace a symlink or reuse timestamps. Include the legacy appearance paths.
 #[derive(Debug, PartialEq, Eq)]
-pub struct ThemeSnapshot(Vec<ThemeFile>);
+pub struct ThemeSnapshot(Vec<ThemeFile>, Vec<Option<String>>);
 
 #[derive(Debug, PartialEq, Eq)]
 struct ThemeFile {
@@ -198,9 +201,14 @@ struct ThemeFile {
 }
 
 impl ThemeSnapshot {
-    pub fn capture() -> Self {
+    pub fn capture(settings: Settings) -> Self {
+        let cosmic = if use_cosmic(settings) {
+            cosmic::snapshot()
+        } else {
+            Vec::new()
+        };
         let Some(roots) = omarchy_roots() else {
-            return Self(Vec::new());
+            return Self(Vec::new(), cosmic);
         };
         let mut directories: Vec<_> = roots
             .into_iter()
@@ -217,7 +225,9 @@ impl ThemeSnapshot {
                 }
             }
         }
-        Self::from_directories(directories)
+        let mut snapshot = Self::from_directories(directories);
+        snapshot.1 = cosmic;
+        snapshot
     }
 
     fn from_directories(directories: Vec<PathBuf>) -> Self {
@@ -230,6 +240,7 @@ impl ThemeSnapshot {
                     directory,
                 })
                 .collect(),
+            Vec::new(),
         )
     }
 }
@@ -279,6 +290,21 @@ fn terminal(p: TerminalPalette, settings: Settings) -> Theme {
     t
 }
 
+fn use_cosmic(settings: Settings) -> bool {
+    settings.source == Source::Cosmic || (settings.source == Source::Auto && cosmic::is_session())
+}
+
+/// Resolve light/dark preferences for native themes and automatic presets.
+pub fn appearance(settings: Settings, fallback: Appearance) -> Appearance {
+    if use_cosmic(settings) {
+        cosmic::appearance()
+    } else if matches!(settings.source, Source::Auto | Source::Omarchy) {
+        crate::theme::omarchy_appearance().unwrap_or(fallback)
+    } else {
+        fallback
+    }
+}
+
 pub fn resolve(
     choice: ThemeChoice,
     auto: AutoThemes,
@@ -291,12 +317,18 @@ pub fn resolve(
         return Ok(palette.map(|p| terminal(p, settings)).unwrap_or(fallback));
     }
     if choice == ThemeChoice::System {
-        if settings.source != Source::Terminal
+        if use_cosmic(settings)
+            && let Some(t) = cosmic::resolve(fallback, settings)
+        {
+            return Ok(t);
+        }
+        if matches!(settings.source, Source::Auto | Source::Omarchy)
+            && !use_cosmic(settings)
             && let Some(t) = omarchy(fallback, settings)
         {
             return Ok(t);
         }
-        if settings.source != Source::Omarchy
+        if matches!(settings.source, Source::Auto | Source::Terminal)
             && let Some(p) = palette
         {
             return Ok(terminal(p, settings));

@@ -2,9 +2,7 @@
 
 use std::{env, io, path::PathBuf};
 
-use crate::theme::{
-    Appearance, AutoThemes, ColorOverrides, THEME_CHOICES, ThemeChoice, omarchy_appearance,
-};
+use crate::theme::{Appearance, AutoThemes, ColorOverrides, THEME_CHOICES, ThemeChoice};
 use crate::{config::Config, focus, markdown, snippets, system_theme};
 
 /// Resolved startup settings from the configuration and command line.
@@ -92,8 +90,8 @@ pub(crate) fn arguments() -> io::Result<StartupOptions> {
     let choice = ThemeChoice::named(&name)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error.to_string()))?;
     let terminal_palette = system_theme::TerminalPalette::query();
-    let system = omarchy_appearance()
-        .or_else(|| terminal_palette.map(|p| p.appearance()))
+    let system = terminal_palette
+        .map(|p| p.appearance())
         .unwrap_or(Appearance::Dark);
     Ok(StartupOptions {
         root: notes_dir

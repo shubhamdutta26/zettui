@@ -26,7 +26,7 @@ Versions identify development milestones; not all have a separate published rele
 
 ## Release preparation
 
-0.7.10: native Omarchy and terminal themes, contrast adjustment and repository maintenance. Direct COSMIC integration remains pending.
+0.7.10: native Omarchy and terminal themes, contrast adjustment and repository maintenance. Direct COSMIC v2 integration is under testing.
 
 ## Planned
 

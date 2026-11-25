@@ -16,7 +16,7 @@ Run with `zettui ~/Documents/Notes`, or simply `zettui` when `notes_dir` is conf
 
 ## Quick start
 
-Copy the [example configuration](config.example.toml) to your Zettui configuration directory and edit the paths. The default appearance follows Omarchy or the terminal, falling back to built-in themes.
+Copy the [example configuration](config.example.toml) to your Zettui configuration directory and edit the paths. The default appearance follows COSMIC, Omarchy or the terminal, falling back to built-in themes.
 
 ```bash
 mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/zettui"

@@ -2,7 +2,7 @@
 
 use super::App;
 use crate::layout::resize_browser_percent;
-use crate::theme::{Theme, ThemeChoice, omarchy_appearance};
+use crate::theme::{Theme, ThemeChoice};
 use crate::{system_theme, theme};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::time::Duration;
@@ -12,7 +12,7 @@ impl App {
         system_theme::resolve(
             choice,
             self.auto_themes,
-            omarchy_appearance().unwrap_or(self.fallback_appearance),
+            system_theme::appearance(self.system_theme, self.fallback_appearance),
             self.system_theme,
             self.terminal_palette,
         )
@@ -27,7 +27,7 @@ impl App {
             return;
         }
         self.last_theme_check = std::time::Instant::now();
-        let snapshot = system_theme::ThemeSnapshot::capture();
+        let snapshot = system_theme::ThemeSnapshot::capture(self.system_theme);
         if self.theme_snapshot.as_ref() == Some(&snapshot) {
             return;
         }

@@ -12,13 +12,13 @@
 # Relative paths resolve against the configuration directory; ~/ expands HOME.
 
 [appearance]
-# system reads native Omarchy colors, then terminal colors, then fixed fallback.
+# system reads native COSMIC/Omarchy colors, then terminal colors, then fixed fallback.
 # auto keeps the original light/dark preset behavior. CLI --theme overrides this.
 # Themes: system, terminal, auto, dark, light, nord, dracula, everforest, rose-pine, kanagawa,
 # solarized-dark, catppuccin-latte, rose-pine-dawn, gruvbox, tokyo-night, midnight.
 theme = "system"
-source = "auto" # auto | omarchy | terminal (only used in system mode)
-live_reload = true # Re-read Omarchy colors while running.
+source = "auto" # auto | cosmic | omarchy | terminal (only used in system mode)
+live_reload = true # Re-read native desktop colors while running.
 ensure_contrast = true # Adjust low-contrast RGB text colors; overrides still win.
 light_theme = "light"  # Fixed palette for light Auto/system fallback.
 dark_theme = "dark"    # Fixed palette for dark Auto/system fallback.

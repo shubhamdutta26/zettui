@@ -37,7 +37,7 @@ impl App {
             }
             self.sync_system_theme();
             terminal.draw(|frame| self.draw(frame))?;
-            // Poll instead of waiting forever: Omarchy may change its theme
+            // Poll instead of waiting forever: The desktop may change its theme
             // while the user isn't pressing any keys.
             if !event::poll(Duration::from_millis(400))? {
                 continue;
