@@ -141,6 +141,7 @@ fn paired(
 #[derive(Default)]
 struct Context {
     fence: Option<(char, usize, String)>,
+    code_context: CodeContext,
     yaml: bool,
     yaml_context: YamlContext,
     math: bool,
@@ -343,103 +344,261 @@ fn yaml_line(c: &[char], s: &mut [Style], ctx: &mut YamlContext, t: Theme, delim
     }
 }
 
-fn code(c: &[char], styles: &mut [Style], lang: &str, t: Theme) {
-    // Small lexical highlighter, deliberately not a language parser.
-    let keywords = "let mut fn pub impl struct enum use mod match if else for while loop return const static async await move trait type where as in break continue def class import from pass yield lambda try except finally with raise True False None function var export new null true false SELECT FROM WHERE JOIN GROUP ORDER INSERT UPDATE DELETE library function TRUE FALSE NULL NA next repeat in";
-    let known = [
-        "rust",
-        "rs",
-        "python",
-        "py",
-        "r",
-        "bash",
-        "sh",
-        "shell",
-        "zsh",
-        "javascript",
-        "js",
-        "typescript",
-        "ts",
-        "json",
-        "yaml",
-        "yml",
-        "toml",
-        "sql",
-        "html",
-        "css",
-    ]
-    .contains(&lang);
-    if !known {
+#[derive(Default)]
+struct CodeContext {
+    block: Option<&'static str>,
+    quote: Option<(&'static str, bool)>,
+    yaml: YamlContext,
+}
+
+fn code_number(c: &[char], start: usize) -> usize {
+    let mut i = start;
+    if c.get(i) == Some(&'0') {
+        let radix = match c.get(i + 1) {
+            Some('x' | 'X') => 16,
+            Some('b' | 'B') => 2,
+            Some('o' | 'O') => 8,
+            _ => 0,
+        };
+        if radix != 0 && c.get(i + 2).is_some_and(|ch| ch.is_digit(radix)) {
+            i += 2;
+            while c.get(i).is_some_and(|ch| ch.is_digit(radix) || *ch == '_') {
+                i += 1;
+            }
+            return i;
+        }
+    }
+    while c.get(i).is_some_and(|ch| ch.is_ascii_digit() || *ch == '_') {
+        i += 1;
+    }
+    if c.get(i) == Some(&'.') && c.get(i + 1) != Some(&'.') {
+        i += 1;
+        while c.get(i).is_some_and(|ch| ch.is_ascii_digit() || *ch == '_') {
+            i += 1;
+        }
+    }
+    if matches!(c.get(i), Some('e' | 'E')) {
+        let mut j = i + 1;
+        if matches!(c.get(j), Some('+' | '-')) {
+            j += 1;
+        }
+        let digits = j;
+        while c.get(j).is_some_and(|ch| ch.is_ascii_digit() || *ch == '_') {
+            j += 1;
+        }
+        if j > digits {
+            i = j;
+        }
+    }
+    i
+}
+
+fn code(
+    c: &[char],
+    styles: &mut [Style],
+    lang: &str,
+    t: Theme,
+    ctx: &mut CodeContext,
+    delimiter: Style,
+) {
+    let lang = match lang {
+        "rs" => "rust",
+        "py" => "python",
+        "sh" | "shell" | "zsh" => "bash",
+        "js" => "javascript",
+        "ts" => "typescript",
+        "yml" => "yaml",
+        "tex" => "latex",
+        "c++" | "cc" | "cxx" => "cpp",
+        other => other,
+    };
+    if lang == "yaml" {
+        yaml_line(c, styles, &mut ctx.yaml, t, delimiter);
         return;
     }
+    let keywords = match lang {
+        "rust" => {
+            "let mut fn pub impl struct enum use mod match if else for while loop return const static async await move trait type where as in break continue crate self Self super ref unsafe dyn extern union"
+        }
+        "python" => {
+            "def class import from pass yield lambda try except finally with raise if elif else for while return break continue as in is not and or assert del global nonlocal async await match case"
+        }
+        "r" => "function if else for while repeat in next break return",
+        "bash" => {
+            "if then elif else fi for while until do done case esac function in select export local readonly return break continue declare set unset"
+        }
+        "javascript" | "typescript" => {
+            "function let const var class extends import export from new return if else for while switch case break continue try catch finally throw async await typeof instanceof interface type implements public private readonly enum"
+        }
+        "sql" => {
+            "select from where join inner left right outer on group by order having insert into values update set delete create table alter drop distinct as limit offset union all and or not is in case when then else end with asc desc"
+        }
+        "c" | "cpp" => {
+            "int char float double void bool long short unsigned signed const static struct enum union typedef if else for while do switch case break continue return sizeof class namespace template typename public private protected using auto new delete virtual override constexpr include define"
+        }
+        "typst" => {
+            "let set show import include if else for while in return break continue context as"
+        }
+        "latex" | "json" | "toml" | "html" | "css" => "",
+        _ => return,
+    };
+    let constants = match lang {
+        "python" => "True False None",
+        "r" => "TRUE FALSE NULL NA NaN Inf NA_integer_ NA_real_ NA_character_",
+        "rust" => "true false Some None Ok Err",
+        "javascript" | "typescript" => "true false null undefined NaN Infinity",
+        "json" | "toml" | "c" | "cpp" => "true false null nullptr NULL",
+        "sql" => "true false null",
+        "typst" => "true false none auto",
+        _ => "",
+    };
+    let comment = Style::default().fg(t.muted).add_modifier(Modifier::ITALIC);
+    let string = Style::default().fg(t.success);
+    let number = Style::default().fg(t.warning);
+    let keyword = Style::default().fg(t.accent).add_modifier(Modifier::BOLD);
+    let function = Style::default().fg(t.directory);
+    let operator = Style::default().fg(t.accent);
+    let slash = matches!(
+        lang,
+        "rust" | "javascript" | "typescript" | "c" | "cpp" | "typst"
+    );
     let mut i = 0;
     while i < c.len() {
-        if (matches!(
-            lang,
-            "python" | "py" | "r" | "bash" | "sh" | "shell" | "zsh" | "yaml" | "yml" | "toml"
-        ) && c[i] == '#')
-            || (matches!(
-                lang,
-                "rust" | "rs" | "javascript" | "js" | "typescript" | "ts"
-            ) && starts(c, i, "//"))
-            || (lang == "sql" && starts(c, i, "--"))
-        {
-            paint(
-                styles,
-                i,
-                c.len(),
-                Style::default().fg(t.muted).add_modifier(Modifier::ITALIC),
-            );
+        if let Some(end) = ctx.block {
+            let stop = (i..c.len())
+                .find(|&j| starts(c, j, end))
+                .map(|j| j + end.len());
+            paint(styles, i, stop.unwrap_or(c.len()), comment);
+            if let Some(stop) = stop {
+                ctx.block = None;
+                i = stop;
+                continue;
+            }
             break;
         }
-        if c[i] == '\'' || c[i] == '"' {
-            let q = c[i];
+        if let Some((end, multiline)) = ctx.quote {
             let a = i;
-            i += 1;
+            let mut closed = false;
             while i < c.len() {
                 if c[i] == '\\' {
                     i = (i + 2).min(c.len());
                     continue;
                 }
-                let done = c[i] == q;
-                i += 1;
-                if done {
+                if starts(c, i, end) {
+                    i += end.len();
+                    closed = true;
                     break;
                 }
-            }
-            paint(styles, a, i, Style::default().fg(t.success));
-            continue;
-        }
-        if c[i].is_ascii_digit() {
-            let a = i;
-            i += 1;
-            while i < c.len() && (c[i].is_ascii_digit() || c[i] == '.') {
                 i += 1;
             }
-            paint(styles, a, i, Style::default().fg(t.warning));
+            paint(styles, a, i, string);
+            if closed || !multiline {
+                ctx.quote = None;
+            }
+            continue;
+        }
+        if c[i].is_whitespace() {
+            i += 1;
+            continue;
+        }
+        let block = if (slash || matches!(lang, "sql" | "css")) && starts(c, i, "/*") {
+            Some(("/*", "*/"))
+        } else if lang == "html" && starts(c, i, "<!--") {
+            Some(("<!--", "-->"))
+        } else {
+            None
+        };
+        if let Some((open, end)) = block {
+            paint(styles, i, i + open.len(), comment);
+            i += open.len();
+            ctx.block = Some(end);
+            continue;
+        }
+        if (matches!(lang, "python" | "r" | "toml") && c[i] == '#')
+            || (lang == "bash"
+                && c[i] == '#'
+                && (i == 0 || c[i - 1].is_whitespace() || matches!(c[i - 1], ';' | '|')))
+            || (slash && starts(c, i, "//"))
+            || (lang == "sql" && starts(c, i, "--"))
+            || (lang == "latex" && c[i] == '%' && !escaped(c, i))
+        {
+            paint(styles, i, c.len(), comment);
+            break;
+        }
+        let quote = if matches!(lang, "python" | "toml") && starts(c, i, "\"\"\"") {
+            Some(("\"\"\"", true))
+        } else if matches!(lang, "python" | "toml") && starts(c, i, "'''") {
+            Some(("'''", true))
+        } else if c[i] == '"' {
+            Some(("\"", matches!(lang, "rust" | "bash" | "r")))
+        } else if c[i] == '\''
+            && !matches!(lang, "typst" | "latex" | "json")
+            && (lang != "rust"
+                || c.get(i + 2) == Some(&'\'')
+                || (c.get(i + 1) == Some(&'\\') && c.get(i + 3) == Some(&'\'')))
+        {
+            Some(("'", lang == "bash" || lang == "r"))
+        } else if c[i] == '`' && matches!(lang, "javascript" | "typescript" | "r" | "bash") {
+            Some(("`", true))
+        } else {
+            None
+        };
+        if let Some((end, multiline)) = quote {
+            paint(styles, i, i + end.len(), string);
+            i += end.len();
+            ctx.quote = Some((end, multiline));
+            continue;
+        }
+        if c[i].is_ascii_digit() || (c[i] == '.' && c.get(i + 1).is_some_and(char::is_ascii_digit))
+        {
+            let end = code_number(c, i);
+            paint(styles, i, end, number);
+            i = end;
+            continue;
+        }
+        if lang == "latex" && c[i] == '\\' {
+            let a = i;
+            i += 1;
+            while c.get(i).is_some_and(|ch| ch.is_alphabetic()) {
+                i += 1;
+            }
+            if i == a + 1 && i < c.len() {
+                i += 1;
+            }
+            paint(styles, a, i, keyword);
             continue;
         }
         if c[i].is_alphabetic() || c[i] == '_' {
             let a = i;
             i += 1;
-            while i < c.len() && (c[i].is_alphanumeric() || c[i] == '_') {
+            while c
+                .get(i)
+                .is_some_and(|ch| ch.is_alphanumeric() || *ch == '_' || (lang == "r" && *ch == '.'))
+            {
                 i += 1;
             }
             let word: String = c[a..i].iter().collect();
-            if keywords
-                .split_whitespace()
-                .any(|k| k == word || (lang == "sql" && k.eq_ignore_ascii_case(&word)))
+            let lookup = if lang == "sql" {
+                word.to_ascii_lowercase()
+            } else {
+                word
+            };
+            if keywords.split_whitespace().any(|k| k == lookup)
+                || constants.split_whitespace().any(|k| k == lookup)
             {
-                paint(
-                    styles,
-                    a,
-                    i,
-                    Style::default().fg(t.accent).add_modifier(Modifier::BOLD),
-                );
+                paint(styles, a, i, keyword);
+            } else if c[i..].iter().find(|ch| !ch.is_whitespace()) == Some(&'(') {
+                paint(styles, a, i, function);
             }
             continue;
         }
+        if "+-*/%=!<>|&^~:$#".contains(c[i]) {
+            styles[i] = operator;
+        }
         i += 1;
+    }
+    if ctx.quote.is_some_and(|(_, multiline)| !multiline) {
+        ctx.quote = None;
     }
 }
 
@@ -525,11 +684,12 @@ fn line_styles(
         let count = c[start..].iter().take_while(|&&x| x == *marker).count();
         if count >= *len && c[start + count..].iter().all(|x| x.is_whitespace()) {
             ctx.fence = None;
+            ctx.code_context = CodeContext::default();
             if settings.highlight_code_blocks {
                 s.fill(delimiter);
             }
         } else if settings.highlight_code_blocks {
-            code(&c, &mut s, lang, t);
+            code(&c, &mut s, lang, t, &mut ctx.code_context, delimiter);
         }
         return (c, s);
     }
@@ -541,12 +701,13 @@ fn line_styles(
             let lang = lang
                 .trim()
                 .trim_start_matches('{')
-                .trim_end_matches('}')
-                .split_whitespace()
+                .trim_start()
+                .split(|ch: char| ch.is_whitespace() || ch == ',' || ch == '}')
                 .next()
                 .unwrap_or("")
                 .to_lowercase();
             ctx.fence = Some((marker, len, lang));
+            ctx.code_context = CodeContext::default();
             if settings.highlight_code_blocks {
                 s.fill(delimiter);
             }
@@ -1251,5 +1412,76 @@ mod expanded_yaml_tests {
             .collect::<Vec<_>>()
             .join("\n");
         assert_eq!(restored, doc);
+    }
+}
+
+#[cfg(test)]
+mod expanded_code_tests {
+    use super::*;
+    #[test]
+    fn numbers_and_language_keywords() {
+        let t = Theme::named("dark").unwrap();
+        let mut ctx = Context::default();
+        let settings = MarkdownSettings::default();
+        line_styles("```{r, echo=false}", 0, &mut ctx, t, &settings);
+        let (_, s) = line_styles("let <- 1e-8", 1, &mut ctx, t, &settings);
+        assert_eq!(s[0], Style::default());
+        assert!(s[7..].iter().all(|style| style.fg == Some(t.warning)));
+        let (_, s) = line_styles("print(TRUE)", 2, &mut ctx, t, &settings);
+        assert_eq!(s[0].fg, Some(t.directory));
+        assert!(s[6].add_modifier.contains(Modifier::BOLD));
+    }
+    #[test]
+    fn multiline_state_and_fence_reset() {
+        let t = Theme::named("dark").unwrap();
+        let mut ctx = Context::default();
+        let settings = MarkdownSettings::default();
+        let doc = "```python\nx = \"\"\"hello\n# string\nend\"\"\"\n```\n```rust\n/* comment\nlet x = 1;\n*/ let x = 2;\n```\n```unknown\nlet x = 1\n```";
+        let lines: Vec<_> = doc
+            .lines()
+            .enumerate()
+            .map(|(i, l)| line_styles(l, i, &mut ctx, t, &settings).1)
+            .collect();
+        assert_eq!(lines[2][0].fg, Some(t.success));
+        assert!(lines[7][0].add_modifier.contains(Modifier::ITALIC));
+        assert_eq!(lines[8][3].fg, Some(t.accent));
+        assert!(lines[11].iter().all(|s| *s == Style::default()));
+        assert!(ctx.fence.is_none());
+    }
+}
+
+#[cfg(test)]
+mod fenced_integration_tests {
+    use super::*;
+    #[test]
+    fn r_fence_variants() {
+        let t = Theme::named("dark").unwrap();
+        let settings = MarkdownSettings::default();
+        for fence in ["```r", "```{r}", "```{r, echo=false}"] {
+            let mut ctx = Context::default();
+            line_styles(fence, 0, &mut ctx, t, &settings);
+            let (_, s) = line_styles("print(1e-8)", 1, &mut ctx, t, &settings);
+            assert_eq!(s[0].fg, Some(t.directory));
+            assert!(s[6..10].iter().all(|s| s.fg == Some(t.warning)));
+        }
+    }
+    #[test]
+    fn yaml_and_c_fences() {
+        let t = Theme::named("dark").unwrap();
+        let settings = MarkdownSettings::default();
+        let mut ctx = Context::default();
+        line_styles("```yaml", 0, &mut ctx, t, &settings);
+        let (_, s) = line_styles("url: https://example.org/a#b", 1, &mut ctx, t, &settings);
+        assert_eq!(s[0].fg, Some(t.directory));
+        assert!(s[5..].iter().all(|s| s.fg == Some(t.success)));
+        line_styles("```", 2, &mut ctx, t, &settings);
+        for fence in ["```c", "```cpp", "```c++"] {
+            line_styles(fence, 3, &mut ctx, t, &settings);
+            let (_, s) = line_styles("int main() { return 0; }", 4, &mut ctx, t, &settings);
+            assert!(s[0].add_modifier.contains(Modifier::BOLD));
+            assert_eq!(s[4].fg, Some(t.directory));
+            assert!(s[13].add_modifier.contains(Modifier::BOLD));
+            line_styles("```", 5, &mut ctx, t, &settings);
+        }
     }
 }
