@@ -75,8 +75,31 @@ fn starts(c: &[char], i: usize, s: &str) -> bool {
         rest.iter().copied().zip(s.chars()).all(|(a, b)| a == b) && rest.len() >= s.chars().count()
     })
 }
+fn escaped(c: &[char], i: usize) -> bool {
+    !c[..i]
+        .iter()
+        .rev()
+        .take_while(|&&ch| ch == '\\')
+        .count()
+        .is_multiple_of(2)
+}
 fn find(c: &[char], from: usize, s: &str) -> Option<usize> {
-    (from..c.len()).find(|&i| starts(c, i, s) && (i == 0 || c[i - 1] != '\\'))
+    (from..c.len()).find(|&i| starts(c, i, s) && !escaped(c, i))
+}
+fn link_end(c: &[char], from: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for (i, &ch) in c.iter().enumerate().skip(from) {
+        if escaped(c, i) {
+            continue;
+        }
+        match ch {
+            '(' => depth += 1,
+            ')' if depth == 0 => return Some(i),
+            ')' => depth -= 1,
+            _ => {}
+        }
+    }
+    None
 }
 fn paint(styles: &mut [Style], a: usize, b: usize, style: Style) {
     if a <= b && b <= styles.len() {
@@ -96,7 +119,15 @@ fn paired(
         return None;
     }
     let a = i + open.chars().count();
-    let b = find(c, a, close)?;
+    let b = if open.starts_with('`') {
+        (a..c.len()).find(|&j| {
+            c[j] == '`'
+                && c[j - 1] != '`'
+                && c[j..].iter().take_while(|&&ch| ch == '`').count() == close.len()
+        })?
+    } else {
+        find(c, a, close)?
+    };
     if b == a {
         return None;
     }
@@ -312,7 +343,7 @@ fn line_styles(
     if start < n && matches!(c[start], '`' | '~') && !ctx.comment && !ctx.math {
         let marker = c[start];
         let len = c[start..].iter().take_while(|&&x| x == marker).count();
-        if len >= 3 {
+        if len >= 3 && (marker != '`' || !c[start + len..].contains(&'`')) {
             let lang: String = c[start + len..].iter().collect();
             let lang = lang
                 .trim()
@@ -380,17 +411,31 @@ fn line_styles(
             }
         }
     }
+    // Delimiter stack: apply formatting only when a matching closer is found.
+    // Character offsets are preserved, and opaque spans are skipped by the scanner.
+    let mut emphasis: Vec<(char, usize, usize)> = Vec::new();
+    let table_like = trim.starts_with('|')
+        || trim.ends_with('|')
+        || (trim.contains(" | ") && trim.matches('|').count() >= 2);
     let mut i = 0;
     while i < n {
+        if i == start
+            && c[i] == '*'
+            && c.get(i + 1).is_some_and(|ch| ch.is_whitespace())
+            && !ctx.comment
+        {
+            i += 1;
+            continue;
+        }
         if ctx.comment || starts(&c, i, "<!--") {
             let from = if ctx.comment { i } else { i + 4 };
             if let Some(end) = find(&c, from, "-->") {
-                paint(&mut s, i, end + 3, dim);
+                paint(&mut s, i, end + 3, dim.add_modifier(Modifier::ITALIC));
                 ctx.comment = false;
                 i = end + 3;
                 continue;
             }
-            paint(&mut s, i, n, dim);
+            paint(&mut s, i, n, dim.add_modifier(Modifier::ITALIC));
             ctx.comment = true;
             break;
         }
@@ -408,31 +453,75 @@ fn line_styles(
             i += len;
             continue;
         }
+        if matches!(c[i], '*' | '_' | '~') {
+            let marker = c[i];
+            let len = c[i..].iter().take_while(|&&ch| ch == marker).count();
+            let prev = i.checked_sub(1).map(|j| c[j]);
+            let next = c.get(i + len).copied();
+            let intraword = marker == '_'
+                && prev.is_some_and(char::is_alphanumeric)
+                && next.is_some_and(char::is_alphanumeric);
+            let can_open = !intraword && next.is_some_and(|ch| !ch.is_whitespace());
+            let can_close = !intraword && prev.is_some_and(|ch| !ch.is_whitespace());
+            let mut used = 0;
+            if can_close {
+                while let Some(&(m, width, begin)) = emphasis.last() {
+                    if m != marker || width > len - used {
+                        break;
+                    }
+                    emphasis.pop();
+                    let close = i + used;
+                    let (color, modifier) = match (marker, width) {
+                        ('~', _) => (t.muted, Modifier::CROSSED_OUT),
+                        (_, 2) => (t.warning, Modifier::BOLD),
+                        _ => (t.success, Modifier::ITALIC),
+                    };
+                    for style in &mut s[begin + width..close] {
+                        if style.fg.is_none() {
+                            *style = style.fg(color);
+                        }
+                        *style = style.add_modifier(modifier);
+                    }
+                    paint(&mut s, begin, begin + width, delimiter);
+                    paint(&mut s, close, close + width, delimiter);
+                    used += width;
+                }
+            }
+            if can_open {
+                while used < len && emphasis.len() < 64 {
+                    let width = if len - used >= 2 { 2 } else { 1 };
+                    if marker == '~' && width == 1 {
+                        break;
+                    }
+                    emphasis.push((marker, width, i + used));
+                    used += width;
+                }
+            }
+            i += len;
+            continue;
+        }
         let mut matched = false;
         for (a, b, style) in [
             ("[[", "]]", link),
             ("[@", "]", accent),
+            ("[-@", "]", accent),
             ("[^", "]", accent),
-            (
-                "***",
-                "***",
-                warn.add_modifier(Modifier::BOLD | Modifier::ITALIC),
-            ),
-            (
-                "___",
-                "___",
-                warn.add_modifier(Modifier::BOLD | Modifier::ITALIC),
-            ),
-            ("**", "**", warn.add_modifier(Modifier::BOLD)),
-            ("__", "__", warn.add_modifier(Modifier::BOLD)),
-            ("~~", "~~", dim.add_modifier(Modifier::CROSSED_OUT)),
             ("==", "==", warn.add_modifier(Modifier::BOLD)),
             ("$$", "$$", warn),
             ("$", "$", warn),
-            ("*", "*", green.add_modifier(Modifier::ITALIC)),
-            ("_", "_", green.add_modifier(Modifier::ITALIC)),
         ] {
-            if a == "_" && i > 0 && c[i - 1].is_alphanumeric() {
+            if a == "$"
+                && (c.get(i + 1).is_none_or(|ch| ch.is_whitespace()) || c.get(i + 1) == Some(&'$'))
+            {
+                continue;
+            }
+            if a == "$"
+                && !find(&c, i + 1, "$").is_some_and(|end| {
+                    end > i + 1
+                        && !c[end - 1].is_whitespace()
+                        && !c.get(end + 1).is_some_and(char::is_ascii_digit)
+                })
+            {
                 continue;
             }
             if let Some(end) = paired(&c, &mut s, i, a, b, style, delimiter) {
@@ -447,15 +536,37 @@ fn line_styles(
         let a = if starts(&c, i, "![") { i + 1 } else { i };
         if c[a] == '['
             && let Some(mid) = find(&c, a + 1, "](")
-            && let Some(end) = find(&c, mid + 2, ")")
+            && let Some(end) = link_end(&c, mid + 2)
         {
             paint(&mut s, i, a + 1, delimiter);
             paint(&mut s, a + 1, mid, link);
             paint(&mut s, mid, mid + 2, delimiter);
-            paint(&mut s, mid + 2, end, link);
+            paint(
+                &mut s,
+                mid + 2,
+                end,
+                accent.add_modifier(Modifier::UNDERLINED),
+            );
             paint(&mut s, end, end + 1, delimiter);
             i = end + 1;
             continue;
+        }
+        if c[i] == '<'
+            && let Some(end) = find(&c, i + 1, ">")
+        {
+            let body: String = c[i + 1..end].iter().collect();
+            if !body.chars().any(char::is_whitespace)
+                && (body.starts_with("https://")
+                    || body.starts_with("http://")
+                    || body.starts_with("mailto:")
+                    || body.contains('@'))
+            {
+                paint(&mut s, i, i + 1, delimiter);
+                paint(&mut s, i + 1, end, link);
+                paint(&mut s, end, end + 1, delimiter);
+                i = end + 1;
+                continue;
+            }
         }
         if c[i] == '#'
             && (i == 0 || c[i - 1].is_whitespace())
@@ -469,7 +580,7 @@ fn line_styles(
             paint(&mut s, a, i, green);
             continue;
         }
-        if c[i] == '|' && !ctx.comment {
+        if c[i] == '|' && table_like && !ctx.comment {
             s[i] = delimiter;
         }
         i += 1;
@@ -770,5 +881,60 @@ mod settings_tests {
         let (_, styles) = line_styles("**bold**", 0, &mut Context::default(), t, &settings);
         assert_eq!(styles[0].fg, Some(t.foreground));
         assert_eq!(styles[2].fg, Some(t.warning));
+    }
+}
+
+#[cfg(test)]
+mod expanded_markdown_tests {
+    use super::*;
+
+    fn styles(line: &str) -> Vec<Style> {
+        line_styles(
+            line,
+            1,
+            &mut Context::default(),
+            Theme::named("dark").unwrap(),
+            &MarkdownSettings::default(),
+        )
+        .1
+    }
+
+    #[test]
+    fn nested_emphasis_and_unicode() {
+        let s = styles("β **outer *inner***");
+        assert!(s[4].add_modifier.contains(Modifier::BOLD));
+        assert!(
+            s[11]
+                .add_modifier
+                .contains(Modifier::BOLD | Modifier::ITALIC)
+        );
+        assert_eq!(s.len(), "β **outer *inner***".chars().count());
+    }
+
+    #[test]
+    fn opaque_code_and_intraword_underscores() {
+        let s = styles("`**x**` foo_bar_baz");
+        assert!(!s[3].add_modifier.contains(Modifier::BOLD));
+        assert_eq!(s[12], Style::default());
+        assert!(
+            styles("unclosed **text")
+                .iter()
+                .all(|s| *s == Style::default())
+        );
+    }
+
+    #[test]
+    fn balanced_link_and_plain_pipe() {
+        let s = styles("[x](a(b)c)");
+        assert!(s[8].add_modifier.contains(Modifier::UNDERLINED));
+        assert_eq!(styles("a | b")[2], Style::default());
+    }
+
+    #[test]
+    fn comments_and_math_are_opaque() {
+        let s = styles("<!-- **x** -->");
+        assert!(s[6].add_modifier.contains(Modifier::ITALIC));
+        assert!(!s[6].add_modifier.contains(Modifier::BOLD));
+        assert_eq!(styles("$5 and $10")[0], Style::default());
     }
 }
