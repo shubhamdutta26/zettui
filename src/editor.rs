@@ -34,7 +34,7 @@ impl OpenNote {
         if metadata.len() > MAX_EDIT_BYTES {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "File is too large to edit in Lesson 2 (256 KB limit)",
+                "File is too large to edit (256 KB limit)",
             ));
         }
         let original_disk = fs::read_to_string(&path)?;
@@ -51,7 +51,12 @@ impl OpenNote {
     }
 
     pub fn is_dirty(&self) -> bool {
-        self.state.lines.to_string() != self.saved_text
+        self.is_dirty_text(&self.state.lines.to_string())
+    }
+
+    /// Compare an already serialized buffer without allocating a second copy.
+    pub fn is_dirty_text(&self, text: &str) -> bool {
+        text != self.saved_text
     }
 
     /// Save only if the content has changed AND no other program changed the file.

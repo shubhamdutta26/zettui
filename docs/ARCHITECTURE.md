@@ -33,4 +33,8 @@ These modules share `App` privately rather than passing large collections of sta
 - Preserve character offsets for Unicode text and editor search overlays.
 - Keep system theme fallback and explicit user override precedence intact.
 
-Further extraction of picker state and renderer helpers, and any caching changes, should be separate changes with regression tests. Do not optimize before measuring representative notes.
+## Rendering and theme caches
+
+- `HighlightCache` holds one document's lexical styles and word count. Exact source text, resolved theme, Markdown status and settings form the cache key. Search and focus overlays operate on copies of base styles so cursor movements cannot contaminate the cache. The editor still serializes its buffer once per draw; this is not incremental parsing.
+- `ThemeSnapshot` records actual palette file contents and legacy light-mode markers. The live-theme poll skips resolution when the snapshot is unchanged. Reading contents (rather than relying on timestamps) detects symlink replacements. Theme queries still happen before the terminal event loop.
+- Existing periodic rendering and vault indexing behavior are unchanged. Benchmark before introducing further optimizations.

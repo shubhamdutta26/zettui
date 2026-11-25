@@ -73,7 +73,7 @@ All keys are optional. Restart Zettui after changing the file. Session commands 
 
 Heading overrides apply across themes and to both preview and editor. Choose colors readable on your background. Missing heading overrides use adaptive colors. Disabling fenced code or YAML highlighting leaves those blocks plain, without interpreting their contents as Markdown. Inline code remains highlighted unless the master switch is off. Search and focus highlighting are independent of the master switch. Invalid heading colors are configuration errors.
 
-Legacy top-level workspace, theme and browser width keys are still accepted; if both forms specify a setting, the sectioned value wins. Keep legacy root keys before any TOML table headers. `[colors]`, `[editor]`, `[zen]`, and `[focus]` retain their existing locations.
+The sectioned configuration is required starting with v0.7.10. Old top-level workspace, theme and browser width keys are rejected rather than silently ignored. Move these settings into `[workspace]`, `[appearance]` and `[layout]` respectively. Zettui never rewrites the configuration. The current example is the canonical reference.
 
 
 ## Native system theming

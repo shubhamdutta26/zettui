@@ -299,7 +299,8 @@ impl App {
                 .and_then(|name| name.to_str())
                 .unwrap_or("note")
                 .to_owned();
-            let modified = note.is_dirty();
+            let source = note.state.lines.to_string();
+            let modified = note.is_dirty_text(&source);
             let dirty = if modified { " [+]" } else { "" };
             let title = format!(" {filename}{dirty} ");
             let border = Block::bordered()
@@ -347,7 +348,6 @@ impl App {
                     Style::default().fg(theme.background).bg(theme.accent)
                 })
                 .hide_status_line();
-            let source = note.state.lines.to_string();
             let focus_range = if self.writing.focus.enabled && note.state.mode != EditorMode::Visual
             {
                 Some((
@@ -367,14 +367,16 @@ impl App {
                 inner.y = inner.y.saturating_add(pad);
                 inner.height = inner.height.saturating_sub(pad);
             }
-            note.state.set_highlights(markdown::editor_highlights(
+            self.highlight_cache.prepare(
                 &source,
                 theme,
                 markdown::is_markdown(&note.path),
+                &self.markdown_settings,
+            );
+            note.state.set_highlights(self.highlight_cache.highlights(
                 &self.note_search.painted,
                 self.note_search.active,
                 focus_range,
-                &self.markdown_settings,
             ));
             frame.render_widget(
                 EditorView::new(&mut note.state)
@@ -427,7 +429,7 @@ impl App {
             };
             let stats = format!(
                 "{} words  │  Ln {}, Col {}",
-                note.state.lines.to_string().split_whitespace().count(),
+                self.highlight_cache.word_count(),
                 note.state.cursor.row + 1,
                 note.state.cursor.col + 1
             );

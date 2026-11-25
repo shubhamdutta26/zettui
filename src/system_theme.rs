@@ -172,7 +172,7 @@ fn native_palette(doc: &toml::Value, fallback: Theme, settings: Settings) -> Opt
     );
     Some(t)
 }
-fn omarchy(fallback: Theme, settings: Settings) -> Option<Theme> {
+fn omarchy_roots() -> Option<[PathBuf; 2]> {
     let home = env::var_os("HOME").map(PathBuf::from)?;
     let state = env::var_os("XDG_STATE_HOME")
         .filter(|s| !s.is_empty())
@@ -182,7 +182,60 @@ fn omarchy(fallback: Theme, settings: Settings) -> Option<Theme> {
         .filter(|s| !s.is_empty())
         .map(PathBuf::from)
         .unwrap_or_else(|| home.join(".config"));
-    [state, config].iter().find_map(|root| {
+    Some([state, config])
+}
+
+/// Compare actual file contents rather than timestamps: theme switches may
+/// replace a symlink or reuse timestamps. Include the legacy appearance paths.
+#[derive(Debug, PartialEq, Eq)]
+pub struct ThemeSnapshot(Vec<ThemeFile>);
+
+#[derive(Debug, PartialEq, Eq)]
+struct ThemeFile {
+    directory: PathBuf,
+    colors: Option<String>,
+    light_marker: bool,
+}
+
+impl ThemeSnapshot {
+    pub fn capture() -> Self {
+        let Some(roots) = omarchy_roots() else {
+            return Self(Vec::new());
+        };
+        let mut directories: Vec<_> = roots
+            .into_iter()
+            .map(|root| root.join("omarchy/current/theme"))
+            .collect();
+        if let Some(home) = env::var_os("HOME").map(PathBuf::from) {
+            for relative in [
+                ".local/state/omarchy/current/theme",
+                ".config/omarchy/current/theme",
+            ] {
+                let directory = home.join(relative);
+                if !directories.contains(&directory) {
+                    directories.push(directory);
+                }
+            }
+        }
+        Self::from_directories(directories)
+    }
+
+    fn from_directories(directories: Vec<PathBuf>) -> Self {
+        Self(
+            directories
+                .into_iter()
+                .map(|directory| ThemeFile {
+                    colors: fs::read_to_string(directory.join("colors.toml")).ok(),
+                    light_marker: directory.join("light.mode").is_file(),
+                    directory,
+                })
+                .collect(),
+        )
+    }
+}
+
+fn omarchy(fallback: Theme, settings: Settings) -> Option<Theme> {
+    omarchy_roots()?.iter().find_map(|root| {
         let text = fs::read_to_string(root.join("omarchy/current/theme/colors.toml")).ok()?;
         native_palette(&text.parse().ok()?, fallback, settings)
     })
@@ -256,6 +309,22 @@ pub fn resolve(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn snapshot_detects_palette_and_marker_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        let capture = || ThemeSnapshot::from_directories(vec![dir.path().to_path_buf()]);
+        let initial = capture();
+        assert_eq!(initial, capture());
+        fs::write(dir.path().join("colors.toml"), "mode = 'dark'").unwrap();
+        let dark = capture();
+        assert_ne!(initial, dark);
+        fs::write(dir.path().join("colors.toml"), "mode = 'light'").unwrap();
+        let light = capture();
+        assert_ne!(dark, light);
+        fs::write(dir.path().join("light.mode"), "").unwrap();
+        assert_ne!(light, capture());
+    }
+
     #[test]
     fn reads_omarchy_named_colors() {
         let doc = "background='#2d353b'\nforeground='#d3c6aa'\naccent='#7fbbb3'\nselection='#3d484d'\nmuted='#475258'\nlighter_background='#343f44'\nmagenta='#d699b6'\nblue='#7fbbb3'\ncyan='#83c092'\ngreen='#a7c080'\nyellow='#dbbc7f'\norange='#e09d7f'".parse().unwrap();

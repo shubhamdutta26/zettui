@@ -8,18 +8,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// Canonical configuration mirrors the TOML sections directly.
 #[derive(Debug, Default, Deserialize)]
-#[serde(from = "RawConfig")]
+#[serde(default, deny_unknown_fields)]
 pub struct Config {
-    pub bibliography: Option<PathBuf>,
-    pub notes_dir: Option<PathBuf>,
-    pub snippets_dir: Option<PathBuf>,
-    pub theme: Option<String>,
-    pub system_theme: crate::system_theme::Settings,
-    pub light_theme: Option<String>,
-    pub dark_theme: Option<String>,
-    /// Desired percent of terminal width used by the left file pane.
-    pub browser_width_percent: Option<u16>,
+    pub workspace: Workspace,
+    pub appearance: AppearanceSettings,
+    pub layout: LayoutSettings,
     pub colors: ColorOverrides,
     pub zen: crate::focus::ZenSettings,
     pub focus: crate::focus::FocusSettings,
@@ -28,78 +23,35 @@ pub struct Config {
 }
 
 #[derive(Debug, Default, Deserialize)]
-#[serde(default)]
-struct Workspace {
-    notes_dir: Option<PathBuf>,
-    bibliography: Option<PathBuf>,
-    snippets_dir: Option<PathBuf>,
+#[serde(default, deny_unknown_fields)]
+pub struct Workspace {
+    pub notes_dir: Option<PathBuf>,
+    pub bibliography: Option<PathBuf>,
+    pub snippets_dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
-struct AppearanceSettings {
+pub struct AppearanceSettings {
     #[serde(flatten)]
-    system_theme: crate::system_theme::Settings,
-    theme: Option<String>,
-    light_theme: Option<String>,
-    dark_theme: Option<String>,
+    pub system_theme: crate::system_theme::Settings,
+    pub theme: Option<String>,
+    pub light_theme: Option<String>,
+    pub dark_theme: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
-#[serde(default)]
-struct LayoutSettings {
-    browser_width_percent: Option<u16>,
-}
-
-// Accept legacy top-level keys as well as the canonical sectioned format.
-#[derive(Debug, Default, Deserialize)]
-#[serde(default)]
-struct RawConfig {
-    workspace: Workspace,
-    appearance: AppearanceSettings,
-    layout: LayoutSettings,
-    notes_dir: Option<PathBuf>,
-    bibliography: Option<PathBuf>,
-    snippets_dir: Option<PathBuf>,
-    theme: Option<String>,
-    light_theme: Option<String>,
-    dark_theme: Option<String>,
-    browser_width_percent: Option<u16>,
-    colors: ColorOverrides,
-    editor: crate::focus::EditorSettings,
-    zen: crate::focus::ZenSettings,
-    focus: crate::focus::FocusSettings,
-    markdown: crate::markdown::MarkdownSettings,
-}
-
-impl From<RawConfig> for Config {
-    fn from(raw: RawConfig) -> Self {
-        Self {
-            notes_dir: raw.workspace.notes_dir.or(raw.notes_dir),
-            bibliography: raw.workspace.bibliography.or(raw.bibliography),
-            snippets_dir: raw.workspace.snippets_dir.or(raw.snippets_dir),
-            theme: raw.appearance.theme.or(raw.theme),
-            system_theme: raw.appearance.system_theme,
-            light_theme: raw.appearance.light_theme.or(raw.light_theme),
-            dark_theme: raw.appearance.dark_theme.or(raw.dark_theme),
-            browser_width_percent: raw
-                .layout
-                .browser_width_percent
-                .or(raw.browser_width_percent),
-            colors: raw.colors,
-            editor: raw.editor,
-            zen: raw.zen,
-            focus: raw.focus,
-            markdown: raw.markdown,
-        }
-    }
+#[serde(default, deny_unknown_fields)]
+pub struct LayoutSettings {
+    /// Desired percent of terminal width used by the left file pane.
+    pub browser_width_percent: Option<u16>,
 }
 
 impl Config {
     pub fn auto_themes(&self) -> io::Result<crate::theme::AutoThemes> {
         crate::theme::AutoThemes::named(
-            self.light_theme.as_deref().unwrap_or("light"),
-            self.dark_theme.as_deref().unwrap_or("dark"),
+            self.appearance.light_theme.as_deref().unwrap_or("light"),
+            self.appearance.dark_theme.as_deref().unwrap_or("dark"),
         )
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error.to_string()))
     }
@@ -107,6 +59,7 @@ impl Config {
     pub fn browser_width(&self) -> io::Result<u16> {
         use crate::layout::{DEFAULT_BROWSER_PERCENT, valid_browser_percent};
         let width = self
+            .layout
             .browser_width_percent
             .unwrap_or(DEFAULT_BROWSER_PERCENT);
         if !valid_browser_percent(width) {
@@ -134,9 +87,15 @@ impl Config {
             )
         })?;
         let config_dir = config_file.parent().unwrap_or(Path::new("."));
-        cfg.bibliography = cfg.bibliography.map(|p| expand_path(p, config_dir));
-        cfg.notes_dir = cfg.notes_dir.map(|p| expand_path(p, config_dir));
-        cfg.snippets_dir = cfg.snippets_dir.map(|p| expand_path(p, config_dir));
+        cfg.workspace.bibliography = cfg
+            .workspace
+            .bibliography
+            .map(|p| expand_path(p, config_dir));
+        cfg.workspace.notes_dir = cfg.workspace.notes_dir.map(|p| expand_path(p, config_dir));
+        cfg.workspace.snippets_dir = cfg
+            .workspace
+            .snippets_dir
+            .map(|p| expand_path(p, config_dir));
         Ok(cfg)
     }
 }
@@ -171,18 +130,22 @@ mod tests {
     #[test]
     fn parses_config_and_optional_fields() {
         let cfg: Config = toml::from_str(
-            r#"bibliography = "/tmp/refs.json"
+            r#"[workspace]
+bibliography = "/tmp/refs.json"
 notes_dir = "/tmp/notes"
 "#,
         )
         .unwrap();
-        assert_eq!(cfg.bibliography.unwrap(), PathBuf::from("/tmp/refs.json"));
+        assert_eq!(
+            cfg.workspace.bibliography.unwrap(),
+            PathBuf::from("/tmp/refs.json")
+        );
     }
 
     #[test]
     fn parses_auto_theme_presets() {
         let cfg: Config = toml::from_str(
-            "theme = 'auto'\nlight_theme = 'catppuccin-latte'\ndark_theme = 'everforest'\n",
+            "[appearance]\ntheme = 'auto'\nlight_theme = 'catppuccin-latte'\ndark_theme = 'everforest'\n",
         )
         .unwrap();
         let presets = cfg.auto_themes().unwrap();
@@ -196,7 +159,7 @@ notes_dir = "/tmp/notes"
             Appearance::Everforest
         );
         assert!(
-            toml::from_str::<Config>("dark_theme = 'auto'")
+            toml::from_str::<Config>("[appearance]\ndark_theme = 'auto'")
                 .unwrap()
                 .auto_themes()
                 .is_err()
@@ -205,8 +168,9 @@ notes_dir = "/tmp/notes"
 
     #[test]
     fn parses_theme_and_color_overrides() {
-        let cfg: Config = toml::from_str("theme = 'auto'\n[colors]\naccent = '#123456'\n").unwrap();
-        assert_eq!(cfg.theme.as_deref(), Some("auto"));
+        let cfg: Config =
+            toml::from_str("[appearance]\ntheme = 'auto'\n[colors]\naccent = '#123456'\n").unwrap();
+        assert_eq!(cfg.appearance.theme.as_deref(), Some("auto"));
         assert_eq!(cfg.colors.accent.as_deref(), Some("#123456"));
     }
 
@@ -228,15 +192,15 @@ mod lesson73_config_tests {
 
     #[test]
     fn uses_default_and_parses_custom_width() {
-        let cfg: Config = toml::from_str("theme = 'auto'").unwrap();
+        let cfg: Config = toml::from_str("[appearance]\ntheme = 'auto'").unwrap();
         assert_eq!(cfg.browser_width().unwrap(), 35);
-        let cfg: Config = toml::from_str("browser_width_percent = 50").unwrap();
+        let cfg: Config = toml::from_str("[layout]\nbrowser_width_percent = 50").unwrap();
         assert_eq!(cfg.browser_width().unwrap(), 50);
     }
 
     #[test]
     fn rejects_width_outside_allowed_range() {
-        let cfg: Config = toml::from_str("browser_width_percent = 75").unwrap();
+        let cfg: Config = toml::from_str("[layout]\nbrowser_width_percent = 75").unwrap();
         assert!(cfg.browser_width().is_err());
     }
 }
@@ -245,26 +209,9 @@ mod lesson73_config_tests {
 mod sectioned_config_tests {
     use super::*;
     #[test]
-    fn sectioned_values_override_legacy_per_field() {
-        let cfg: Config = toml::from_str(
-            r#"
-notes_dir = "/old"
-bibliography = "/refs.json"
-theme = "dark"
-browser_width_percent = 35
-[workspace]
-notes_dir = "/new"
-[appearance]
-theme = "light"
-[layout]
-browser_width_percent = 20
-"#,
-        )
-        .unwrap();
-        assert_eq!(cfg.notes_dir.as_deref(), Some(Path::new("/new")));
-        assert_eq!(cfg.bibliography.as_deref(), Some(Path::new("/refs.json")));
-        assert_eq!(cfg.theme.as_deref(), Some("light"));
-        assert_eq!(cfg.browser_width().unwrap(), 20);
+    fn rejects_legacy_root_keys() {
+        assert!(toml::from_str::<Config>("notes_dir = '/old'").is_err());
+        assert!(toml::from_str::<Config>("theme = 'dark'").is_err());
     }
     #[test]
     fn example_and_empty_config_parse() {
@@ -279,6 +226,18 @@ browser_width_percent = 20
             assert!(!cfg.zen.enabled);
             assert!(cfg.auto_themes().is_ok());
         }
+    }
+    #[test]
+    fn parses_native_theme_options() {
+        let cfg: Config = toml::from_str(
+            "[appearance]\ntheme = 'system'\nsource = 'omarchy'\nlive_reload = false\nensure_contrast = false",
+        ).unwrap();
+        assert_eq!(
+            cfg.appearance.system_theme.source,
+            crate::system_theme::Source::Omarchy
+        );
+        assert!(!cfg.appearance.system_theme.live_reload);
+        assert!(!cfg.appearance.system_theme.ensure_contrast);
     }
     #[test]
     fn invalid_heading_color_is_rejected() {

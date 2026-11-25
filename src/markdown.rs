@@ -19,7 +19,7 @@ fn optional_color<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Color>, D::E
         .map_err(serde::de::Error::custom)
 }
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct HeadingColors {
     #[serde(deserialize_with = "optional_color")]
@@ -41,7 +41,7 @@ impl HeadingColors {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct MarkdownSettings {
     pub syntax_highlighting: bool,
@@ -508,7 +508,122 @@ pub fn preview(text: &str, t: Theme, settings: &MarkdownSettings) -> Vec<Line<'s
         .collect()
 }
 
-pub fn editor_highlights(
+/// Cache lexical styling independently of cursor, search and focus overlays.
+/// Exact text comparison avoids stale results after undo, paste or note switches.
+#[derive(Default)]
+pub struct HighlightCache {
+    entry: Option<CachedStyles>,
+}
+
+struct CachedStyles {
+    text: String,
+    theme: Theme,
+    markdown: bool,
+    settings: MarkdownSettings,
+    lines: Vec<Vec<Style>>,
+    words: usize,
+}
+
+impl HighlightCache {
+    pub fn prepare(
+        &mut self,
+        text: &str,
+        theme: Theme,
+        markdown: bool,
+        settings: &MarkdownSettings,
+    ) {
+        if self.entry.as_ref().is_some_and(|entry| {
+            entry.text == text
+                && entry.theme == theme
+                && entry.markdown == markdown
+                && entry.settings == *settings
+        }) {
+            return;
+        }
+        let mut ctx = Context::default();
+        let lines = text
+            .split('\n')
+            .enumerate()
+            .map(|(row, line)| {
+                if markdown {
+                    line_styles(line, row, &mut ctx, theme, settings).1
+                } else {
+                    vec![Style::default(); line.chars().count()]
+                }
+            })
+            .collect();
+        self.entry = Some(CachedStyles {
+            text: text.to_owned(),
+            theme,
+            markdown,
+            settings: settings.clone(),
+            lines,
+            words: text.split_whitespace().count(),
+        });
+    }
+
+    pub fn word_count(&self) -> usize {
+        self.entry.as_ref().map_or(0, |entry| entry.words)
+    }
+
+    pub fn highlights(
+        &self,
+        search: &[(Index2, Index2)],
+        active: usize,
+        focus: Option<(std::ops::Range<usize>, f32)>,
+    ) -> Vec<Highlight> {
+        let Some(entry) = &self.entry else {
+            return Vec::new();
+        };
+        let t = entry.theme;
+        let mut result = Vec::new();
+        let mut hit = 0;
+        for (row, base) in entry.lines.iter().enumerate() {
+            // Overlay edits must never mutate cached lexical styles.
+            let mut s = base.clone();
+            if let Some((range, strength)) = &focus
+                && !range.contains(&row)
+            {
+                for style in &mut s {
+                    *style = crate::focus::dim(*style, t, *strength);
+                }
+            }
+            let first_hit = hit;
+            while hit < search.len() && search[hit].0.row == row {
+                let (a, b) = &search[hit];
+                paint(
+                    &mut s,
+                    a.col,
+                    b.col + 1,
+                    Style::default().fg(t.selected_fg).bg(t.selected_bg),
+                );
+                hit += 1;
+            }
+            if active > first_hit && active <= hit {
+                let (a, b) = &search[active - 1];
+                paint(
+                    &mut s,
+                    a.col,
+                    b.col + 1,
+                    Style::default().fg(t.background).bg(t.accent),
+                );
+            }
+            for (a, b, style) in runs(&s) {
+                if style != Style::default() {
+                    result.push(Highlight::new(
+                        Index2::new(row, a),
+                        Index2::new(row, b - 1),
+                        style,
+                    ));
+                }
+            }
+        }
+        result
+    }
+}
+
+#[cfg(test)]
+fn editor_highlights(
     text: &str,
     t: Theme,
     markdown: bool,
@@ -517,58 +632,39 @@ pub fn editor_highlights(
     focus: Option<(std::ops::Range<usize>, f32)>,
     settings: &MarkdownSettings,
 ) -> Vec<Highlight> {
-    let mut ctx = Context::default();
-    let mut result = Vec::new();
-    let mut hit = 0;
-    for (row, line) in text.split('\n').enumerate() {
-        let (_, mut s) = if markdown {
-            line_styles(line, row, &mut ctx, t, settings)
-        } else {
-            (Vec::new(), vec![Style::default(); line.chars().count()])
-        };
-        if let Some((range, strength)) = &focus
-            && !range.contains(&row)
-        {
-            for style in &mut s {
-                *style = crate::focus::dim(*style, t, *strength);
-            }
-        }
-        let first_hit = hit;
-        while hit < search.len() && search[hit].0.row == row {
-            let (a, b) = &search[hit];
-            paint(
-                &mut s,
-                a.col,
-                b.col + 1,
-                Style::default().fg(t.selected_fg).bg(t.selected_bg),
-            );
-            hit += 1;
-        }
-        if active > first_hit && active <= hit {
-            let (a, b) = &search[active - 1];
-            paint(
-                &mut s,
-                a.col,
-                b.col + 1,
-                Style::default().fg(t.background).bg(t.accent),
-            );
-        }
-        for (a, b, style) in runs(&s) {
-            if style != Style::default() {
-                result.push(Highlight::new(
-                    Index2::new(row, a),
-                    Index2::new(row, b - 1),
-                    style,
-                ));
-            }
-        }
-    }
-    result
+    let mut cache = HighlightCache::default();
+    cache.prepare(text, t, markdown, settings);
+    cache.highlights(search, active, focus)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn cache_invalidates_and_overlays_do_not_modify_base() {
+        let mut cache = HighlightCache::default();
+        let dark = Theme::named("dark").unwrap();
+        let light = Theme::named("light").unwrap();
+        let settings = MarkdownSettings::default();
+        cache.prepare("# Hello", dark, true, &settings);
+        assert_eq!(cache.word_count(), 2);
+        let base = cache.entry.as_ref().unwrap().lines.clone();
+        let hit = [(Index2::new(0, 2), Index2::new(0, 6))];
+        assert!(!cache.highlights(&hit, 1, Some((1..2, 0.5))).is_empty());
+        assert_eq!(cache.entry.as_ref().unwrap().lines, base);
+        cache.prepare("# Hello", light, true, &settings);
+        assert_eq!(cache.entry.as_ref().unwrap().theme, light);
+        cache.prepare("new text here", light, false, &settings);
+        assert_eq!(cache.word_count(), 3);
+        assert!(cache.highlights(&[], 0, None).is_empty());
+        let disabled = MarkdownSettings {
+            syntax_highlighting: false,
+            ..settings
+        };
+        cache.prepare("# Hello", dark, true, &disabled);
+        assert!(cache.highlights(&[], 0, None).is_empty());
+    }
+
     #[test]
     fn heading_levels_are_distinct() {
         for name in ["dark", "light", "midnight"] {

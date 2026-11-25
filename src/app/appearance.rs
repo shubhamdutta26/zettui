@@ -27,10 +27,13 @@ impl App {
             return;
         }
         self.last_theme_check = std::time::Instant::now();
-        if let Ok(theme) = self.resolve_theme(self.theme_choice)
-            && theme != self.theme
-        {
+        let snapshot = system_theme::ThemeSnapshot::capture();
+        if self.theme_snapshot.as_ref() == Some(&snapshot) {
+            return;
+        }
+        if let Ok(theme) = self.resolve_theme(self.theme_choice) {
             self.theme = theme;
+            self.theme_snapshot = Some(snapshot);
         }
     }
 
@@ -39,6 +42,7 @@ impl App {
         let next = self.theme_choice.next();
         match self.resolve_theme(next) {
             Ok(theme) => {
+                self.theme_snapshot = None;
                 self.theme_choice = next;
                 self.theme = theme;
                 self.message = format!(

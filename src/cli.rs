@@ -38,6 +38,7 @@ pub(crate) fn arguments() -> io::Result<StartupOptions> {
     let browser_width = config.browser_width()?;
     let auto_themes = config.auto_themes()?;
     let snippets_dir = config
+        .workspace
         .snippets_dir
         .clone()
         .unwrap_or_else(snippets::default_snippets_dir);
@@ -86,7 +87,7 @@ pub(crate) fn arguments() -> io::Result<StartupOptions> {
         }
     }
     let name = theme_override
-        .or(config.theme)
+        .or(config.appearance.theme)
         .unwrap_or_else(|| "system".to_owned());
     let choice = ThemeChoice::named(&name)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error.to_string()))?;
@@ -96,11 +97,11 @@ pub(crate) fn arguments() -> io::Result<StartupOptions> {
         .unwrap_or(Appearance::Dark);
     Ok(StartupOptions {
         root: notes_dir
-            .or(config.notes_dir)
+            .or(config.workspace.notes_dir)
             .unwrap_or(env::current_dir()?),
-        bibliography: bibliography.or(config.bibliography),
+        bibliography: bibliography.or(config.workspace.bibliography),
         choice,
-        system_theme: config.system_theme,
+        system_theme: config.appearance.system_theme,
         terminal_palette,
         overrides: config.colors,
         fallback: system,
