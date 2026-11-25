@@ -9,7 +9,7 @@ use std::{
 use ratatui::style::{Color, Style};
 use serde::Deserialize;
 
-/// Auto follows Omarchy; all other choices are fixed palettes.
+/// Available theme modes: automatic presets, fixed palettes, and native providers.
 pub const THEME_CHOICES: &[&str] = &[
     "auto",
     "dark",

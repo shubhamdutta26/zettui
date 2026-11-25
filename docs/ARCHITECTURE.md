@@ -1,6 +1,17 @@
 # Architecture
 
-`main.rs` owns application state, event routing, dialogs and rendering. `cli.rs` resolves startup options before Ratatui initializes the terminal. The event loop coordinates the browser, editor and modal pickers; it owns mutation of application state.
+`main.rs` declares modules and delegates startup to `app::start`. `cli.rs` resolves startup options before Ratatui initializes the terminal. `app.rs` owns the private application state, picker state, and startup coordination. Its child modules extend `App` with focused implementations; the event loop remains the single owner of application-state mutation.
+
+| Application module | Responsibility |
+| --- | --- |
+| `app/browser.rs` | Directory listing, selection, navigation and previews |
+| `app/appearance.rs` | Theme resolution, live refresh, cycling and pane resizing |
+| `app/dialogs.rs` | Picker actions, search, links, citations, snippets and file prompts |
+| `app/editing.rs` | Saving, editor commands and in-note search interception |
+| `app/events.rs` | Terminal lifecycle, cursor shape and input routing |
+| `app/ui.rs` | Main interface and popup rendering |
+
+These modules share `App` privately rather than passing large collections of state between unrelated public interfaces. Methods used by sibling modules have `pub(super)` visibility; implementation helpers remain private.
 
 | Module | Responsibility |
 | --- | --- |
@@ -22,4 +33,4 @@
 - Preserve character offsets for Unicode text and editor search overlays.
 - Keep system theme fallback and explicit user override precedence intact.
 
-Future extraction of UI/event modules and caching should be separate changes with regression tests. Do not optimize before measuring representative notes.
+Further extraction of picker state and renderer helpers, and any caching changes, should be separate changes with regression tests. Do not optimize before measuring representative notes.

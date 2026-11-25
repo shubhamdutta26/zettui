@@ -4,6 +4,7 @@
 
 - Native Omarchy and terminal theming, contrast correction and system heading colors.
 - Repository housekeeping, CLI module extraction, documentation and stricter CI.
+- Split application coordination, browser, appearance, dialogs, editing, events and rendering into focused modules.
 - Configuration template included in release packages.
 
 ## 0.7.9
