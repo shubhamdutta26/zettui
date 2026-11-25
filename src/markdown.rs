@@ -2,11 +2,65 @@
 //! offsets, not UTF-8 byte offsets, matching EdTUI's Index2 coordinates.
 use crate::theme::Theme;
 use edtui::{Highlight, Index2};
+use ratatui::style::Color;
 use ratatui::{
     style::{Modifier, Style},
     text::{Line, Span},
 };
+use serde::{Deserialize, Deserializer};
 use std::path::Path;
+
+fn optional_color<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Color>, D::Error> {
+    let value = Option::<String>::deserialize(d)?;
+    value
+        .as_deref()
+        .map(crate::theme::parse_hex)
+        .transpose()
+        .map_err(serde::de::Error::custom)
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct HeadingColors {
+    #[serde(deserialize_with = "optional_color")]
+    pub h1: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub h2: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub h3: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub h4: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub h5: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub h6: Option<Color>,
+}
+impl HeadingColors {
+    fn get(&self, level: usize) -> Option<Color> {
+        [self.h1, self.h2, self.h3, self.h4, self.h5, self.h6][level.clamp(1, 6) - 1]
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct MarkdownSettings {
+    pub syntax_highlighting: bool,
+    pub highlight_code_blocks: bool,
+    pub highlight_frontmatter: bool,
+    pub dim_delimiters: bool,
+    pub heading_colors: HeadingColors,
+}
+impl Default for MarkdownSettings {
+    fn default() -> Self {
+        Self {
+            syntax_highlighting: true,
+            highlight_code_blocks: true,
+            highlight_frontmatter: true,
+            dim_delimiters: true,
+            heading_colors: HeadingColors::default(),
+        }
+    }
+}
 
 pub fn is_markdown(path: &Path) -> bool {
     path.extension().and_then(|s| s.to_str()).is_some_and(|s| {
@@ -161,11 +215,54 @@ fn code(c: &[char], styles: &mut [Style], lang: &str, t: Theme) {
     }
 }
 
-fn line_styles(line: &str, row: usize, ctx: &mut Context, t: Theme) -> (Vec<char>, Vec<Style>) {
+// Distinct hue families with light/dark contrast, independent of duplicate theme accents.
+fn heading_color(level: usize, t: Theme, settings: &MarkdownSettings) -> ratatui::style::Color {
+    if let Some(color) = settings.heading_colors.get(level) {
+        return color;
+    }
+    let light = matches!(t.background, Color::Rgb(r,g,b) if (u32::from(r)*299+u32::from(g)*587+u32::from(b)*114)>150_000);
+    let colors = if light {
+        [
+            (112, 48, 160),
+            (28, 82, 168),
+            (0, 105, 113),
+            (36, 112, 54),
+            (133, 91, 0),
+            (177, 65, 35),
+        ]
+    } else {
+        [
+            (203, 166, 247),
+            (137, 180, 250),
+            (148, 226, 213),
+            (166, 227, 161),
+            (249, 226, 175),
+            (250, 179, 135),
+        ]
+    };
+    let (r, g, b) = colors[level.clamp(1, 6) - 1];
+    Color::Rgb(r, g, b)
+}
+
+fn line_styles(
+    line: &str,
+    row: usize,
+    ctx: &mut Context,
+    t: Theme,
+    settings: &MarkdownSettings,
+) -> (Vec<char>, Vec<Style>) {
     let c: Vec<char> = line.chars().collect();
     let n = c.len();
     let mut s = vec![Style::default(); n];
+    if !settings.syntax_highlighting {
+        return (c, s);
+    }
     let dim = Style::default().fg(t.muted);
+    let delimiter = if settings.dim_delimiters {
+        dim
+    } else {
+        Style::default().fg(t.foreground)
+    };
     let accent = Style::default().fg(t.accent);
     let green = Style::default().fg(t.success);
     let warn = Style::default().fg(t.warning);
@@ -176,18 +273,22 @@ fn line_styles(line: &str, row: usize, ctx: &mut Context, t: Theme) -> (Vec<char
     let start = c.iter().position(|x| !x.is_whitespace()).unwrap_or(n);
     if row == 0 && trim.trim_start_matches('\u{feff}') == "---" {
         ctx.yaml = true;
-        s.fill(dim);
+        if settings.highlight_frontmatter {
+            s.fill(delimiter);
+        }
         return (c, s);
     }
     if ctx.yaml {
         if trim == "---" || trim == "..." {
             ctx.yaml = false;
-            s.fill(dim);
-        } else {
+            if settings.highlight_frontmatter {
+                s.fill(delimiter);
+            }
+        } else if settings.highlight_frontmatter {
             s.fill(green);
             if let Some(k) = c.iter().position(|&x| x == ':') {
                 paint(&mut s, 0, k, accent);
-                paint(&mut s, k, k + 1, dim);
+                paint(&mut s, k, k + 1, delimiter);
             }
             code(&c, &mut s, "yaml", t);
         }
@@ -197,8 +298,10 @@ fn line_styles(line: &str, row: usize, ctx: &mut Context, t: Theme) -> (Vec<char
         let count = c[start..].iter().take_while(|&&x| x == *marker).count();
         if count >= *len && c[start + count..].iter().all(|x| x.is_whitespace()) {
             ctx.fence = None;
-            s.fill(dim);
-        } else {
+            if settings.highlight_code_blocks {
+                s.fill(delimiter);
+            }
+        } else if settings.highlight_code_blocks {
             code(&c, &mut s, lang, t);
         }
         return (c, s);
@@ -217,13 +320,15 @@ fn line_styles(line: &str, row: usize, ctx: &mut Context, t: Theme) -> (Vec<char
                 .unwrap_or("")
                 .to_lowercase();
             ctx.fence = Some((marker, len, lang));
-            s.fill(dim);
+            if settings.highlight_code_blocks {
+                s.fill(delimiter);
+            }
             return (c, s);
         }
     }
     if trim == "$$" && !ctx.comment {
         ctx.math = !ctx.math;
-        s.fill(dim);
+        s.fill(delimiter);
         return (c, s);
     }
     if ctx.math {
@@ -233,14 +338,8 @@ fn line_styles(line: &str, row: usize, ctx: &mut Context, t: Theme) -> (Vec<char
     if start < n && !ctx.comment {
         let h = c[start..].iter().take_while(|&&x| x == '#').count();
         if (1..=6).contains(&h) && (start + h == n || c[start + h].is_whitespace()) {
-            let color = match h {
-                1 => t.accent,
-                2 => t.directory,
-                3 => t.success,
-                _ => t.foreground,
-            };
+            let color = heading_color(h, t, settings);
             s.fill(Style::default().fg(color).add_modifier(Modifier::BOLD));
-            paint(&mut s, start, start + h, dim);
         } else if trim.chars().filter(|x| !x.is_whitespace()).count() >= 3
             && ['-', '*', '_']
                 .iter()
@@ -299,7 +398,7 @@ fn line_styles(line: &str, row: usize, ctx: &mut Context, t: Theme) -> (Vec<char
         if c[i] == '`' {
             let len = c[i..].iter().take_while(|&&x| x == '`').count();
             let delim = "`".repeat(len);
-            if let Some(end) = paired(&c, &mut s, i, &delim, &delim, warn, dim) {
+            if let Some(end) = paired(&c, &mut s, i, &delim, &delim, warn, delimiter) {
                 i = end;
                 continue;
             }
@@ -333,7 +432,7 @@ fn line_styles(line: &str, row: usize, ctx: &mut Context, t: Theme) -> (Vec<char
             if a == "_" && i > 0 && c[i - 1].is_alphanumeric() {
                 continue;
             }
-            if let Some(end) = paired(&c, &mut s, i, a, b, style, dim) {
+            if let Some(end) = paired(&c, &mut s, i, a, b, style, delimiter) {
                 i = end;
                 matched = true;
                 break;
@@ -343,18 +442,17 @@ fn line_styles(line: &str, row: usize, ctx: &mut Context, t: Theme) -> (Vec<char
             continue;
         }
         let a = if starts(&c, i, "![") { i + 1 } else { i };
-        if c[a] == '[' {
-            if let Some(mid) = find(&c, a + 1, "](") {
-                if let Some(end) = find(&c, mid + 2, ")") {
-                    paint(&mut s, i, a + 1, dim);
-                    paint(&mut s, a + 1, mid, link);
-                    paint(&mut s, mid, mid + 2, dim);
-                    paint(&mut s, mid + 2, end, link);
-                    paint(&mut s, end, end + 1, dim);
-                    i = end + 1;
-                    continue;
-                }
-            }
+        if c[a] == '['
+            && let Some(mid) = find(&c, a + 1, "](")
+            && let Some(end) = find(&c, mid + 2, ")")
+        {
+            paint(&mut s, i, a + 1, delimiter);
+            paint(&mut s, a + 1, mid, link);
+            paint(&mut s, mid, mid + 2, delimiter);
+            paint(&mut s, mid + 2, end, link);
+            paint(&mut s, end, end + 1, delimiter);
+            i = end + 1;
+            continue;
         }
         if c[i] == '#'
             && (i == 0 || c[i - 1].is_whitespace())
@@ -369,7 +467,7 @@ fn line_styles(line: &str, row: usize, ctx: &mut Context, t: Theme) -> (Vec<char
             continue;
         }
         if c[i] == '|' && !ctx.comment {
-            s[i] = dim;
+            s[i] = delimiter;
         }
         i += 1;
     }
@@ -392,12 +490,12 @@ fn runs(styles: &[Style]) -> impl Iterator<Item = (usize, usize, Style)> + '_ {
     })
 }
 
-pub fn preview(text: &str, t: Theme) -> Vec<Line<'static>> {
+pub fn preview(text: &str, t: Theme, settings: &MarkdownSettings) -> Vec<Line<'static>> {
     let mut ctx = Context::default();
     text.split('\n')
         .enumerate()
         .map(|(row, line)| {
-            let (c, s) = line_styles(line.trim_end_matches('\r'), row, &mut ctx, t);
+            let (c, s) = line_styles(line.trim_end_matches('\r'), row, &mut ctx, t, settings);
             Line::from(
                 runs(&s)
                     .map(|(a, b, style)| Span::styled(c[a..b].iter().collect::<String>(), style))
@@ -413,16 +511,25 @@ pub fn editor_highlights(
     markdown: bool,
     search: &[(Index2, Index2)],
     active: usize,
+    focus: Option<(std::ops::Range<usize>, f32)>,
+    settings: &MarkdownSettings,
 ) -> Vec<Highlight> {
     let mut ctx = Context::default();
     let mut result = Vec::new();
     let mut hit = 0;
     for (row, line) in text.split('\n').enumerate() {
         let (_, mut s) = if markdown {
-            line_styles(line, row, &mut ctx, t)
+            line_styles(line, row, &mut ctx, t, settings)
         } else {
             (Vec::new(), vec![Style::default(); line.chars().count()])
         };
+        if let Some((range, strength)) = &focus
+            && !range.contains(&row)
+        {
+            for style in &mut s {
+                *style = crate::focus::dim(*style, t, *strength);
+            }
+        }
         let first_hit = hit;
         while hit < search.len() && search[hit].0.row == row {
             let (a, b) = &search[hit];
@@ -460,10 +567,30 @@ pub fn editor_highlights(
 mod tests {
     use super::*;
     #[test]
+    fn heading_levels_are_distinct() {
+        for name in ["dark", "light", "midnight"] {
+            let t = Theme::named(name).unwrap();
+            let colors = (1..=6)
+                .map(|n| heading_color(n, t, &MarkdownSettings::default()))
+                .collect::<Vec<_>>();
+            for i in 0..6 {
+                assert!(!colors[..i].contains(&colors[i]));
+                let (_, s) = line_styles(
+                    &format!("{} Heading", "#".repeat(i + 1)),
+                    0,
+                    &mut Context::default(),
+                    t,
+                    &MarkdownSettings::default(),
+                );
+                assert_eq!(s[0].fg, Some(colors[i]));
+            }
+        }
+    }
+    #[test]
     fn source_preserved() {
         let t = Theme::named("dark").unwrap();
         let text = "# β heading\n**bold** and `x`\n```r\n# comment\n```\n";
-        let reconstructed = preview(text, t)
+        let reconstructed = preview(text, t, &MarkdownSettings::default())
             .iter()
             .map(|l| {
                 l.spans
@@ -479,12 +606,70 @@ mod tests {
     fn unicode_offsets_and_fences() {
         let t = Theme::named("dark").unwrap();
         let mut ctx = Context::default();
-        let (_, s) = line_styles("β **x**", 0, &mut ctx, t);
+        let (_, s) = line_styles("β **x**", 0, &mut ctx, t, &MarkdownSettings::default());
         assert_eq!(s[4].fg, Some(t.warning));
-        line_styles("```r", 1, &mut ctx, t);
-        let (_, s) = line_styles("# heading", 2, &mut ctx, t);
+        line_styles("```r", 1, &mut ctx, t, &MarkdownSettings::default());
+        let (_, s) = line_styles("# heading", 2, &mut ctx, t, &MarkdownSettings::default());
         assert_eq!(s[0].fg, Some(t.muted));
-        line_styles("```", 3, &mut ctx, t);
+        line_styles("```", 3, &mut ctx, t, &MarkdownSettings::default());
         assert!(ctx.fence.is_none());
+    }
+}
+
+#[cfg(test)]
+mod settings_tests {
+    use super::*;
+    #[test]
+    fn overrides_are_partial_and_apply_to_preview() {
+        let settings: MarkdownSettings =
+            toml::from_str("[heading_colors]\nh2 = '#123456'").unwrap();
+        for name in ["dark", "light"] {
+            let t = Theme::named(name).unwrap();
+            let lines = preview("# One\n## Two", t, &settings);
+            assert_eq!(lines[1].spans[0].style.fg, Some(Color::Rgb(18, 52, 86)));
+            assert_eq!(
+                lines[0].spans[0].style.fg,
+                Some(heading_color(1, t, &MarkdownSettings::default()))
+            );
+        }
+    }
+    #[test]
+    fn disabled_blocks_stay_plain_and_do_not_leak_context() {
+        let t = Theme::named("dark").unwrap();
+        let settings = MarkdownSettings {
+            highlight_code_blocks: false,
+            highlight_frontmatter: false,
+            ..Default::default()
+        };
+        let lines = preview(
+            "---\n# yaml comment\n---\n```r\n# code comment\n```\n# Heading",
+            t,
+            &settings,
+        );
+        for line in &lines[..6] {
+            assert!(line.spans.iter().all(|s| s.style == Style::default()));
+        }
+        assert_eq!(
+            lines[6].spans[0].style.fg,
+            Some(heading_color(1, t, &settings))
+        );
+    }
+    #[test]
+    fn master_switch_and_delimiters() {
+        let t = Theme::named("dark").unwrap();
+        let disabled = MarkdownSettings {
+            syntax_highlighting: false,
+            ..Default::default()
+        };
+        assert!(editor_highlights("# Heading", t, true, &[], 0, None, &disabled).is_empty());
+        let hit = [(Index2::new(0, 0), Index2::new(0, 0))];
+        assert!(!editor_highlights("# Heading", t, true, &hit, 1, None, &disabled).is_empty());
+        let settings = MarkdownSettings {
+            dim_delimiters: false,
+            ..Default::default()
+        };
+        let (_, styles) = line_styles("**bold**", 0, &mut Context::default(), t, &settings);
+        assert_eq!(styles[0].fg, Some(t.foreground));
+        assert_eq!(styles[2].fg, Some(t.warning));
     }
 }

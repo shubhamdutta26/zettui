@@ -520,7 +520,7 @@ impl Theme {
     }
 }
 
-fn parse_hex(value: &str) -> Result<Color, String> {
+pub(crate) fn parse_hex(value: &str) -> Result<Color, String> {
     let Some(digits) = value.strip_prefix('#') else {
         return Err(format!("expected #RRGGBB, found '{value}'"));
     };

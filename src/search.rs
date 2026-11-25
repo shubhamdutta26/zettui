@@ -202,11 +202,21 @@ fn truncate_chars(value: &str, max: usize) -> String {
 }
 
 /// Supports Zettlr/Obsidian's common frontmatter forms:
+///
+/// ```yaml
 /// tags: [antibody, "vhh engineering"]
+/// ```
+///
+/// ```yaml
 /// tags:
 ///   - antibody
 ///   - vhh
+/// ```
+///
+/// ```yaml
 /// tags: antibody
+/// ```
+///
 /// This is intentionally a small parser, not a complete YAML implementation.
 fn frontmatter_tags(text: &str) -> Vec<String> {
     let mut lines = text.lines();

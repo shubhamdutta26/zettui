@@ -5,6 +5,7 @@ mod config;
 mod editor;
 mod editor_search;
 mod file_ops;
+mod focus;
 mod layout;
 mod links;
 mod markdown;
@@ -491,6 +492,8 @@ struct App {
     auto_themes: AutoThemes,
     theme_overrides: ColorOverrides,
     browser_width_percent: u16,
+    writing: focus::Writing,
+    markdown_settings: markdown::MarkdownSettings,
     history: Vec<PathBuf>,
     message: String,
 }
@@ -545,6 +548,8 @@ impl App {
             auto_themes,
             theme_overrides,
             browser_width_percent: DEFAULT_BROWSER_PERCENT,
+            writing: focus::Writing::default(),
+            markdown_settings: markdown::MarkdownSettings::default(),
             history: Vec::new(),
             message: String::new(),
         };
@@ -691,7 +696,7 @@ impl App {
                 self.theme_choice = next;
                 self.theme = theme;
                 self.message = format!(
-                    "Theme mode: {} ({}) — session only. Set theme = \"{}\" in config.toml.",
+                    "Theme mode: {} ({}) — session only. Set appearance.theme = \"{}\" in config.toml.",
                     next.as_str(),
                     appearance.as_str(),
                     next.as_str()
@@ -713,7 +718,7 @@ impl App {
         };
         self.browser_width_percent = resize_browser_percent(self.browser_width_percent, grow);
         self.message = format!(
-            "Files: {}% | Notes: {}% (session only; set browser_width_percent in config.toml)",
+            "Files: {}% | Notes: {}% (session only; set layout.browser_width_percent in config.toml)",
             self.browser_width_percent,
             100 - self.browser_width_percent,
         );
@@ -736,13 +741,30 @@ impl App {
         let show_editor_cursor = !self.has_active_popup() && self.note_search.input.is_none();
         let theme = self.theme;
         frame.render_widget(Block::default().style(theme.base_style()), frame.area());
+        let zen = self.editor.is_some() && self.writing.zen.enabled;
+        let interactive =
+            self.command.is_some() || self.note_search.input.is_some() || self.writing.leader;
+        let footer_height = if !zen {
+            3
+        } else if interactive {
+            2
+        } else {
+            u16::from(self.writing.zen.show_status_bar) + u16::from(!self.message.is_empty())
+        };
         let areas = Layout::vertical([
-            Constraint::Length(1),
+            Constraint::Length(u16::from(!zen || self.writing.zen.show_title)),
             Constraint::Min(1),
-            Constraint::Length(3),
+            Constraint::Length(footer_height),
         ])
         .split(frame.area());
-        let panes = split_panes(areas[1], self.browser_width_percent);
+        let panes = if zen {
+            [
+                Rect::default(),
+                focus::centered(areas[1], self.writing.zen.width.clamp(20, 240)),
+            ]
+        } else {
+            split_panes(areas[1], self.browser_width_percent)
+        };
 
         let browser_active = self.editor.is_none() && !self.has_active_popup();
         let editor_active = self.editor.is_some() && !self.has_active_popup();
@@ -783,7 +805,24 @@ impl App {
             };
             header.push(Span::styled(part.as_str(), style));
         }
-        frame.render_widget(Paragraph::new(Line::from(header)), areas[0]);
+        if zen {
+            if self.writing.zen.show_title {
+                let title = self
+                    .editor
+                    .as_ref()
+                    .and_then(|n| n.path.file_name())
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                frame.render_widget(
+                    Paragraph::new(title)
+                        .centered()
+                        .style(Style::default().fg(theme.muted)),
+                    areas[0],
+                );
+            }
+        } else {
+            frame.render_widget(Paragraph::new(Line::from(header)), areas[0]);
+        }
 
         let items: Vec<ListItem> = self
             .entries
@@ -828,7 +867,9 @@ impl App {
         if !self.entries.is_empty() {
             state.select(Some(self.selected));
         }
-        frame.render_stateful_widget(list, panes[0], &mut state);
+        if !zen {
+            frame.render_stateful_widget(list, panes[0], &mut state);
+        }
 
         let popup_active = self.has_active_popup();
         let (mode, location, help, stats, dirty_state) = if let Some(note) = &mut self.editor {
@@ -861,8 +902,14 @@ impl App {
                 } else {
                     theme.muted
                 }));
-            let inner = border.inner(panes[1]);
-            frame.render_widget(border, panes[1]);
+            let mut inner = if zen {
+                panes[1]
+            } else {
+                border.inner(panes[1])
+            };
+            if !zen {
+                frame.render_widget(border, panes[1]);
+            }
             let editor_theme = EditorTheme::default()
                 .base(theme.base_style())
                 .line_numbers_style(
@@ -881,17 +928,48 @@ impl App {
                 })
                 .hide_status_line();
             let source = note.state.lines.to_string();
+            let focus_range = if self.writing.focus.enabled && note.state.mode != EditorMode::Visual
+            {
+                Some((
+                    focus::active_range(&source, note.state.cursor.row, self.writing.focus.mode),
+                    self.writing.focus.dim_strength,
+                ))
+            } else {
+                None
+            };
+            if self.writing.focus.typewriter && inner.height > 2 {
+                let half = usize::from(inner.height / 2);
+                let row = note.state.cursor.row;
+                let (x, _) = note.state.viewport_offset();
+                note.state.set_viewport_offset(x, row.saturating_sub(half));
+                // Display-only blank space above the start of the document.
+                let pad = half.saturating_sub(row) as u16;
+                inner.y = inner.y.saturating_add(pad);
+                inner.height = inner.height.saturating_sub(pad);
+            }
             note.state.set_highlights(markdown::editor_highlights(
                 &source,
                 theme,
                 markdown::is_markdown(&note.path),
                 &self.note_search.painted,
                 self.note_search.active,
+                focus_range,
+                &self.markdown_settings,
             ));
             frame.render_widget(
                 EditorView::new(&mut note.state)
-                    .wrap(true)
-                    .line_numbers(LineNumbers::Absolute)
+                    .wrap(self.writing.editor.word_wrap)
+                    .line_numbers(
+                        if if zen {
+                            self.writing.zen.show_line_numbers
+                        } else {
+                            self.writing.editor.line_numbers
+                        } {
+                            LineNumbers::Absolute
+                        } else {
+                            LineNumbers::None
+                        },
+                    )
                     .theme(editor_theme),
                 inner,
             );
@@ -906,7 +984,10 @@ impl App {
             } else {
                 note.state.mode.name().to_uppercase()
             };
-            let help = if let Some(input) = &self.note_search.input {
+            let help = if self.writing.leader {
+                "Space: z Zen | f Focus | t Typewriter | 1/2/3 Focus level | n Numbers | s Status"
+                    .to_owned()
+            } else if let Some(input) = &self.note_search.input {
                 format!(
                     "{}{}▏  [{}/{}] | Enter confirm | Esc cancel",
                     input.direction.prefix(),
@@ -937,7 +1018,11 @@ impl App {
                 .get(self.selected)
                 .is_some_and(|e| !e.is_dir && markdown::is_markdown(&e.path))
             {
-                Paragraph::new(markdown::preview(&self.preview, theme))
+                Paragraph::new(markdown::preview(
+                    &self.preview,
+                    theme,
+                    &self.markdown_settings,
+                ))
             } else {
                 Paragraph::new(self.preview.as_str())
             }
@@ -1003,18 +1088,31 @@ impl App {
                 }),
             ));
         }
+        let writing_label = if self.editor.is_some() {
+            self.writing.label()
+        } else {
+            String::new()
+        };
+        if !writing_label.is_empty() {
+            status.push(Span::styled(
+                format!("  {writing_label}"),
+                Style::default().fg(theme.accent),
+            ));
+        }
         let location_width = usize::from(areas[2].width)
             .saturating_sub(status.iter().map(Span::width).sum::<usize>() + 2);
-        if location_width > 0 {
+        if location_width > 0 && !zen {
             status.push(Span::styled(
                 format!("  {}", tail_label(&location, location_width)),
                 Style::default().fg(theme.muted),
             ));
         }
         let footer_rows = Layout::vertical([
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Length(1),
+            Constraint::Length(u16::from(
+                !zen || interactive || self.writing.zen.show_status_bar,
+            )),
+            Constraint::Length(u16::from(!zen || interactive || !self.message.is_empty())),
+            Constraint::Length(u16::from(footer_height > 2)),
         ])
         .split(areas[2]);
         let status_line = Line::from(status);
@@ -1047,7 +1145,8 @@ impl App {
                 "See dialog for controls",
                 Style::default().fg(theme.muted),
             ));
-        } else if self.command.is_some() || self.note_search.input.is_some() {
+        } else if self.command.is_some() || self.note_search.input.is_some() || self.writing.leader
+        {
             shortcuts.push(Span::styled(
                 help.as_str(),
                 Style::default().fg(theme.accent),
@@ -1070,14 +1169,18 @@ impl App {
                 ));
             }
         }
-        frame.render_widget(
-            Paragraph::new(Line::from(shortcuts)).style(theme.base_style()),
-            footer_rows[1],
-        );
-        frame.render_widget(
-            Paragraph::new(self.message.as_str()).style(theme.base_style()),
-            footer_rows[2],
-        );
+        if !zen || interactive {
+            frame.render_widget(
+                Paragraph::new(Line::from(shortcuts)).style(theme.base_style()),
+                footer_rows[1],
+            );
+        }
+        if !zen || (!interactive && !self.message.is_empty()) {
+            frame.render_widget(
+                Paragraph::new(self.message.as_str()).style(theme.base_style()),
+                footer_rows[if zen { 1 } else { 2 }],
+            );
+        }
 
         if let Some(prompt) = &self.prompt {
             let screen = frame.area();
@@ -2003,7 +2106,7 @@ impl App {
             return;
         }
         let Some(path) = &self.bibliography_path else {
-            self.message = "No bibliography configured. Set bibliography in ~/.config/zettui/config.toml or pass --bibliography FILE".to_owned();
+            self.message = "No bibliography configured. Set workspace.bibliography in ~/.config/zettui/config.toml or pass --bibliography FILE".to_owned();
             return;
         };
         match Bibliography::load(path) {
@@ -2375,6 +2478,7 @@ impl App {
         }
         self.note_search.reset_matches();
         self.editor = None;
+        self.writing.leader = false;
         self.wiki_completion = None;
         self.pending_open_bracket = false;
         self.command = None;
@@ -2384,6 +2488,10 @@ impl App {
 
     /// Minimal Vim-style application commands (separate from edtui's text motions).
     fn run_command(&mut self, command: String) {
+        if self.writing.command(command.trim()) {
+            self.message.clear();
+            return;
+        }
         match command.trim() {
             "w" => {
                 self.save_editor();
@@ -2572,6 +2680,40 @@ impl App {
             return;
         }
 
+        if self.writing.leader {
+            self.writing.leader = false;
+            let cmd = if key.modifiers.is_empty() {
+                match key.code {
+                    KeyCode::Char('z') => Some("zen"),
+                    KeyCode::Char('f') => Some("focus"),
+                    KeyCode::Char('t') => Some("typewriter"),
+                    KeyCode::Char('1') => Some("focus line"),
+                    KeyCode::Char('2') => Some("focus paragraph"),
+                    KeyCode::Char('3') => Some("focus section"),
+                    KeyCode::Char('n') => Some("toggle number"),
+                    KeyCode::Char('s') => Some("toggle status"),
+                    _ => None,
+                }
+            } else {
+                None
+            };
+            if let Some(cmd) = cmd {
+                self.run_command(cmd.to_owned());
+                return;
+            }
+            if key.code == KeyCode::Esc {
+                return;
+            }
+        } else if key.code == KeyCode::Char(' ')
+            && key.modifiers.is_empty()
+            && self
+                .editor
+                .as_ref()
+                .is_some_and(|n| n.state.mode == EditorMode::Normal)
+        {
+            self.writing.leader = true;
+            return;
+        }
         if self.intercept_note_search(key) {
             return;
         }
@@ -2730,10 +2872,12 @@ impl App {
                 continue;
             }
             if key.code == KeyCode::Char('f') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                self.writing.leader = false;
                 self.open_vault_search(SearchMode::Text);
                 continue;
             }
             if key.code == KeyCode::Char('t') && key.modifiers.contains(KeyModifiers::ALT) {
+                self.writing.leader = false;
                 self.open_vault_search(SearchMode::Tags);
                 continue;
             }
@@ -2800,19 +2944,24 @@ impl App {
     }
 }
 
+/// Resolved startup settings from the configuration and command line.
+struct StartupOptions {
+    root: PathBuf,
+    bibliography: Option<PathBuf>,
+    choice: ThemeChoice,
+    overrides: ColorOverrides,
+    fallback: Appearance,
+    auto_themes: AutoThemes,
+    browser_width: u16,
+    snippets_dir: PathBuf,
+    writing: focus::Writing,
+    markdown_settings: markdown::MarkdownSettings,
+}
+
 /// Command line syntax:
 ///   zettui [NOTES_DIR] [--bibliography PATH] [--theme auto|dark|light]
 /// Configuration acts as a default; explicit CLI arguments win.
-fn arguments() -> io::Result<(
-    PathBuf,
-    Option<PathBuf>,
-    ThemeChoice,
-    ColorOverrides,
-    Appearance,
-    AutoThemes,
-    u16,
-    PathBuf,
-)> {
+fn arguments() -> io::Result<StartupOptions> {
     let config = Config::load()?;
     let browser_width = config.browser_width()?;
     let auto_themes = config.auto_themes()?;
@@ -2877,26 +3026,45 @@ fn arguments() -> io::Result<(
             _ => Appearance::Dark,
         }
     });
-    Ok((
-        notes_dir
+    Ok(StartupOptions {
+        root: notes_dir
             .or(config.notes_dir)
             .unwrap_or(env::current_dir()?),
-        bibliography.or(config.bibliography),
+        bibliography: bibliography.or(config.bibliography),
         choice,
-        config.colors,
-        system,
+        overrides: config.colors,
+        fallback: system,
         auto_themes,
         browser_width,
         snippets_dir,
-    ))
+        writing: focus::Writing {
+            zen: config.zen,
+            focus: config.focus,
+            editor: config.editor,
+            leader: false,
+        },
+        markdown_settings: config.markdown,
+    })
 }
 
 fn main() -> io::Result<()> {
-    let (root, bibliography, choice, overrides, fallback, auto_themes, browser_width, snippets_dir) =
-        arguments()?;
+    let StartupOptions {
+        root,
+        bibliography,
+        choice,
+        overrides,
+        fallback,
+        auto_themes,
+        browser_width,
+        snippets_dir,
+        writing,
+        markdown_settings,
+    } = arguments()?;
     let mut app = App::new(root, bibliography, choice, overrides, fallback, auto_themes)?;
     app.browser_width_percent = browser_width;
     app.snippets_dir = snippets_dir;
+    app.writing = writing;
+    app.markdown_settings = markdown_settings;
     ratatui::run(|terminal| app.run(terminal))
 }
 

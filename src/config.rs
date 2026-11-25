@@ -9,6 +9,7 @@ use std::{
 };
 
 #[derive(Debug, Default, Deserialize)]
+#[serde(from = "RawConfig")]
 pub struct Config {
     pub bibliography: Option<PathBuf>,
     pub notes_dir: Option<PathBuf>,
@@ -18,8 +19,76 @@ pub struct Config {
     pub dark_theme: Option<String>,
     /// Desired percent of terminal width used by the left file pane.
     pub browser_width_percent: Option<u16>,
-    #[serde(default)]
     pub colors: ColorOverrides,
+    pub zen: crate::focus::ZenSettings,
+    pub focus: crate::focus::FocusSettings,
+    pub editor: crate::focus::EditorSettings,
+    pub markdown: crate::markdown::MarkdownSettings,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct Workspace {
+    notes_dir: Option<PathBuf>,
+    bibliography: Option<PathBuf>,
+    snippets_dir: Option<PathBuf>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct AppearanceSettings {
+    theme: Option<String>,
+    light_theme: Option<String>,
+    dark_theme: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct LayoutSettings {
+    browser_width_percent: Option<u16>,
+}
+
+// Accept legacy top-level keys as well as the canonical sectioned format.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct RawConfig {
+    workspace: Workspace,
+    appearance: AppearanceSettings,
+    layout: LayoutSettings,
+    notes_dir: Option<PathBuf>,
+    bibliography: Option<PathBuf>,
+    snippets_dir: Option<PathBuf>,
+    theme: Option<String>,
+    light_theme: Option<String>,
+    dark_theme: Option<String>,
+    browser_width_percent: Option<u16>,
+    colors: ColorOverrides,
+    editor: crate::focus::EditorSettings,
+    zen: crate::focus::ZenSettings,
+    focus: crate::focus::FocusSettings,
+    markdown: crate::markdown::MarkdownSettings,
+}
+
+impl From<RawConfig> for Config {
+    fn from(raw: RawConfig) -> Self {
+        Self {
+            notes_dir: raw.workspace.notes_dir.or(raw.notes_dir),
+            bibliography: raw.workspace.bibliography.or(raw.bibliography),
+            snippets_dir: raw.workspace.snippets_dir.or(raw.snippets_dir),
+            theme: raw.appearance.theme.or(raw.theme),
+            light_theme: raw.appearance.light_theme.or(raw.light_theme),
+            dark_theme: raw.appearance.dark_theme.or(raw.dark_theme),
+            browser_width_percent: raw
+                .layout
+                .browser_width_percent
+                .or(raw.browser_width_percent),
+            colors: raw.colors,
+            editor: raw.editor,
+            zen: raw.zen,
+            focus: raw.focus,
+            markdown: raw.markdown,
+        }
+    }
 }
 
 impl Config {
@@ -165,5 +234,50 @@ mod lesson73_config_tests {
     fn rejects_width_outside_allowed_range() {
         let cfg: Config = toml::from_str("browser_width_percent = 75").unwrap();
         assert!(cfg.browser_width().is_err());
+    }
+}
+
+#[cfg(test)]
+mod sectioned_config_tests {
+    use super::*;
+    #[test]
+    fn sectioned_values_override_legacy_per_field() {
+        let cfg: Config = toml::from_str(
+            r#"
+notes_dir = "/old"
+bibliography = "/refs.json"
+theme = "dark"
+browser_width_percent = 35
+[workspace]
+notes_dir = "/new"
+[appearance]
+theme = "light"
+[layout]
+browser_width_percent = 20
+"#,
+        )
+        .unwrap();
+        assert_eq!(cfg.notes_dir.as_deref(), Some(Path::new("/new")));
+        assert_eq!(cfg.bibliography.as_deref(), Some(Path::new("/refs.json")));
+        assert_eq!(cfg.theme.as_deref(), Some("light"));
+        assert_eq!(cfg.browser_width().unwrap(), 20);
+    }
+    #[test]
+    fn example_and_empty_config_parse() {
+        for source in ["", include_str!("../config.example.toml")] {
+            let cfg: Config = toml::from_str(source).unwrap();
+            assert_eq!(cfg.browser_width().unwrap(), 35);
+            assert!(cfg.markdown.syntax_highlighting);
+            assert!(cfg.markdown.highlight_code_blocks);
+            assert!(cfg.markdown.highlight_frontmatter);
+            assert!(cfg.markdown.dim_delimiters);
+            assert!(cfg.editor.word_wrap);
+            assert!(!cfg.zen.enabled);
+            assert!(cfg.auto_themes().is_ok());
+        }
+    }
+    #[test]
+    fn invalid_heading_color_is_rejected() {
+        assert!(toml::from_str::<Config>("[markdown.heading_colors]\nh1 = 'red'").is_err());
     }
 }

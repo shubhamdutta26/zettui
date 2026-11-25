@@ -1,0 +1,72 @@
+# Zettui configuration — copy to ~/.config/zettui/config.toml
+# (or $XDG_CONFIG_HOME/zettui/config.toml). Restart Zettui after edits.
+# Uncomment optional entries and adjust paths to your machine.
+
+[workspace]
+# If omitted, the current working directory is used (or CLI NOTES_DIR).
+# notes_dir = "~/Documents/Notes"
+# Optional Zotero Better CSL JSON export; CLI --bibliography takes precedence.
+# bibliography = "~/Zotero/references.json"
+# Defaults to the Zettui configuration directory's snippets folder.
+# snippets_dir = "~/.config/zettui/snippets"
+# Relative paths resolve against the configuration directory; ~/ expands HOME.
+
+[appearance]
+# auto follows system appearance; CLI --theme overrides this setting.
+# Themes: auto, dark, light, nord, dracula, everforest, rose-pine, kanagawa,
+# solarized-dark, catppuccin-latte, rose-pine-dawn, gruvbox, tokyo-night, midnight.
+theme = "auto"
+light_theme = "light"  # Fixed palette used in Auto light mode (not auto).
+dark_theme = "dark"    # Fixed palette used in Auto dark mode (not auto).
+
+[layout]
+browser_width_percent = 35 # Allowed: 20–70; remaining space is the note pane.
+
+[editor]
+line_numbers = true
+word_wrap = true # Visual wrapping only; never inserts line breaks.
+
+[markdown]
+syntax_highlighting = true # Master switch for editor and preview.
+highlight_code_blocks = true # Fenced code, including fence markers; not inline code.
+highlight_frontmatter = true # YAML frontmatter only.
+dim_delimiters = true # Mute inline formatting, links, fences and table separators.
+# Heading markers always use their heading color. Search/focus remain independent.
+
+[markdown.heading_colors]
+# Optional #RRGGBB overrides for each heading; omitted levels use adaptive colors.
+# Overrides apply to all themes, including automatic light/dark switching.
+# The following examples suit dark backgrounds; choose suitable contrast.
+# h1 = "#CBA6F7"
+# h2 = "#89B4FA"
+# h3 = "#94E2D5"
+# h4 = "#A6E3A1"
+# h5 = "#F9E2AF"
+# h6 = "#FAB387"
+
+[zen]
+enabled = false
+width = 80 # 20–240 columns, including the gutter if enabled.
+show_line_numbers = false
+show_status_bar = true
+show_title = true
+
+[focus]
+enabled = false
+mode = "paragraph" # line | paragraph | section
+dim_strength = 0.65 # Clamped to 0–0.85; 0 means no dimming.
+typewriter = false # Independent of focus; approximate logical-line centering.
+
+[colors]
+# Optional global palette overrides, all #RRGGBB. Omit to inherit the theme.
+# background = "#1E1E2E"
+# surface = "#313244"
+# foreground = "#CDD6F4"
+# muted = "#7F849C"
+# border = "#585B70"
+# accent = "#CBA6F7"
+# directory = "#89B4FA"
+# selected_bg = "#45475A"
+# selected_fg = "#CDD6F4"
+# warning = "#F9E2AF"
+# success = "#A6E3A1"
