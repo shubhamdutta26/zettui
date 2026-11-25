@@ -25,6 +25,8 @@ pub const THEME_CHOICES: &[&str] = &[
     "gruvbox",
     "tokyo-night",
     "midnight",
+    "system",
+    "terminal",
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -80,12 +82,16 @@ pub enum ThemeChoice {
     Gruvbox,
     TokyoNight,
     Midnight,
+    System,
+    Terminal,
 }
 
 impl ThemeChoice {
     pub fn named(value: &str) -> Result<Self, ThemeError> {
         match value {
             "auto" => Ok(Self::Auto),
+            "system" => Ok(Self::System),
+            "terminal" => Ok(Self::Terminal),
             "dark" | "catppuccin" => Ok(Self::Dark),
             "light" | "paper" => Ok(Self::Light),
             "nord" => Ok(Self::Nord),
@@ -115,7 +121,7 @@ impl ThemeChoice {
     }
     pub fn resolve(self, system: Appearance) -> Appearance {
         match self {
-            Self::Auto => system,
+            Self::Auto | Self::System | Self::Terminal => system,
             Self::Dark => Appearance::Dark,
             Self::Light => Appearance::Light,
             Self::Nord => Appearance::Nord,
@@ -134,6 +140,8 @@ impl ThemeChoice {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Auto => "auto",
+            Self::System => "system",
+            Self::Terminal => "terminal",
             Self::Dark => "dark",
             Self::Light => "light",
             Self::Nord => "nord",
@@ -177,7 +185,11 @@ impl AutoThemes {
                 appearance,
                 Appearance::Light | Appearance::CatppuccinLatte | Appearance::RosePineDawn
             );
-            if choice == ThemeChoice::Auto || is_light != light {
+            if matches!(
+                choice,
+                ThemeChoice::Auto | ThemeChoice::System | ThemeChoice::Terminal
+            ) || is_light != light
+            {
                 return Err(ThemeError(format!(
                     "{key}: '{name}' must be a fixed {} palette",
                     if light { "light" } else { "dark" }
@@ -240,6 +252,7 @@ fn appearance_from_theme_dir(dir: &Path) -> Option<Appearance> {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Theme {
+    pub heading_colors: [Option<Color>; 6],
     pub name: &'static str,
     pub background: Color,
     pub surface: Color,
@@ -296,6 +309,7 @@ impl Theme {
         // Dark and Light retain their original palettes and legacy aliases.
         let result = match ThemeChoice::named(name)? {
             ThemeChoice::Dark => Self {
+                heading_colors: [None; 6],
                 name: "dark",
                 background: rgb(0x1e1e2e),
                 surface: rgb(0x313244),
@@ -310,6 +324,7 @@ impl Theme {
                 success: rgb(0xa6e3a1),
             },
             ThemeChoice::Light => Self {
+                heading_colors: [None; 6],
                 name: "light",
                 background: rgb(0xfaf8f2),
                 surface: rgb(0xe9e6dd),
@@ -324,6 +339,7 @@ impl Theme {
                 success: rgb(0x257047),
             },
             ThemeChoice::Nord => Self {
+                heading_colors: [None; 6],
                 name: "nord",
                 background: rgb(0x2e3440),
                 surface: rgb(0x3b4252),
@@ -338,6 +354,7 @@ impl Theme {
                 success: rgb(0xa3be8c),
             },
             ThemeChoice::Dracula => Self {
+                heading_colors: [None; 6],
                 name: "dracula",
                 background: rgb(0x282a36),
                 surface: rgb(0x343746),
@@ -352,6 +369,7 @@ impl Theme {
                 success: rgb(0x50fa7b),
             },
             ThemeChoice::Everforest => Self {
+                heading_colors: [None; 6],
                 name: "everforest",
                 background: rgb(0x2d353b),
                 surface: rgb(0x343f44),
@@ -366,6 +384,7 @@ impl Theme {
                 success: rgb(0xa7c080),
             },
             ThemeChoice::RosePine => Self {
+                heading_colors: [None; 6],
                 name: "rose-pine",
                 background: rgb(0x191724),
                 surface: rgb(0x1f1d2e),
@@ -380,6 +399,7 @@ impl Theme {
                 success: rgb(0x9ccfd8),
             },
             ThemeChoice::Kanagawa => Self {
+                heading_colors: [None; 6],
                 name: "kanagawa",
                 background: rgb(0x1f1f28),
                 surface: rgb(0x2a2a37),
@@ -394,6 +414,7 @@ impl Theme {
                 success: rgb(0x76946a),
             },
             ThemeChoice::SolarizedDark => Self {
+                heading_colors: [None; 6],
                 name: "solarized-dark",
                 background: rgb(0x002b36),
                 surface: rgb(0x073642),
@@ -408,6 +429,7 @@ impl Theme {
                 success: rgb(0x859900),
             },
             ThemeChoice::CatppuccinLatte => Self {
+                heading_colors: [None; 6],
                 name: "catppuccin-latte",
                 background: rgb(0xeff1f5),
                 surface: rgb(0xe6e9ef),
@@ -422,6 +444,7 @@ impl Theme {
                 success: rgb(0x40a02b),
             },
             ThemeChoice::RosePineDawn => Self {
+                heading_colors: [None; 6],
                 name: "rose-pine-dawn",
                 background: rgb(0xfaf4ed),
                 surface: rgb(0xf2e9e1),
@@ -436,6 +459,7 @@ impl Theme {
                 success: rgb(0x56949f),
             },
             ThemeChoice::Gruvbox => Self {
+                heading_colors: [None; 6],
                 name: "gruvbox",
                 background: rgb(0x282828),
                 surface: rgb(0x3c3836),
@@ -450,6 +474,7 @@ impl Theme {
                 success: rgb(0xb8bb26),
             },
             ThemeChoice::TokyoNight => Self {
+                heading_colors: [None; 6],
                 name: "tokyo-night",
                 background: rgb(0x1a1b26),
                 surface: rgb(0x24283b),
@@ -464,6 +489,7 @@ impl Theme {
                 success: rgb(0x9ece6a),
             },
             ThemeChoice::Midnight => Self {
+                heading_colors: [None; 6],
                 name: "midnight",
                 background: rgb(0x181922),
                 surface: rgb(0x22232d),
@@ -477,7 +503,9 @@ impl Theme {
                 warning: rgb(0xe5b66c),
                 success: rgb(0xa6cf79),
             },
-            ThemeChoice::Auto => return Err(ThemeError("Use a resolved dark/light mode".into())),
+            ThemeChoice::Auto | ThemeChoice::System | ThemeChoice::Terminal => {
+                return Err(ThemeError("Use a resolved dark/light mode".into()));
+            }
         };
         Ok(result)
     }
@@ -582,7 +610,10 @@ mod tests {
         for &name in THEME_CHOICES {
             assert_eq!(choice.as_str(), name);
             assert_eq!(ThemeChoice::named(name).unwrap(), choice);
-            if choice != ThemeChoice::Auto {
+            if !matches!(
+                choice,
+                ThemeChoice::Auto | ThemeChoice::System | ThemeChoice::Terminal
+            ) {
                 for system in [Appearance::Dark, Appearance::Light] {
                     let resolved = choice.resolve(system);
                     assert_eq!(resolved.as_str(), name);
@@ -613,6 +644,9 @@ mod tests {
     #[test]
     fn explicit_palettes_use_their_own_background() {
         for &name in &THEME_CHOICES[3..] {
+            if matches!(name, "system" | "terminal") {
+                continue;
+            }
             let theme = Theme::named(name).unwrap();
             assert_eq!(theme.base_style().bg, Some(theme.background));
         }

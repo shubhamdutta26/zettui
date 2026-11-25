@@ -15,6 +15,7 @@ pub struct Config {
     pub notes_dir: Option<PathBuf>,
     pub snippets_dir: Option<PathBuf>,
     pub theme: Option<String>,
+    pub system_theme: crate::system_theme::Settings,
     pub light_theme: Option<String>,
     pub dark_theme: Option<String>,
     /// Desired percent of terminal width used by the left file pane.
@@ -37,6 +38,8 @@ struct Workspace {
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 struct AppearanceSettings {
+    #[serde(flatten)]
+    system_theme: crate::system_theme::Settings,
     theme: Option<String>,
     light_theme: Option<String>,
     dark_theme: Option<String>,
@@ -76,6 +79,7 @@ impl From<RawConfig> for Config {
             bibliography: raw.workspace.bibliography.or(raw.bibliography),
             snippets_dir: raw.workspace.snippets_dir.or(raw.snippets_dir),
             theme: raw.appearance.theme.or(raw.theme),
+            system_theme: raw.appearance.system_theme,
             light_theme: raw.appearance.light_theme.or(raw.light_theme),
             dark_theme: raw.appearance.dark_theme.or(raw.dark_theme),
             browser_width_percent: raw

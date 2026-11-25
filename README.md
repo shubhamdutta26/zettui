@@ -31,7 +31,10 @@ notes_dir = "~/Documents/Notes"
 bibliography = "~/Zotero/references.json"
 
 [appearance]
-theme = "auto"
+theme = "system"
+source = "auto"
+live_reload = true
+ensure_contrast = true
 light_theme = "catppuccin-latte"
 dark_theme = "everforest"
 
@@ -87,7 +90,7 @@ Legacy top-level workspace, theme and browser width keys are still accepted; if 
 
 The interface uses a compact workspace header, accent-colored active panel borders, muted inactive borders, a vertical file selection marker, compact directory markers, padded panels and a lighter status area. The browser remains a current-directory list; Enter opens a folder and h returns to its parent.
 
-Set `theme = "midnight"` for the new Noodle-inspired dark palette, or cycle themes with `Ctrl+G`. Existing palettes and custom color overrides are retained. Available themes: `auto`, `dark`, `light`, `nord`, `dracula`, `everforest`, `rose-pine`, `kanagawa`, `solarized-dark`, `catppuccin-latte`, `rose-pine-dawn`, `gruvbox`, `tokyo-night`, `midnight`.
+Set `theme = "midnight"` for the new Noodle-inspired dark palette, or cycle themes with `Ctrl+G`. Existing palettes and custom color overrides are retained. Available themes: `system`, `terminal`, `auto`, `dark`, `light`, `nord`, `dracula`, `everforest`, `rose-pine`, `kanagawa`, `solarized-dark`, `catppuccin-latte`, `rose-pine-dawn`, `gruvbox`, `tokyo-night`, `midnight`.
 
 In Auto mode, optional `light_theme` and `dark_theme` select fixed palettes for the corresponding system appearance. Omitting them preserves the original defaults.
 
@@ -183,3 +186,19 @@ Missing settings use these defaults. Command changes are session-only. Heading c
 - `Ctrl+F` searches saved text in nested folders; `Alt+T` searches YAML frontmatter `tags:`. Search does not include unsaved edits or inline `#hashtags`. Files larger than 1 MiB are skipped.
 
 [Roadmap](ROADMAP.md) · [Development lessons](docs/lessons/) · MIT License
+
+## Native system theming (v0.7.10)
+
+The default `appearance.theme = "system"` reads Omarchy's active `colors.toml` (under `$XDG_STATE_HOME` or `~/.local/state`, then `$XDG_CONFIG_HOME` or `~/.config`). It accepts named semantic colors and older ANSI-style keys. Background, foreground, selection, surface, border, syntax and H1–H6 colors follow the active palette where available. Missing fields use derived or fallback colors. Existing `auto` retains light/dark preset selection; fixed themes and `Ctrl+G` remain available.
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `appearance.theme` | `system` | Native colors; `terminal`, `auto`, and fixed presets also supported |
+| `appearance.source` | `auto` | `auto` tries Omarchy then terminal; `omarchy` or `terminal` restricts the provider |
+| `appearance.live_reload` | `true` | Poll Omarchy at most every 400 ms; no restart for palette changes |
+| `appearance.ensure_contrast` | `true` | Adjust low-contrast RGB foreground/semantic text against the background |
+| `appearance.light_theme` / `dark_theme` | `light` / `dark` | Fixed light/dark fallback palettes |
+
+Terminal mode samples RGB background and foreground at startup using terminal-colorsaurus, and uses the terminal's ANSI color slots for semantic colors. Restart to refresh sampled terminal RGB colors. Full ANSI RGB querying and direct COSMIC integration are not implemented yet. ANSI semantic colors cannot be contrast-checked or hue-preservingly dimmed without their RGB values. Unsupported terminal queries fall back to built-in palettes. `[colors]` and `[markdown.heading_colors]` overrides still take priority, including over contrast correction. The configuration file is never rewritten.
+
+Test on Omarchy by switching between two dark themes, then between dark and light themes while a note is open. Verify editor, preview, search, selection, dialogs, focus and headings update without modifying the note.

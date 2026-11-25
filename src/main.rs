@@ -11,6 +11,7 @@ mod links;
 mod markdown;
 mod search;
 mod snippets;
+mod system_theme;
 mod theme;
 
 use std::{
@@ -488,6 +489,9 @@ struct App {
     bibliography_path: Option<PathBuf>,
     theme: Theme,
     theme_choice: ThemeChoice,
+    system_theme: system_theme::Settings,
+    terminal_palette: Option<system_theme::TerminalPalette>,
+    last_theme_check: std::time::Instant,
     fallback_appearance: Appearance,
     auto_themes: AutoThemes,
     theme_overrides: ColorOverrides,
@@ -544,6 +548,9 @@ impl App {
             bibliography_path,
             theme,
             theme_choice,
+            system_theme: system_theme::Settings::default(),
+            terminal_palette: None,
+            last_theme_check: std::time::Instant::now(),
             fallback_appearance,
             auto_themes,
             theme_overrides,
@@ -664,41 +671,43 @@ impl App {
         Ok(())
     }
 
-    /// Re-evaluate the Omarchy theme only when Auto is enabled. This is called
-    /// periodically even without keyboard input, so theme switches are live.
+    fn resolve_theme(&self, choice: ThemeChoice) -> Result<Theme, theme::ThemeError> {
+        system_theme::resolve(
+            choice,
+            self.auto_themes,
+            omarchy_appearance().unwrap_or(self.fallback_appearance),
+            self.system_theme,
+            self.terminal_palette,
+        )
+        .and_then(|t| t.with_overrides(&self.theme_overrides))
+    }
+
     fn sync_system_theme(&mut self) {
-        if self.theme_choice != ThemeChoice::Auto {
+        if !self.system_theme.live_reload
+            || !matches!(self.theme_choice, ThemeChoice::Auto | ThemeChoice::System)
+            || self.last_theme_check.elapsed() < Duration::from_millis(400)
+        {
             return;
         }
-        let appearance = self.auto_themes.resolve(
-            self.theme_choice,
-            omarchy_appearance().unwrap_or(self.fallback_appearance),
-        );
-        if self.theme.name != appearance.as_str()
-            && let Ok(theme) = Theme::named(appearance.as_str())
-                .and_then(|t| t.with_overrides(&self.theme_overrides))
+        self.last_theme_check = std::time::Instant::now();
+        if let Ok(theme) = self.resolve_theme(self.theme_choice)
+            && theme != self.theme
         {
             self.theme = theme;
         }
     }
 
-    /// Cycle all built-in palettes. This never changes local settings.
+    /// Cycle all palettes without changing the configuration file.
     fn cycle_theme(&mut self) {
         let next = self.theme_choice.next();
-        let appearance = self.auto_themes.resolve(
-            next,
-            omarchy_appearance().unwrap_or(self.fallback_appearance),
-        );
-        match Theme::named(appearance.as_str())
-            .and_then(|theme| theme.with_overrides(&self.theme_overrides))
-        {
+        match self.resolve_theme(next) {
             Ok(theme) => {
                 self.theme_choice = next;
                 self.theme = theme;
                 self.message = format!(
                     "Theme mode: {} ({}) — session only. Set appearance.theme = \"{}\" in config.toml.",
                     next.as_str(),
-                    appearance.as_str(),
+                    theme.name,
                     next.as_str()
                 );
             }
@@ -2949,6 +2958,8 @@ struct StartupOptions {
     root: PathBuf,
     bibliography: Option<PathBuf>,
     choice: ThemeChoice,
+    system_theme: system_theme::Settings,
+    terminal_palette: Option<system_theme::TerminalPalette>,
     overrides: ColorOverrides,
     fallback: Appearance,
     auto_themes: AutoThemes,
@@ -2962,6 +2973,13 @@ struct StartupOptions {
 ///   zettui [NOTES_DIR] [--bibliography PATH] [--theme auto|dark|light]
 /// Configuration acts as a default; explicit CLI arguments win.
 fn arguments() -> io::Result<StartupOptions> {
+    if env::args()
+        .skip(1)
+        .any(|arg| arg == "--version" || arg == "-V")
+    {
+        println!("zettui {}", env!("CARGO_PKG_VERSION"));
+        std::process::exit(0);
+    }
     let config = Config::load()?;
     let browser_width = config.browser_width()?;
     let auto_themes = config.auto_themes()?;
@@ -3015,23 +3033,21 @@ fn arguments() -> io::Result<StartupOptions> {
     }
     let name = theme_override
         .or(config.theme)
-        .unwrap_or_else(|| "auto".to_owned());
+        .unwrap_or_else(|| "system".to_owned());
     let choice = ThemeChoice::named(&name)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error.to_string()))?;
-    let system = omarchy_appearance().unwrap_or_else(|| {
-        // On other Linux desktops, use the terminal background at launch.
-        // OSC color queries run here, before Ratatui enables raw input mode.
-        match terminal_colorsaurus::theme_mode(terminal_colorsaurus::QueryOptions::default()) {
-            Ok(terminal_colorsaurus::ThemeMode::Light) => Appearance::Light,
-            _ => Appearance::Dark,
-        }
-    });
+    let terminal_palette = system_theme::TerminalPalette::query();
+    let system = omarchy_appearance()
+        .or_else(|| terminal_palette.map(|p| p.appearance()))
+        .unwrap_or(Appearance::Dark);
     Ok(StartupOptions {
         root: notes_dir
             .or(config.notes_dir)
             .unwrap_or(env::current_dir()?),
         bibliography: bibliography.or(config.bibliography),
         choice,
+        system_theme: config.system_theme,
+        terminal_palette,
         overrides: config.colors,
         fallback: system,
         auto_themes,
@@ -3052,6 +3068,8 @@ fn main() -> io::Result<()> {
         root,
         bibliography,
         choice,
+        system_theme,
+        terminal_palette,
         overrides,
         fallback,
         auto_themes,
@@ -3061,6 +3079,11 @@ fn main() -> io::Result<()> {
         markdown_settings,
     } = arguments()?;
     let mut app = App::new(root, bibliography, choice, overrides, fallback, auto_themes)?;
+    app.system_theme = system_theme;
+    app.terminal_palette = terminal_palette;
+    app.theme = app
+        .resolve_theme(choice)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e.to_string()))?;
     app.browser_width_percent = browser_width;
     app.snippets_dir = snippets_dir;
     app.writing = writing;

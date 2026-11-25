@@ -220,6 +220,9 @@ fn heading_color(level: usize, t: Theme, settings: &MarkdownSettings) -> ratatui
     if let Some(color) = settings.heading_colors.get(level) {
         return color;
     }
+    if let Some(color) = t.heading_colors[level.clamp(1, 6) - 1] {
+        return color;
+    }
     let light = matches!(t.background, Color::Rgb(r,g,b) if (u32::from(r)*299+u32::from(g)*587+u32::from(b)*114)>150_000);
     let colors = if light {
         [
