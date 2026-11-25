@@ -60,6 +60,9 @@ All keys are optional. Restart Zettui after changing the file. Session commands 
 | `markdown` | `highlight_frontmatter` | `true`; YAML frontmatter |
 | `markdown` | `dim_delimiters` | `true`; mute formatting delimiters, fence and table markers; heading markers retain heading color |
 | `markdown.heading_colors` | `h1`, `h2`, `h3`, `h4`, `h5`, `h6` | Unset; each uses adaptive light/dark color; optional quoted `#RRGGBB` overrides |
+| `markdown.syntax_colors` | See [syntax color overrides](#syntax-color-overrides) | Unset; inherit theme colors |
+| `markdown.yaml_colors` | See [syntax color overrides](#syntax-color-overrides) | Unset; inherit theme colors |
+| `markdown.code_colors` | See [syntax color overrides](#syntax-color-overrides) | Unset; inherit theme colors |
 | `zen` | `enabled` | `false` |
 | `zen` | `width` | `80`; effective range 20–240 columns |
 | `zen` | `show_line_numbers` | `false` |
@@ -71,10 +74,95 @@ All keys are optional. Restart Zettui after changing the file. Session commands 
 | `focus` | `typewriter` | `false`; independent of focus |
 | `colors` | `background`, `surface`, `foreground`, `muted`, `border`, `accent`, `directory`, `selected_bg`, `selected_fg`, `warning`, `success` | Unset; optional quoted `#RRGGBB` global theme overrides |
 
-Heading overrides apply across themes and to both preview and editor. Choose colors readable on your background. Missing heading overrides use adaptive colors. Disabling fenced code or YAML highlighting leaves those blocks plain, without interpreting their contents as Markdown. Inline code remains highlighted unless the master switch is off. Search and focus highlighting are independent of the master switch. Invalid heading colors are configuration errors.
+Heading overrides apply across themes and to both preview and editor. Choose colors readable on your background. Missing heading overrides use native theme heading colors where available, otherwise adaptive light/dark colors. Duplicate automatic heading colors are replaced with unused fallback colors; explicit overrides are preserved. Disabling fenced code or YAML highlighting leaves those blocks plain, without interpreting their contents as Markdown. Inline code remains highlighted unless the master switch is off. Search and focus highlighting are independent of the master switch. Invalid heading or syntax colors and unknown keys in these color tables are configuration errors.
 
 The sectioned configuration is required starting with v0.7.10. Old top-level workspace, theme and browser width keys are rejected rather than silently ignored. Move these settings into `[workspace]`, `[appearance]` and `[layout]` respectively. Zettui never rewrites the configuration. The current example is the canonical reference.
 
+
+## Syntax color overrides
+
+Starting with v0.7.11, individual syntax roles can be overridden without changing the global UI palette. All entries are optional, accept quoted `#RRGGBB` values, and apply to both the editor and preview. Restart after editing the configuration. Omitted roles follow the active resolved theme, including live desktop palette changes. Explicit overrides take precedence over global `[colors]` overrides and are not contrast-corrected; choose colors suitable for your background.
+
+The following tables list all supported keys. The values in the example are suggestions for dark backgrounds, not fixed defaults.
+
+### `markdown.syntax_colors`
+
+Markdown emphasis, references, links, math, comments, list markers and formatting punctuation. Inline code uses its own color role.
+
+```toml
+[markdown.syntax_colors]
+# Optional #RRGGBB overrides; omitted entries inherit the active theme.
+# bold = "#F38BA8"
+# italic = "#A6E3A1"
+# strikethrough = "#A6ADC8"
+# highlight = "#F38BA8"
+# inline_code = "#CBA6F7"
+# link = "#89B4FA"
+# link_destination = "#CBA6F7"
+# wiki_link = "#89B4FA"
+# tag = "#A6E3A1"
+# citation = "#CBA6F7"
+# footnote = "#CBA6F7"
+# math = "#F38BA8"
+# comment = "#A6ADC8"
+# blockquote = "#A6ADC8"
+# list_marker = "#CBA6F7"
+# task_done = "#A6E3A1"
+# task_pending = "#F38BA8"
+# delimiter = "#A6ADC8"
+# horizontal_rule = "#A6ADC8"
+```
+
+### `markdown.yaml_colors`
+
+YAML frontmatter and the contents of fenced YAML blocks share these roles. Dates and timestamps use `number`; anchors, aliases and explicit tags use `reference`.
+
+```toml
+[markdown.yaml_colors]
+# Optional #RRGGBB overrides; omitted entries inherit the active theme.
+# key = "#89B4FA"
+# string = "#A6E3A1"
+# number = "#F38BA8"
+# boolean = "#CBA6F7"
+# null = "#CBA6F7"
+# comment = "#A6ADC8"
+# marker = "#F38BA8"
+# reference = "#CBA6F7"
+# delimiter = "#A6ADC8"
+```
+
+### `markdown.code_colors`
+
+Fenced programming-language and data-format blocks use these roles, except YAML contents. Fence markers use the code delimiter role even for YAML fences.
+
+```toml
+[markdown.code_colors]
+# Optional #RRGGBB overrides; omitted entries inherit the active theme.
+# keyword = "#CBA6F7"
+# constant = "#CBA6F7"
+# function = "#89B4FA"
+# string = "#A6E3A1"
+# number = "#F38BA8"
+# comment = "#A6ADC8"
+# operator = "#CBA6F7"
+# delimiter = "#A6ADC8"
+```
+
+### Behavior and precedence
+
+- `syntax_highlighting = false` disables lexical highlighting in both panes. Search and focus overlays remain independent.
+- `highlight_frontmatter = false` leaves frontmatter plain; `highlight_code_blocks = false` leaves fenced blocks plain, including fenced YAML. Neither switch disables inline code.
+- `dim_delimiters = false` uses the theme foreground for formatting delimiters instead of their muted or overridden colors. Heading markers retain the heading color. Horizontal rules have their own role.
+- Explicit heading colors are reserved first; automatic heading colors avoid exact duplicates using adaptive fallback colors. Deliberately identical explicit heading overrides are allowed.
+- Unspecified syntax roles inherit semantic colors from the resolved palette (such as accent, directory, success, warning and muted). The inline-code default uses accent, or foreground if accent matches the bold color.
+
+### Supported fenced code
+
+Use ordinary fences such as ` ```r `, or Quarto-style fences such as ` ```{r} ` and ` ```{r, echo=false} `. The language identifier selects the lexer; Quarto itself is not a language and Zettui does not execute chunks.
+
+Supported identifiers include `rust` (`rs`), `python` (`py`), `r`, `bash` (`sh`, `shell`, `zsh`), `javascript` (`js`), `typescript` (`ts`), `c`, `cpp` (`c++`, `cc`, `cxx`), `sql`, `yaml` (`yml`), `toml`, `json`, `typst`, `latex` (`tex`), `html` and `css`. Unknown identifiers are left plain. HTML, CSS and Typst have basic lexical coverage. Numeric literals, functions, comments and strings are highlighted where recognized, including selected multiline strings and comments.
+
+This is a lightweight lexer, not a validator or full grammar implementation. Nested Markdown emphasis is line-based; table recognition is heuristic. Explicit YAML tags do not fully resolve scalar types, and advanced code constructs such as nested block comments, Rust raw strings, Bash heredocs and interpolation are not fully supported.
 
 ## Native system theming
 
@@ -90,7 +178,7 @@ On other desktops the default reads Omarchy's active `colors.toml` (under `$XDG_
 | `appearance.ensure_contrast` | `true` | Adjust low-contrast RGB foreground/semantic text against the background |
 | `appearance.light_theme` / `dark_theme` | `light` / `dark` | Fixed light/dark fallback palettes |
 
-Terminal mode samples RGB background and foreground at startup using terminal-colorsaurus, and uses the terminal's ANSI color slots for semantic colors. Restart to refresh sampled terminal RGB colors. Full ANSI RGB querying and older COSMIC v1 palettes are not implemented. ANSI semantic colors cannot be contrast-checked or hue-preservingly dimmed without their RGB values. Unsupported terminal queries fall back to built-in palettes. `[colors]` and `[markdown.heading_colors]` overrides still take priority, including over contrast correction. The configuration file is never rewritten.
+Terminal mode samples RGB background and foreground at startup using terminal-colorsaurus, and uses the terminal's ANSI color slots for semantic colors. Restart to refresh sampled terminal RGB colors. Full ANSI RGB querying and older COSMIC v1 palettes are not implemented. ANSI semantic colors cannot be contrast-checked or hue-preservingly dimmed without their RGB values. Unsupported terminal queries fall back to built-in palettes. `[colors]` and explicit Markdown heading and syntax color overrides still take priority, including over contrast correction. The configuration file is never rewritten.
 
 Test on Omarchy by switching between two dark themes, then between dark and light themes while a note is open. Verify editor, preview, search, selection, dialogs, focus and headings update without modifying the note.
 

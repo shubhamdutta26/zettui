@@ -35,6 +35,18 @@ cargo run --locked -- "$demo/notes" --bibliography examples/bibliography/referen
 
 Use `j`/`k` to browse, Enter to open, `i` to edit, Escape for Normal mode, and `:w` to save. `Space z` toggles Zen mode. See the full references below.
 
+## Syntax highlighting
+
+Zettui v0.7.11 expands theme-aware source highlighting in the editor and browser preview without changing note contents.
+
+- Markdown: six heading levels, nested emphasis, strikethrough, inline code, links and images, wiki links, tags, citations, footnotes, math, task lists, tables and HTML comments.
+- YAML: keys, strings, numbers (including scientific notation), dates, booleans, nulls, comments, nested mappings, collections, anchors, aliases and multiline strings.
+- Fenced code: lightweight language-specific highlighting for R, Python, Rust, Bash, JavaScript, TypeScript, C, C++, SQL, YAML, TOML, JSON, Typst and LaTeX, plus basic HTML and CSS. Standard Markdown fences and Quarto-style fences such as ` ```{r, echo=false} ` select the same R lexer. Unknown languages remain plain.
+
+Syntax colors inherit the active theme (including COSMIC and Omarchy). Optional `[markdown.heading_colors]`, `[markdown.syntax_colors]`, `[markdown.yaml_colors]` and `[markdown.code_colors]` tables allow individual overrides; no new configuration is required. Automatic heading colors avoid duplicates, and inline code has a separate color role. See [Configuration](docs/CONFIGURATION.md#syntax-color-overrides) for details.
+
+Highlighting is source-preserving and lexical, not a full Markdown renderer, YAML validator or programming-language parser. Quarto chunks are highlighted, not executed.
+
 ## Documentation
 
 - [User guide](docs/USER-GUIDE.md)
