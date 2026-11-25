@@ -1,6 +1,7 @@
 //! Zettui: local notes, Vim editing, wiki-link completion, Zotero, and themes.
 
 mod bibliography;
+mod cli;
 mod config;
 mod editor;
 mod editor_search;
@@ -15,7 +16,7 @@ mod system_theme;
 mod theme;
 
 use std::{
-    env, fs, io,
+    fs, io,
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -31,7 +32,7 @@ use ratatui::{
 };
 
 use crate::bibliography::Bibliography;
-use crate::config::Config;
+use crate::cli::{StartupOptions, arguments};
 use crate::editor::OpenNote;
 use crate::editor_search::{Direction, NoteSearch};
 use crate::layout::{DEFAULT_BROWSER_PERCENT, resize_browser_percent, split_panes};
@@ -39,7 +40,7 @@ use crate::links::{Index, LinkItem, NoteSuggestion};
 use crate::search::{SearchHit, SearchMode, VaultIndex};
 use crate::snippets::{Field, Snippet, load_snippets};
 use crate::theme::{
-    Appearance, AutoThemes, ColorOverrides, THEME_CHOICES, Theme, ThemeChoice, omarchy_appearance,
+    Appearance, AutoThemes, ColorOverrides, Theme, ThemeChoice, omarchy_appearance,
 };
 use crossterm::cursor::SetCursorStyle;
 use edtui::Index2;
@@ -2951,116 +2952,6 @@ impl App {
             }
         }
     }
-}
-
-/// Resolved startup settings from the configuration and command line.
-struct StartupOptions {
-    root: PathBuf,
-    bibliography: Option<PathBuf>,
-    choice: ThemeChoice,
-    system_theme: system_theme::Settings,
-    terminal_palette: Option<system_theme::TerminalPalette>,
-    overrides: ColorOverrides,
-    fallback: Appearance,
-    auto_themes: AutoThemes,
-    browser_width: u16,
-    snippets_dir: PathBuf,
-    writing: focus::Writing,
-    markdown_settings: markdown::MarkdownSettings,
-}
-
-/// Command line syntax:
-///   zettui [NOTES_DIR] [--bibliography PATH] [--theme auto|dark|light]
-/// Configuration acts as a default; explicit CLI arguments win.
-fn arguments() -> io::Result<StartupOptions> {
-    if env::args()
-        .skip(1)
-        .any(|arg| arg == "--version" || arg == "-V")
-    {
-        println!("zettui {}", env!("CARGO_PKG_VERSION"));
-        std::process::exit(0);
-    }
-    let config = Config::load()?;
-    let browser_width = config.browser_width()?;
-    let auto_themes = config.auto_themes()?;
-    let snippets_dir = config
-        .snippets_dir
-        .clone()
-        .unwrap_or_else(snippets::default_snippets_dir);
-    let mut notes_dir = None;
-    let mut bibliography = None;
-    let mut theme_override = None;
-    let mut args = env::args_os().skip(1);
-    while let Some(arg) = args.next() {
-        let flag = arg.to_string_lossy().into_owned();
-        match flag.as_str() {
-            "--bibliography" => {
-                let value = args.next().ok_or_else(|| {
-                    io::Error::new(
-                        io::ErrorKind::InvalidInput,
-                        "--bibliography requires a path",
-                    )
-                })?;
-                bibliography = Some(PathBuf::from(value));
-            }
-            "--theme" => {
-                let value = args.next().ok_or_else(|| {
-                    io::Error::new(io::ErrorKind::InvalidInput, "--theme requires a name")
-                })?;
-                theme_override = Some(value.to_string_lossy().into_owned());
-            }
-            "-h" | "--help" => {
-                println!(
-                    "zettui [NOTES_DIR] [--bibliography FILE] [--theme auto|dark|light]\n\nModes: {}\nConfig: ~/.config/zettui/config.toml",
-                    THEME_CHOICES.join(", "),
-                );
-                std::process::exit(0);
-            }
-            other if other.starts_with('-') => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    format!("Unknown option: {other}"),
-                ));
-            }
-            _ if notes_dir.is_none() => notes_dir = Some(PathBuf::from(arg)),
-            _ => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    "Provide at most one NOTES_DIR",
-                ));
-            }
-        }
-    }
-    let name = theme_override
-        .or(config.theme)
-        .unwrap_or_else(|| "system".to_owned());
-    let choice = ThemeChoice::named(&name)
-        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error.to_string()))?;
-    let terminal_palette = system_theme::TerminalPalette::query();
-    let system = omarchy_appearance()
-        .or_else(|| terminal_palette.map(|p| p.appearance()))
-        .unwrap_or(Appearance::Dark);
-    Ok(StartupOptions {
-        root: notes_dir
-            .or(config.notes_dir)
-            .unwrap_or(env::current_dir()?),
-        bibliography: bibliography.or(config.bibliography),
-        choice,
-        system_theme: config.system_theme,
-        terminal_palette,
-        overrides: config.colors,
-        fallback: system,
-        auto_themes,
-        browser_width,
-        snippets_dir,
-        writing: focus::Writing {
-            zen: config.zen,
-            focus: config.focus,
-            editor: config.editor,
-            leader: false,
-        },
-        markdown_settings: config.markdown,
-    })
 }
 
 fn main() -> io::Result<()> {

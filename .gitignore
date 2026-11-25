@@ -1,4 +1,12 @@
 /target/
+/dist/
+/zettui-*.zip
+/zettui-*.tar.gz
+/zettui-*.patch
 .DS_Store
+Thumbs.db
 .idea/
 .vscode/
+*.swp
+*.swo
+*~

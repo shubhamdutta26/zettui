@@ -20,21 +20,24 @@ if readelf -l "$binary" | grep -q INTERP; then
 fi
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-[[ -f "$root/LICENSE" && -f "$root/README.md" ]] || {
-  echo 'Run this script inside the Zettui repository (LICENSE and README.md required)' >&2; exit 1;
+[[ -f "$root/LICENSE" && -f "$root/README.md" && -f "$root/config.example.toml" ]] || {
+  echo 'Run this script inside the Zettui repository (LICENSE, README.md and config.example.toml required)' >&2; exit 1;
 }
 mkdir -p "$root/dist"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 name="zettui_${version}_linux_x86_64"
 archive="${name}.tar.gz"
+# Clear only the outputs for this version; preserve other local builds.
+rm -f -- "$root/dist/$archive" "$root/dist/${name}.deb" "$root/dist/${name}.rpm" "$root/dist/PKGBUILD" "$root/dist/SHA256SUMS"
 
 # General-purpose binary archive (for any x86-64 Linux distribution).
 mkdir -p "$work/archive"
 install -m755 "$binary" "$work/archive/zettui"
 install -m644 "$root/LICENSE" "$work/archive/LICENSE"
 install -m644 "$root/README.md" "$work/archive/README.md"
-tar -czf "$root/dist/$archive" -C "$work/archive" zettui LICENSE README.md
+install -m644 "$root/config.example.toml" "$work/archive/config.example.toml"
+tar -czf "$root/dist/$archive" -C "$work/archive" zettui LICENSE README.md config.example.toml
 
 # Debian/Ubuntu .deb (if dpkg-deb is installed).
 if command -v dpkg-deb >/dev/null; then
@@ -42,6 +45,7 @@ if command -v dpkg-deb >/dev/null; then
   install -m755 "$binary" "$work/deb/usr/bin/zettui"
   install -m644 "$root/LICENSE" "$work/deb/usr/share/doc/zettui/copyright"
   install -m644 "$root/README.md" "$work/deb/usr/share/doc/zettui/README.md"
+  install -m644 "$root/config.example.toml" "$work/deb/usr/share/doc/zettui/config.example.toml"
   cat > "$work/deb/DEBIAN/control" <<CONTROL
 Package: zettui
 Version: $version
@@ -64,6 +68,7 @@ if command -v rpmbuild >/dev/null; then
   install -m755 "$binary" "$rpmroot/SOURCES/zettui"
   install -m644 "$root/LICENSE" "$rpmroot/SOURCES/LICENSE"
   install -m644 "$root/README.md" "$rpmroot/SOURCES/README.md"
+  install -m644 "$root/config.example.toml" "$rpmroot/SOURCES/config.example.toml"
   cat > "$rpmroot/SPECS/zettui.spec" <<SPEC
 %global debug_package %{nil}
 Name: zettui
@@ -82,10 +87,13 @@ install -Dm0755 %{_sourcedir}/zettui %{buildroot}%{_bindir}/zettui
 install -Dm0644 %{_sourcedir}/LICENSE %{buildroot}%{_datadir}/licenses/zettui/LICENSE
 install -Dm0644 %{_sourcedir}/README.md %{buildroot}%{_datadir}/doc/zettui/README.md
 
+install -Dm0644 %{_sourcedir}/config.example.toml %{buildroot}%{_datadir}/doc/zettui/config.example.toml
+
 %files
 %{_bindir}/zettui
 %license %{_datadir}/licenses/zettui/LICENSE
 %doc %{_datadir}/doc/zettui/README.md
+%doc %{_datadir}/doc/zettui/config.example.toml
 SPEC
   rpmbuild -bb --define "_topdir $rpmroot" "$rpmroot/SPECS/zettui.spec"
   rpm_file="$(find "$rpmroot/RPMS" -type f -name 'zettui-*.rpm' -print -quit)"
@@ -112,6 +120,7 @@ package() {
   install -Dm755 "\${srcdir}/zettui" "\${pkgdir}/usr/bin/zettui"
   install -Dm644 "\${srcdir}/LICENSE" "\${pkgdir}/usr/share/licenses/\${pkgname}/LICENSE"
   install -Dm644 "\${srcdir}/README.md" "\${pkgdir}/usr/share/doc/\${pkgname}/README.md"
+  install -Dm644 "\${srcdir}/config.example.toml" "\${pkgdir}/usr/share/doc/\${pkgname}/config.example.toml"
 }
 PKGBUILD
 
