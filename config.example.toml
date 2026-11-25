@@ -48,6 +48,51 @@ dim_delimiters = true # Mute inline formatting, links, fences and table separato
 # h5 = "#F9E2AF"
 # h6 = "#FAB387"
 
+[markdown.syntax_colors]
+# Optional #RRGGBB overrides; omitted entries inherit the active theme.
+# bold = "#F38BA8"
+# italic = "#A6E3A1"
+# strikethrough = "#A6ADC8"
+# highlight = "#F38BA8"
+# inline_code = "#CBA6F7"
+# link = "#89B4FA"
+# link_destination = "#CBA6F7"
+# wiki_link = "#89B4FA"
+# tag = "#A6E3A1"
+# citation = "#CBA6F7"
+# footnote = "#CBA6F7"
+# math = "#F38BA8"
+# comment = "#A6ADC8"
+# blockquote = "#A6ADC8"
+# list_marker = "#CBA6F7"
+# task_done = "#A6E3A1"
+# task_pending = "#F38BA8"
+# delimiter = "#A6ADC8"
+# horizontal_rule = "#A6ADC8"
+
+[markdown.yaml_colors]
+# Optional #RRGGBB overrides; omitted entries inherit the active theme.
+# key = "#89B4FA"
+# string = "#A6E3A1"
+# number = "#F38BA8"
+# boolean = "#CBA6F7"
+# null = "#CBA6F7"
+# comment = "#A6ADC8"
+# marker = "#F38BA8"
+# reference = "#CBA6F7"
+# delimiter = "#A6ADC8"
+
+[markdown.code_colors]
+# Optional #RRGGBB overrides; omitted entries inherit the active theme.
+# keyword = "#CBA6F7"
+# constant = "#CBA6F7"
+# function = "#89B4FA"
+# string = "#A6E3A1"
+# number = "#F38BA8"
+# comment = "#A6ADC8"
+# operator = "#CBA6F7"
+# delimiter = "#A6ADC8"
+
 [zen]
 enabled = false
 width = 80 # 20–240 columns, including the gutter if enabled.

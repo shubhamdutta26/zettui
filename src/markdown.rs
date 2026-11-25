@@ -41,6 +41,93 @@ impl HeadingColors {
     }
 }
 
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+pub struct SyntaxColors {
+    #[serde(deserialize_with = "optional_color")]
+    pub bold: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub italic: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub strikethrough: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub highlight: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub inline_code: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub link: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub link_destination: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub wiki_link: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub tag: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub citation: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub footnote: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub math: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub comment: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub blockquote: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub list_marker: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub task_done: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub task_pending: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub delimiter: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub horizontal_rule: Option<Color>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+pub struct YamlColors {
+    #[serde(deserialize_with = "optional_color")]
+    pub key: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub string: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub number: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub boolean: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub null: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub comment: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub marker: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub reference: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub delimiter: Option<Color>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+pub struct CodeColors {
+    #[serde(deserialize_with = "optional_color")]
+    pub keyword: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub constant: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub function: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub string: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub number: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub comment: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub operator: Option<Color>,
+    #[serde(deserialize_with = "optional_color")]
+    pub delimiter: Option<Color>,
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct MarkdownSettings {
@@ -49,6 +136,9 @@ pub struct MarkdownSettings {
     pub highlight_frontmatter: bool,
     pub dim_delimiters: bool,
     pub heading_colors: HeadingColors,
+    pub code_colors: CodeColors,
+    pub yaml_colors: YamlColors,
+    pub syntax_colors: SyntaxColors,
 }
 impl Default for MarkdownSettings {
     fn default() -> Self {
@@ -58,6 +148,9 @@ impl Default for MarkdownSettings {
             highlight_frontmatter: true,
             dim_delimiters: true,
             heading_colors: HeadingColors::default(),
+            code_colors: CodeColors::default(),
+            yaml_colors: YamlColors::default(),
+            syntax_colors: SyntaxColors::default(),
         }
     }
 }
@@ -163,7 +256,7 @@ fn yaml_colon(c: &[char], i: usize, flow: bool) -> bool {
         }) || (flow && i > 0 && matches!(c[i - 1], '\'' | '"')))
 }
 
-fn yaml_scalar_style(value: &str, t: Theme) -> Style {
+fn yaml_scalar_style(value: &str, t: Theme, colors: &YamlColors) -> Style {
     let lower = value.to_ascii_lowercase();
     let numeric = value.replace('_', "");
     let unsigned = numeric.trim_start_matches(['+', '-']);
@@ -183,15 +276,21 @@ fn yaml_scalar_style(value: &str, t: Theme) -> Style {
         && bytes[8..10].iter().all(u8::is_ascii_digit)
         && (bytes.len() == 10 || matches!(bytes[10], b'T' | b't' | b' '));
     if matches!(lower.as_str(), "true" | "false" | "null" | "~") {
-        Style::default().fg(t.accent).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(if matches!(lower.as_str(), "null" | "~") {
+                colors.null.unwrap_or(t.accent)
+            } else {
+                colors.boolean.unwrap_or(t.accent)
+            })
+            .add_modifier(Modifier::BOLD)
     } else if numeric.parse::<f64>().is_ok() && unsigned.chars().any(|ch| ch.is_ascii_digit())
         || radix_number
         || date
         || matches!(lower.as_str(), ".inf" | "+.inf" | "-.inf" | ".nan")
     {
-        Style::default().fg(t.warning)
+        Style::default().fg(colors.number.unwrap_or(t.warning))
     } else {
-        Style::default().fg(t.success)
+        Style::default().fg(colors.string.unwrap_or(t.success))
     }
 }
 
@@ -212,14 +311,24 @@ fn yaml_quote_end(c: &[char], mut i: usize, quote: char) -> Option<usize> {
     None
 }
 
-fn yaml_line(c: &[char], s: &mut [Style], ctx: &mut YamlContext, t: Theme, delimiter: Style) {
+fn yaml_line(
+    c: &[char],
+    s: &mut [Style],
+    ctx: &mut YamlContext,
+    t: Theme,
+    settings: &MarkdownSettings,
+) {
+    let colors = &settings.yaml_colors;
+    let delimiter = delimiter_style(t, settings.dim_delimiters, colors.delimiter);
     let n = c.len();
     let start = c.iter().position(|ch| !ch.is_whitespace()).unwrap_or(n);
-    let string = Style::default().fg(t.success);
-    let key = Style::default().fg(t.directory);
-    let marker = Style::default().fg(t.warning);
-    let reference = Style::default().fg(t.accent);
-    let comment = Style::default().fg(t.muted).add_modifier(Modifier::ITALIC);
+    let string = Style::default().fg(colors.string.unwrap_or(t.success));
+    let key = Style::default().fg(colors.key.unwrap_or(t.directory));
+    let marker = Style::default().fg(colors.marker.unwrap_or(t.warning));
+    let reference = Style::default().fg(colors.reference.unwrap_or(t.accent));
+    let comment = Style::default()
+        .fg(colors.comment.unwrap_or(t.muted))
+        .add_modifier(Modifier::ITALIC);
     if let Some(indent) = ctx.block_indent {
         if start == n || start > indent {
             paint(s, start, n, string);
@@ -338,7 +447,7 @@ fn yaml_line(c: &[char], s: &mut [Style], ctx: &mut YamlContext, t: Theme, delim
         let style = if i < n && yaml_colon(c, i, flow) {
             key
         } else {
-            yaml_scalar_style(&value, t)
+            yaml_scalar_style(&value, t, colors)
         };
         paint(s, a, end, style);
     }
@@ -399,7 +508,7 @@ fn code(
     lang: &str,
     t: Theme,
     ctx: &mut CodeContext,
-    delimiter: Style,
+    settings: &MarkdownSettings,
 ) {
     let lang = match lang {
         "rs" => "rust",
@@ -413,7 +522,7 @@ fn code(
         other => other,
     };
     if lang == "yaml" {
-        yaml_line(c, styles, &mut ctx.yaml, t, delimiter);
+        yaml_line(c, styles, &mut ctx.yaml, t, settings);
         return;
     }
     let keywords = match lang {
@@ -452,12 +561,20 @@ fn code(
         "typst" => "true false none auto",
         _ => "",
     };
-    let comment = Style::default().fg(t.muted).add_modifier(Modifier::ITALIC);
-    let string = Style::default().fg(t.success);
-    let number = Style::default().fg(t.warning);
-    let keyword = Style::default().fg(t.accent).add_modifier(Modifier::BOLD);
-    let function = Style::default().fg(t.directory);
-    let operator = Style::default().fg(t.accent);
+    let colors = &settings.code_colors;
+    let comment = Style::default()
+        .fg(colors.comment.unwrap_or(t.muted))
+        .add_modifier(Modifier::ITALIC);
+    let string = Style::default().fg(colors.string.unwrap_or(t.success));
+    let number = Style::default().fg(colors.number.unwrap_or(t.warning));
+    let keyword = Style::default()
+        .fg(colors.keyword.unwrap_or(t.accent))
+        .add_modifier(Modifier::BOLD);
+    let constant = Style::default()
+        .fg(colors.constant.unwrap_or(t.accent))
+        .add_modifier(Modifier::BOLD);
+    let function = Style::default().fg(colors.function.unwrap_or(t.directory));
+    let operator = Style::default().fg(colors.operator.unwrap_or(t.accent));
     let slash = matches!(
         lang,
         "rust" | "javascript" | "typescript" | "c" | "cpp" | "typst"
@@ -583,10 +700,10 @@ fn code(
             } else {
                 word
             };
-            if keywords.split_whitespace().any(|k| k == lookup)
-                || constants.split_whitespace().any(|k| k == lookup)
-            {
+            if keywords.split_whitespace().any(|k| k == lookup) {
                 paint(styles, a, i, keyword);
+            } else if constants.split_whitespace().any(|k| k == lookup) {
+                paint(styles, a, i, constant);
             } else if c[i..].iter().find(|ch| !ch.is_whitespace()) == Some(&'(') {
                 paint(styles, a, i, function);
             }
@@ -604,12 +721,6 @@ fn code(
 
 // Distinct hue families with light/dark contrast, independent of duplicate theme accents.
 fn heading_color(level: usize, t: Theme, settings: &MarkdownSettings) -> ratatui::style::Color {
-    if let Some(color) = settings.heading_colors.get(level) {
-        return color;
-    }
-    if let Some(color) = t.heading_colors[level.clamp(1, 6) - 1] {
-        return color;
-    }
     let light = matches!(t.background, Color::Rgb(r,g,b) if (u32::from(r)*299+u32::from(g)*587+u32::from(b)*114)>150_000);
     let colors = if light {
         [
@@ -630,8 +741,35 @@ fn heading_color(level: usize, t: Theme, settings: &MarkdownSettings) -> ratatui
             (250, 179, 135),
         ]
     };
-    let (r, g, b) = colors[level.clamp(1, 6) - 1];
-    Color::Rgb(r, g, b)
+    let fallback = colors.map(|(r, g, b)| Color::Rgb(r, g, b));
+    let mut resolved = [None; 6];
+    for (i, slot) in resolved.iter_mut().enumerate() {
+        *slot = settings.heading_colors.get(i + 1);
+    }
+    for i in 0..6 {
+        if resolved[i].is_some() {
+            continue;
+        }
+        let preferred = t.heading_colors[i].unwrap_or(fallback[i]);
+        resolved[i] = Some(if !resolved.contains(&Some(preferred)) {
+            preferred
+        } else {
+            fallback
+                .iter()
+                .copied()
+                .find(|c| !resolved.contains(&Some(*c)))
+                .expect("six fallback colors for six headings")
+        });
+    }
+    resolved[level.clamp(1, 6) - 1].expect("resolved heading")
+}
+
+fn delimiter_style(t: Theme, dim: bool, color: Option<Color>) -> Style {
+    Style::default().fg(if dim {
+        color.unwrap_or(t.muted)
+    } else {
+        t.foreground
+    })
 }
 
 fn line_styles(
@@ -647,24 +785,33 @@ fn line_styles(
     if !settings.syntax_highlighting {
         return (c, s);
     }
-    let dim = Style::default().fg(t.muted);
-    let delimiter = if settings.dim_delimiters {
-        dim
-    } else {
-        Style::default().fg(t.foreground)
-    };
-    let accent = Style::default().fg(t.accent);
-    let green = Style::default().fg(t.success);
-    let warn = Style::default().fg(t.warning);
+    let colors = &settings.syntax_colors;
+    let delimiter = delimiter_style(t, settings.dim_delimiters, colors.delimiter);
+    let yaml_delimiter =
+        delimiter_style(t, settings.dim_delimiters, settings.yaml_colors.delimiter);
+    let code_delimiter =
+        delimiter_style(t, settings.dim_delimiters, settings.code_colors.delimiter);
+    let list_marker = Style::default().fg(colors.list_marker.unwrap_or(t.accent));
+    let math = Style::default().fg(colors.math.unwrap_or(t.warning));
+    let inline_code = Style::default().fg(colors.inline_code.unwrap_or_else(|| {
+        if t.accent == colors.bold.unwrap_or(t.warning) {
+            t.foreground
+        } else {
+            t.accent
+        }
+    }));
+    let comment = Style::default()
+        .fg(colors.comment.unwrap_or(t.muted))
+        .add_modifier(Modifier::ITALIC);
     let link = Style::default()
-        .fg(t.directory)
+        .fg(colors.link.unwrap_or(t.directory))
         .add_modifier(Modifier::UNDERLINED);
     let trim = line.trim();
     let start = c.iter().position(|x| !x.is_whitespace()).unwrap_or(n);
     if row == 0 && line.trim_start_matches('\u{feff}').trim_end() == "---" {
         ctx.yaml = true;
         if settings.highlight_frontmatter {
-            s.fill(delimiter);
+            s.fill(yaml_delimiter);
         }
         return (c, s);
     }
@@ -673,10 +820,10 @@ fn line_styles(
             ctx.yaml = false;
             ctx.yaml_context = YamlContext::default();
             if settings.highlight_frontmatter {
-                s.fill(delimiter);
+                s.fill(yaml_delimiter);
             }
         } else if settings.highlight_frontmatter {
-            yaml_line(&c, &mut s, &mut ctx.yaml_context, t, delimiter);
+            yaml_line(&c, &mut s, &mut ctx.yaml_context, t, settings);
         }
         return (c, s);
     }
@@ -686,10 +833,10 @@ fn line_styles(
             ctx.fence = None;
             ctx.code_context = CodeContext::default();
             if settings.highlight_code_blocks {
-                s.fill(delimiter);
+                s.fill(code_delimiter);
             }
         } else if settings.highlight_code_blocks {
-            code(&c, &mut s, lang, t, &mut ctx.code_context, delimiter);
+            code(&c, &mut s, lang, t, &mut ctx.code_context, settings);
         }
         return (c, s);
     }
@@ -709,7 +856,7 @@ fn line_styles(
             ctx.fence = Some((marker, len, lang));
             ctx.code_context = CodeContext::default();
             if settings.highlight_code_blocks {
-                s.fill(delimiter);
+                s.fill(code_delimiter);
             }
             return (c, s);
         }
@@ -720,7 +867,7 @@ fn line_styles(
         return (c, s);
     }
     if ctx.math {
-        s.fill(warn);
+        s.fill(math);
         return (c, s);
     }
     if start < n && !ctx.comment {
@@ -733,10 +880,14 @@ fn line_styles(
                 .iter()
                 .any(|&m| trim.chars().all(|x| x == m || x.is_whitespace()))
         {
-            s.fill(dim);
+            s.fill(Style::default().fg(colors.horizontal_rule.unwrap_or(t.muted)));
             return (c, s);
         } else if c[start] == '>' {
-            s.fill(dim.add_modifier(Modifier::ITALIC));
+            s.fill(
+                Style::default()
+                    .fg(colors.blockquote.unwrap_or(t.muted))
+                    .add_modifier(Modifier::ITALIC),
+            );
         } else {
             let marker = if matches!(c[start], '-' | '+' | '*')
                 && c.get(start + 1).is_some_and(|x| x.is_whitespace())
@@ -755,9 +906,22 @@ fn line_styles(
                 }
             };
             if let Some(end) = marker {
-                paint(&mut s, start, end, accent);
+                paint(&mut s, start, end, list_marker);
                 let a = end + c[end..].iter().take_while(|x| x.is_whitespace()).count();
-                for (m, style) in [("[x]", green), ("[X]", green), ("[ ]", warn)] {
+                for (m, style) in [
+                    (
+                        "[x]",
+                        Style::default().fg(colors.task_done.unwrap_or(t.success)),
+                    ),
+                    (
+                        "[X]",
+                        Style::default().fg(colors.task_done.unwrap_or(t.success)),
+                    ),
+                    (
+                        "[ ]",
+                        Style::default().fg(colors.task_pending.unwrap_or(t.warning)),
+                    ),
+                ] {
                     if starts(&c, a, m) {
                         paint(&mut s, a, a + 3, style);
                     }
@@ -784,12 +948,12 @@ fn line_styles(
         if ctx.comment || starts(&c, i, "<!--") {
             let from = if ctx.comment { i } else { i + 4 };
             if let Some(end) = find(&c, from, "-->") {
-                paint(&mut s, i, end + 3, dim.add_modifier(Modifier::ITALIC));
+                paint(&mut s, i, end + 3, comment);
                 ctx.comment = false;
                 i = end + 3;
                 continue;
             }
-            paint(&mut s, i, n, dim.add_modifier(Modifier::ITALIC));
+            paint(&mut s, i, n, comment);
             ctx.comment = true;
             break;
         }
@@ -800,7 +964,7 @@ fn line_styles(
         if c[i] == '`' {
             let len = c[i..].iter().take_while(|&&x| x == '`').count();
             let delim = "`".repeat(len);
-            if let Some(end) = paired(&c, &mut s, i, &delim, &delim, warn, delimiter) {
+            if let Some(end) = paired(&c, &mut s, i, &delim, &delim, inline_code, delimiter) {
                 i = end;
                 continue;
             }
@@ -826,9 +990,12 @@ fn line_styles(
                     emphasis.pop();
                     let close = i + used;
                     let (color, modifier) = match (marker, width) {
-                        ('~', _) => (t.muted, Modifier::CROSSED_OUT),
-                        (_, 2) => (t.warning, Modifier::BOLD),
-                        _ => (t.success, Modifier::ITALIC),
+                        ('~', _) => (
+                            colors.strikethrough.unwrap_or(t.muted),
+                            Modifier::CROSSED_OUT,
+                        ),
+                        (_, 2) => (colors.bold.unwrap_or(t.warning), Modifier::BOLD),
+                        _ => (colors.italic.unwrap_or(t.success), Modifier::ITALIC),
                     };
                     for style in &mut s[begin + width..close] {
                         if style.fg.is_none() {
@@ -856,13 +1023,37 @@ fn line_styles(
         }
         let mut matched = false;
         for (a, b, style) in [
-            ("[[", "]]", link),
-            ("[@", "]", accent),
-            ("[-@", "]", accent),
-            ("[^", "]", accent),
-            ("==", "==", warn.add_modifier(Modifier::BOLD)),
-            ("$$", "$$", warn),
-            ("$", "$", warn),
+            (
+                "[[",
+                "]]",
+                Style::default()
+                    .fg(colors.wiki_link.unwrap_or(t.directory))
+                    .add_modifier(Modifier::UNDERLINED),
+            ),
+            (
+                "[@",
+                "]",
+                Style::default().fg(colors.citation.unwrap_or(t.accent)),
+            ),
+            (
+                "[-@",
+                "]",
+                Style::default().fg(colors.citation.unwrap_or(t.accent)),
+            ),
+            (
+                "[^",
+                "]",
+                Style::default().fg(colors.footnote.unwrap_or(t.accent)),
+            ),
+            (
+                "==",
+                "==",
+                Style::default()
+                    .fg(colors.highlight.unwrap_or(t.warning))
+                    .add_modifier(Modifier::BOLD),
+            ),
+            ("$$", "$$", math),
+            ("$", "$", math),
         ] {
             if a == "$"
                 && (c.get(i + 1).is_none_or(|ch| ch.is_whitespace()) || c.get(i + 1) == Some(&'$'))
@@ -899,7 +1090,9 @@ fn line_styles(
                 &mut s,
                 mid + 2,
                 end,
-                accent.add_modifier(Modifier::UNDERLINED),
+                Style::default()
+                    .fg(colors.link_destination.unwrap_or(t.accent))
+                    .add_modifier(Modifier::UNDERLINED),
             );
             paint(&mut s, end, end + 1, delimiter);
             i = end + 1;
@@ -931,7 +1124,12 @@ fn line_styles(
             while i < n && (c[i].is_alphanumeric() || matches!(c[i], '_' | '-' | '/')) {
                 i += 1;
             }
-            paint(&mut s, a, i, green);
+            paint(
+                &mut s,
+                a,
+                i,
+                Style::default().fg(colors.tag.unwrap_or(t.success)),
+            );
             continue;
         }
         if c[i] == '|' && table_like && !ctx.comment {
@@ -1483,5 +1681,67 @@ mod fenced_integration_tests {
             assert!(s[13].add_modifier.contains(Modifier::BOLD));
             line_styles("```", 5, &mut ctx, t, &settings);
         }
+    }
+}
+
+#[cfg(test)]
+mod syntax_color_tests {
+    use super::*;
+
+    #[test]
+    fn partial_overrides_and_validation() {
+        let settings: MarkdownSettings = toml::from_str(
+            "[syntax_colors]\ninline_code = '#123456'\n[yaml_colors]\nnumber = '#654321'\n[code_colors]\nkeyword = '#112233'",
+        ).unwrap();
+        let t = Theme::named("dark").unwrap();
+        let doc = "---\ncount: 123\n---\n`code` **bold**\n```rust\nlet x = 123;\n```";
+        let mut ctx = Context::default();
+        let rows: Vec<_> = doc
+            .lines()
+            .enumerate()
+            .map(|(i, l)| line_styles(l, i, &mut ctx, t, &settings).1)
+            .collect();
+        assert_eq!(rows[1][7].fg, Some(Color::Rgb(101, 67, 33)));
+        assert_eq!(rows[3][1].fg, Some(Color::Rgb(18, 52, 86)));
+        assert_eq!(rows[3][9].fg, Some(t.warning));
+        assert_eq!(rows[5][0].fg, Some(Color::Rgb(17, 34, 51)));
+        assert_eq!(rows[5][8].fg, Some(t.warning));
+        assert!(toml::from_str::<MarkdownSettings>("[code_colors]\nnumber = 'red'").is_err());
+        assert!(toml::from_str::<MarkdownSettings>("[yaml_colors]\nunknown = '#123456'").is_err());
+    }
+
+    #[test]
+    fn duplicate_native_headings_and_inline_code() {
+        let mut t = Theme::named("dark").unwrap();
+        t.heading_colors = [Some(t.accent); 6];
+        let settings = MarkdownSettings::default();
+        let colors: Vec<_> = (1..=6).map(|n| heading_color(n, t, &settings)).collect();
+        for (i, color) in colors.iter().enumerate() {
+            assert!(!colors[..i].contains(color));
+        }
+        let (_, s) = line_styles("**bold** `code`", 1, &mut Context::default(), t, &settings);
+        assert_ne!(s[2].fg, s[10].fg);
+    }
+
+    #[test]
+    fn yaml_fences_inherit_yaml_colors_and_cache_invalidates() {
+        let t = Theme::named("dark").unwrap();
+        let mut settings = MarkdownSettings::default();
+        let text = "```yaml\nactive: true\n```";
+        let mut cache = HighlightCache::default();
+        cache.prepare(text, t, true, &settings);
+        settings.yaml_colors.boolean = Some(Color::Rgb(1, 2, 3));
+        cache.prepare(text, t, true, &settings);
+        assert_eq!(
+            cache.entry.as_ref().unwrap().lines[1][8].fg,
+            settings.yaml_colors.boolean
+        );
+        let lines = preview(text, t, &settings);
+        assert!(
+            lines[1]
+                .spans
+                .iter()
+                .any(|s| s.style.fg == settings.yaml_colors.boolean)
+        );
     }
 }

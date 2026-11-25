@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (0.7.11)
+## 0.7.11
 
 - Expand Markdown source highlighting with nested emphasis, escaped delimiters, balanced link destinations, autolinks, citations, mathematics and improved table detection.
 - Add context-aware YAML frontmatter and fenced YAML highlighting, including typed scalars, nested collections, comments, anchors, aliases and multiline strings.
