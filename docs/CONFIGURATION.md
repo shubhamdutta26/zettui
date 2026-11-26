@@ -26,6 +26,10 @@ dark_theme = "everforest"
 
 [layout]
 browser_width_percent = 35
+outline_width_percent = 25
+show_files = true
+show_preview = true
+show_outline = false
 
 [markdown]
 syntax_highlighting = true
@@ -52,7 +56,11 @@ All keys are optional. Restart Zettui after changing the file. Session commands 
 | `appearance` | `ensure_contrast` | `true`; adjust low-contrast RGB text |
 | `appearance` | `light_theme` | `"light"`; fixed palette for Auto light appearance |
 | `appearance` | `dark_theme` | `"dark"`; fixed palette for Auto dark appearance |
-| `layout` | `browser_width_percent` | `35`; integer 20–70 |
+| `layout` | `browser_width_percent` | `35`; preferred percent, integer 20–70 |
+| `layout` | `outline_width_percent` | `25`; preferred percent, integer 15–50 |
+| `layout` | `show_files` | `true`; while editing; always visible in browser |
+| `layout` | `show_preview` | `true`; browser mode only |
+| `layout` | `show_outline` | `false`; editor mode only, read-only in this phase |
 | `editor` | `line_numbers` | `true` |
 | `editor` | `word_wrap` | `true`; visual wrapping |
 | `markdown` | `syntax_highlighting` | `true`; master switch for editor and preview |

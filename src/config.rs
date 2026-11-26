@@ -45,6 +45,10 @@ pub struct AppearanceSettings {
 pub struct LayoutSettings {
     /// Desired percent of terminal width used by the left file pane.
     pub browser_width_percent: Option<u16>,
+    pub outline_width_percent: Option<u16>,
+    pub show_files: Option<bool>,
+    pub show_preview: Option<bool>,
+    pub show_outline: Option<bool>,
 }
 
 impl Config {
@@ -69,6 +73,27 @@ impl Config {
             ));
         }
         Ok(width)
+    }
+
+    pub fn panels(&self) -> io::Result<crate::layout::Panels> {
+        use crate::layout::{Panels, valid_outline_percent};
+        let defaults = Panels::default();
+        let width = self
+            .layout
+            .outline_width_percent
+            .unwrap_or(defaults.outline_width_percent);
+        if !valid_outline_percent(width) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("outline_width_percent must be between 15 and 50 (got {width})"),
+            ));
+        }
+        Ok(Panels {
+            show_files: self.layout.show_files.unwrap_or(defaults.show_files),
+            show_preview: self.layout.show_preview.unwrap_or(defaults.show_preview),
+            show_outline: self.layout.show_outline.unwrap_or(defaults.show_outline),
+            outline_width_percent: width,
+        })
     }
 
     /// A missing config file is fine; an invalid one is an actionable error.
@@ -252,5 +277,33 @@ mod sectioned_config_tests {
     #[test]
     fn invalid_heading_color_is_rejected() {
         assert!(toml::from_str::<Config>("[markdown.heading_colors]\nh1 = 'red'").is_err());
+    }
+}
+
+#[cfg(test)]
+mod panel_config_tests {
+    use super::*;
+
+    #[test]
+    fn old_and_new_layouts_parse() {
+        let old: Config = toml::from_str("[layout]\nbrowser_width_percent = 50").unwrap();
+        assert_eq!(old.panels().unwrap(), crate::layout::Panels::default());
+        let cfg: Config = toml::from_str("[layout]\nshow_files = false\nshow_preview = false\nshow_outline = true\noutline_width_percent = 30").unwrap();
+        let panels = cfg.panels().unwrap();
+        assert!(!panels.show_files);
+        assert!(!panels.show_preview);
+        assert!(panels.show_outline);
+        assert_eq!(panels.outline_width_percent, 30);
+        let example: Config = toml::from_str(include_str!("../config.example.toml")).unwrap();
+        assert_eq!(example.panels().unwrap(), crate::layout::Panels::default());
+    }
+
+    #[test]
+    fn rejects_invalid_outline_width() {
+        for width in [0, 14, 51, 100] {
+            let cfg: Config =
+                toml::from_str(&format!("[layout]\noutline_width_percent = {width}")).unwrap();
+            assert!(cfg.panels().is_err());
+        }
     }
 }

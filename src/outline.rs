@@ -6,8 +6,6 @@
 pub struct Heading<'a> {
     pub level: usize,
     pub row: usize,
-    // Consumed by the outline UI and heading picker in subsequent phases.
-    #[allow(dead_code)]
     pub title: &'a str,
     /// Nearest preceding heading with a smaller level (if any).
     pub parent: Option<usize>,

@@ -20,6 +20,8 @@
 | Editor | `Ctrl+P`, `Ctrl+E` | Zotero citation picker; snippet picker (empty note only) |
 | Anywhere | `Ctrl+F`, `Alt+T` | Full-text search; search YAML tags |
 | Anywhere | `Alt+h` / `Alt+l` (or `Alt+←` / `Alt+→`) | Narrow / widen file-browser pane |
+| Browser / Editor | `F2` / `F3` / `F4` | Toggle Files / Preview / Outline preferences |
+| Browser / Editor | `Alt+↑` / `Alt+↓` | Widen / narrow outline preference |
 | Anywhere | `Ctrl+G` | Cycle native, terminal and built-in themes |
 | Search popup | `Tab`, `↑` / `↓`, `Enter`, `Esc` | Toggle text/tags, select result, open, cancel |
 | Pickers | `↑` / `↓`, `Enter`, `Esc`, `Ctrl+U` | Select, confirm, cancel, clear search (where supported) |
@@ -27,6 +29,10 @@
 
 **Cursor:** Normal mode uses a blinking block; Insert mode uses a **blinking vertical bar** (subject to terminal support).
 
+
+## Panel visibility
+
+F2 toggles Files while editing; closing the note always restores the file browser without changing the preference. F3 toggles the browser Preview. F4 toggles the read-only Outline of the open note. In Normal mode, `Space e`, `Space p`, `Space o` and `:toggle files`, `:toggle preview`, `:toggle outline` perform the same actions. Function keys work in browser and editor modes (except when a modal picker owns input). The editor always remains available and the Preview and Outline do not receive keyboard focus in this phase. Sidebars temporarily disappear in Zen; narrow terminals temporarily omit the Outline if necessary. Panel width changes and toggles last for the session only; settings in `[layout]` set startup preferences. Outline width changes by five percentage points, within 15–50%. Files resizing is unchanged.
 
 ## Distraction-free writing
 

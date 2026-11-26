@@ -18,6 +18,11 @@ impl App {
             }
             Command::NarrowBrowser => self.resize_browser(false),
             Command::WidenBrowser => self.resize_browser(true),
+            Command::NarrowOutline => self.resize_outline(false),
+            Command::WidenOutline => self.resize_outline(true),
+            Command::ToggleFiles | Command::TogglePreview | Command::ToggleOutline => {
+                self.toggle_panel(command);
+            }
             Command::CycleTheme => self.cycle_theme(),
             Command::Quit => {
                 // Browser-only binding. Do not permit a future caller to bypass dirty notes.

@@ -38,7 +38,11 @@ These modules share `App` privately rather than passing large collections of sta
 
 ## Heading navigation
 
-`outline::extract` works on an immutable source snapshot and returns headings in source order with zero-based logical rows, nearest shallower parent indices, exclusive section ends, and borrowed raw titles. Focus mode uses the same parser. Extraction does not depend on syntax highlighting or theme settings. The parser handles top-level H1–H6 ATX headings, BOM/CRLF, YAML frontmatter, fenced and indented code, multiline HTML comments and standalone `$$` math blocks. It is a lightweight block scanner, not a full Markdown parser: Setext and nested list/blockquote headings are not supported, and inline HTML/code handling is limited. UI rendering and heading search are subsequent phases.
+`outline::extract` works on an immutable source snapshot and returns headings in source order with zero-based logical rows, nearest shallower parent indices, exclusive section ends, and borrowed raw titles. Focus mode uses the same parser. Extraction does not depend on syntax highlighting or theme settings. The parser handles top-level H1–H6 ATX headings, BOM/CRLF, YAML frontmatter, fenced and indented code, multiline HTML comments and standalone `$$` math blocks. It is a lightweight block scanner, not a full Markdown parser: Setext and nested list/blockquote headings are not supported, and inline HTML/code handling is limited. The read-only outline uses the same source snapshot as editor rendering; interactive outline navigation and heading search are subsequent phases.
+
+## Panel layout
+
+`layout::Panels` holds session visibility preferences and preferred outline width. Its geometry method returns `[Files, Editor/Preview, Outline]`, reserving the active pane and suppressing the outline on small terminals. Browser mode always retains Files; editor mode always retains the editor. Zen temporarily suppresses sidebars without changing preferences. The event loop retains its existing browser/editor input ownership; Preview and Outline are read-only. Panel commands flow through the shared command dispatcher and do not mutate the note buffer or configuration file.
 
 ## Rendering and theme caches
 

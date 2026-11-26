@@ -1,9 +1,8 @@
 //! Render the main interface and modal pickers without changing note contents.
 
 use super::{App, PromptKind, breadcrumb_parts, display_component, fit_breadcrumb, tail_label};
-use crate::layout::split_panes;
 use crate::theme::Theme;
-use crate::{focus, markdown};
+use crate::{focus, markdown, outline};
 use edtui::{EditorMode, EditorTheme, EditorView, LineNumbers};
 use ratatui::{
     Frame,
@@ -156,6 +155,63 @@ fn picker_body(
     areas[1]
 }
 
+/// Read-only outline for the current buffer. Keyboard focus and jumps arrive in Phase 4.
+fn draw_outline(
+    frame: &mut Frame,
+    theme: Theme,
+    area: Rect,
+    source: &str,
+    row: usize,
+    is_markdown: bool,
+) {
+    let block = Block::bordered()
+        .title(" Outline ")
+        .padding(Padding::horizontal(1))
+        .border_style(Style::default().fg(theme.border))
+        .title_style(Style::default().fg(theme.muted));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    if !is_markdown {
+        frame.render_widget(
+            Paragraph::new("Markdown notes only")
+                .style(Style::default().fg(theme.muted))
+                .wrap(Wrap { trim: false }),
+            inner,
+        );
+        return;
+    }
+    let headings = outline::extract(source);
+    let active = outline::active_heading(&headings, row);
+    let items: Vec<ListItem<'_>> = headings
+        .iter()
+        .map(|h| {
+            let title = if h.title.is_empty() {
+                "(untitled)".to_owned()
+            } else {
+                display_component(h.title)
+            };
+            ListItem::new(format!("{}{}", "  ".repeat(h.level - 1), title))
+                .style(Style::default().fg(theme.foreground))
+        })
+        .collect();
+    if headings.is_empty() {
+        frame.render_widget(
+            Paragraph::new("No headings").style(Style::default().fg(theme.muted)),
+            inner,
+        );
+    } else {
+        let mut state = ListState::default();
+        state.select(active);
+        frame.render_stateful_widget(
+            List::new(items)
+                .highlight_symbol("▏ ")
+                .highlight_style(Style::default().fg(theme.selected_fg).bg(theme.selected_bg)),
+            inner,
+            &mut state,
+        );
+    }
+}
+
 impl App {
     pub(super) fn draw(&mut self, frame: &mut Frame) {
         let show_editor_cursor = !self.has_active_popup() && self.note_search.input.is_none();
@@ -177,14 +233,15 @@ impl App {
             Constraint::Length(footer_height),
         ])
         .split(frame.area());
-        let panes = if zen {
-            [
-                Rect::default(),
-                focus::centered(areas[1], self.writing.zen.width.clamp(20, 240)),
-            ]
-        } else {
-            split_panes(areas[1], self.browser_width_percent)
-        };
+        let mut panes = self.panels.areas(
+            areas[1],
+            self.browser_width_percent,
+            self.editor.is_some(),
+            zen,
+        );
+        if zen {
+            panes[1] = focus::centered(areas[1], self.writing.zen.width.clamp(20, 240));
+        }
 
         let browser_active = self.editor.is_none() && !self.has_active_popup();
         let editor_active = self.editor.is_some() && !self.has_active_popup();
@@ -244,50 +301,50 @@ impl App {
             frame.render_widget(Paragraph::new(Line::from(header)), areas[0]);
         }
 
-        let items: Vec<ListItem> = self
-            .entries
-            .iter()
-            .map(|entry| {
-                let prefix = if entry.is_dir { "▸ " } else { "  " };
-                let color = if entry.is_dir {
-                    theme.directory
-                } else {
-                    theme.foreground
-                };
-                ListItem::new(Line::from(vec![
-                    Span::styled(prefix.to_owned(), Style::default().fg(color)),
-                    Span::styled(entry.name.clone(), Style::default().fg(color)),
-                ]))
-            })
-            .collect();
-        let list = List::new(items)
-            .block(
-                Block::bordered()
-                    .title(" Files ")
-                    .border_type(if browser_active {
-                        BorderType::Thick
+        if panes[0].width > 0 && panes[0].height > 0 {
+            let items: Vec<ListItem> = self
+                .entries
+                .iter()
+                .map(|entry| {
+                    let prefix = if entry.is_dir { "▸ " } else { "  " };
+                    let color = if entry.is_dir {
+                        theme.directory
                     } else {
-                        BorderType::Plain
-                    })
-                    .padding(Padding::horizontal(1))
-                    .border_style(Style::default().fg(if browser_active {
-                        theme.accent
-                    } else {
-                        theme.border
-                    }))
-                    .title_style(Style::default().fg(if browser_active {
-                        theme.accent
-                    } else {
-                        theme.muted
-                    })),
-            )
-            .highlight_style(Style::default().bg(theme.selected_bg).fg(theme.selected_fg))
-            .highlight_symbol("▏ ");
-        let mut state = ListState::default();
-        if !self.entries.is_empty() {
-            state.select(Some(self.selected));
-        }
-        if !zen {
+                        theme.foreground
+                    };
+                    ListItem::new(Line::from(vec![
+                        Span::styled(prefix.to_owned(), Style::default().fg(color)),
+                        Span::styled(entry.name.clone(), Style::default().fg(color)),
+                    ]))
+                })
+                .collect();
+            let list = List::new(items)
+                .block(
+                    Block::bordered()
+                        .title(" Files ")
+                        .border_type(if browser_active {
+                            BorderType::Thick
+                        } else {
+                            BorderType::Plain
+                        })
+                        .padding(Padding::horizontal(1))
+                        .border_style(Style::default().fg(if browser_active {
+                            theme.accent
+                        } else {
+                            theme.border
+                        }))
+                        .title_style(Style::default().fg(if browser_active {
+                            theme.accent
+                        } else {
+                            theme.muted
+                        })),
+                )
+                .highlight_style(Style::default().bg(theme.selected_bg).fg(theme.selected_fg))
+                .highlight_symbol("▏ ");
+            let mut state = ListState::default();
+            if !self.entries.is_empty() {
+                state.select(Some(self.selected));
+            }
             frame.render_stateful_widget(list, panes[0], &mut state);
         }
 
@@ -300,6 +357,16 @@ impl App {
                 .unwrap_or("note")
                 .to_owned();
             let source = note.state.lines.to_string();
+            if panes[2].width > 0 && panes[2].height > 0 {
+                draw_outline(
+                    frame,
+                    theme,
+                    panes[2],
+                    &source,
+                    note.state.cursor.row,
+                    markdown::is_markdown(&note.path),
+                );
+            }
             let modified = note.is_dirty_text(&source);
             let dirty = if modified { " [+]" } else { "" };
             let title = format!(" {filename}{dirty} ");
@@ -407,7 +474,7 @@ impl App {
                 note.state.mode.name().to_uppercase()
             };
             let help = if self.writing.leader {
-                "Space: z Zen | f Focus | t Typewriter | 1/2/3 Focus level | n Numbers | s Status"
+                "Space: z Zen | f Focus | t Typewriter | e Files | p Preview | o Outline | 1/2/3 Focus level | n Numbers | s Status"
                     .to_owned()
             } else if let Some(input) = &self.note_search.input {
                 format!(
@@ -420,7 +487,7 @@ impl App {
             } else if let Some(command) = &self.command {
                 format!(":{command}▏   Enter run | Esc cancel")
             } else if mode == "NORMAL" {
-                "i Insert | v Visual | / Find | :w Save | :q Close | Ctrl+F Search | Alt+T Tags"
+                "i Insert | v Visual | / Find | :w Save | :q Close | F2 Files | F4 Outline | Ctrl+F Search | Alt+T Tags"
                     .to_owned()
             } else if mode == "INSERT" {
                 "Esc Normal | Ctrl+S Save | Ctrl+P Cite | Ctrl+E Snippet | Ctrl+F Search".to_owned()
@@ -435,29 +502,31 @@ impl App {
             );
             (mode, filename, help, stats, Some(modified))
         } else {
-            let preview = if self
-                .entries
-                .get(self.selected)
-                .is_some_and(|e| !e.is_dir && markdown::is_markdown(&e.path))
-            {
-                Paragraph::new(markdown::preview(
-                    &self.preview,
-                    theme,
-                    &self.markdown_settings,
-                ))
-            } else {
-                Paragraph::new(self.preview.as_str())
+            if panes[1].width > 0 && panes[1].height > 0 {
+                let preview = if self
+                    .entries
+                    .get(self.selected)
+                    .is_some_and(|e| !e.is_dir && markdown::is_markdown(&e.path))
+                {
+                    Paragraph::new(markdown::preview(
+                        &self.preview,
+                        theme,
+                        &self.markdown_settings,
+                    ))
+                } else {
+                    Paragraph::new(self.preview.as_str())
+                }
+                .block(
+                    Block::bordered()
+                        .title(" Preview ")
+                        .padding(Padding::horizontal(1))
+                        .border_style(Style::default().fg(theme.border))
+                        .title_style(Style::default().fg(theme.muted)),
+                )
+                .style(theme.base_style())
+                .wrap(Wrap { trim: false });
+                frame.render_widget(preview, panes[1]);
             }
-            .block(
-                Block::bordered()
-                    .title(" Preview ")
-                    .padding(Padding::horizontal(1))
-                    .border_style(Style::default().fg(theme.border))
-                    .title_style(Style::default().fg(theme.muted)),
-            )
-            .style(theme.base_style())
-            .wrap(Wrap { trim: false });
-            frame.render_widget(preview, panes[1]);
             (
                 "BROWSER".to_owned(),
                 {
@@ -471,7 +540,7 @@ impl App {
                         display_component(&relative.to_string_lossy())
                     }
                 },
-                "Enter Open | n New note | N New folder | / Find | Ctrl+F Search | q Quit"
+                "Enter Open | n New note | N New folder | / Find | Ctrl+F Search | F3 Preview | q Quit"
                     .to_owned(),
                 String::new(),
                 None,

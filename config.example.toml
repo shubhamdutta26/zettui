@@ -24,7 +24,11 @@ light_theme = "light"  # Fixed palette for light Auto/system fallback.
 dark_theme = "dark"    # Fixed palette for dark Auto/system fallback.
 
 [layout]
-browser_width_percent = 35 # Allowed: 20–70; remaining space is the note pane.
+browser_width_percent = 35 # Allowed: 20–70; preferred Files width.
+outline_width_percent = 25 # Allowed: 15–50; preferred Outline width.
+show_files = true # While editing; Files is always available in browser mode.
+show_preview = true # In browser mode only.
+show_outline = false # Read-only outline of the open note; hidden in Zen.
 
 [editor]
 line_numbers = true

@@ -344,6 +344,7 @@ struct App {
     auto_themes: AutoThemes,
     theme_overrides: ColorOverrides,
     browser_width_percent: u16,
+    panels: crate::layout::Panels,
     writing: focus::Writing,
     markdown_settings: markdown::MarkdownSettings,
     highlight_cache: markdown::HighlightCache,
@@ -405,6 +406,7 @@ impl App {
             auto_themes,
             theme_overrides,
             browser_width_percent: DEFAULT_BROWSER_PERCENT,
+            panels: crate::layout::Panels::default(),
             writing: focus::Writing::default(),
             markdown_settings: markdown::MarkdownSettings::default(),
             highlight_cache: markdown::HighlightCache::default(),
@@ -439,6 +441,7 @@ pub(crate) fn start() -> io::Result<()> {
         fallback,
         auto_themes,
         browser_width,
+        panels,
         snippets_dir,
         writing,
         markdown_settings,
@@ -450,6 +453,7 @@ pub(crate) fn start() -> io::Result<()> {
         .resolve_theme(choice)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e.to_string()))?;
     app.browser_width_percent = browser_width;
+    app.panels = panels;
     app.snippets_dir = snippets_dir;
     app.writing = writing;
     app.markdown_settings = markdown_settings;
@@ -861,5 +865,78 @@ mod command_dispatch_tests {
         app.handle_prompt_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
         assert!(app.prompt.is_none());
         assert!(path.exists());
+    }
+}
+
+#[cfg(test)]
+mod panel_management_tests {
+    use super::*;
+    use crate::commands::{Command, KeyScope};
+    use ratatui::layout::Rect;
+
+    #[test]
+    fn panel_commands_keep_dirty_buffer_and_restore_browser() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Note.md");
+        fs::write(&path, "# Original\n").unwrap();
+        let mut app = App::new(
+            dir.path().to_path_buf(),
+            None,
+            ThemeChoice::Dark,
+            ColorOverrides::default(),
+            Appearance::Dark,
+            AutoThemes::default(),
+        )
+        .unwrap();
+        app.select_path(&path);
+        app.enter().unwrap();
+        app.handle_editor_key(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE));
+        app.handle_editor_key(KeyEvent::new(KeyCode::Char('X'), KeyModifiers::NONE));
+        let note = app.editor.as_ref().unwrap();
+        assert!(note.is_dirty());
+        let text = note.state.lines.to_string();
+        let cursor = note.state.cursor;
+        let mode = note.state.mode.name().to_owned();
+        for key in [KeyCode::F(2), KeyCode::F(3), KeyCode::F(4)] {
+            let command =
+                Command::from_key(KeyScope::Global, KeyEvent::new(key, KeyModifiers::NONE))
+                    .unwrap();
+            assert!(!app.execute_command(command).unwrap());
+        }
+        assert!(!app.panels.show_files);
+        assert!(!app.panels.show_preview);
+        assert!(app.panels.show_outline);
+        let note = app.editor.as_ref().unwrap();
+        assert_eq!(note.state.lines.to_string(), text);
+        assert_eq!(note.state.cursor, cursor);
+        assert_eq!(note.state.mode.name(), mode.as_str());
+        assert_eq!(fs::read_to_string(&path).unwrap(), "# Original\n");
+        app.close_editor(false);
+        assert!(app.editor.is_some());
+        app.close_editor(true);
+        assert!(app.editor.is_none());
+        assert_eq!(
+            app.panels
+                .areas(
+                    Rect::new(0, 0, 100, 20),
+                    app.browser_width_percent,
+                    false,
+                    false
+                )
+                .map(|r| r.width),
+            [100, 0, 0]
+        );
+        app.enter().unwrap();
+        assert_eq!(
+            app.panels
+                .areas(
+                    Rect::new(0, 0, 100, 20),
+                    app.browser_width_percent,
+                    true,
+                    false
+                )
+                .map(|r| r.width),
+            [0, 75, 25]
+        );
     }
 }

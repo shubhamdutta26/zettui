@@ -22,6 +22,10 @@ Markdown notes use theme-aware source highlighting in the browser preview and ed
 
 The active Files panel or opened-note editor uses heavy Unicode border characters; the read-only Preview remains inactive. Enter still opens notes, and `l` still only enters directories. Search matches are overlaid on syntax highlighting. No changes to the stored Markdown are made by highlighting.
 
+## Panel layout
+
+Use F2 to hide/show Files while editing, F3 to hide/show Preview in browser mode, and F4 to show/hide the Outline of the open note. The outline shows current unsaved Markdown headings and follows the cursor, but is read-only for now. Alt+Up/Down adjusts its preferred width. The editor stays visible; closing a note restores Files so browsing remains possible. Zen and narrow terminals temporarily hide sidebars without forgetting their preferences. See [keyboard shortcuts](KEYBINDINGS.md) for Normal-mode alternatives.
+
 ## Notes and snippets
 
 - `[[Note Name]]` links, outgoing links, and backlinks work across your notes; duplicate filenames may require folder-qualified links.

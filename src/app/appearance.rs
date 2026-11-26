@@ -1,6 +1,7 @@
 //! Resolve and refresh the active palette, and resize the browser.
 
 use super::App;
+use crate::commands::Command;
 use crate::layout::resize_browser_percent;
 use crate::theme::{Theme, ThemeChoice};
 use crate::{system_theme, theme};
@@ -59,9 +60,48 @@ impl App {
     pub(super) fn resize_browser(&mut self, grow: bool) {
         self.browser_width_percent = resize_browser_percent(self.browser_width_percent, grow);
         self.message = format!(
-            "Files: {}% | Notes: {}% (session only; set layout.browser_width_percent in config.toml)",
+            "Files preferred width: {}% (session only)",
             self.browser_width_percent,
-            100 - self.browser_width_percent,
         );
+    }
+
+    pub(super) fn resize_outline(&mut self, grow: bool) {
+        self.panels.resize_outline(grow);
+        self.message = format!(
+            "Outline preferred width: {}% (session only)",
+            self.panels.outline_width_percent
+        );
+    }
+
+    /// Toggle preferences without changing input ownership or the open buffer.
+    pub(super) fn toggle_panel(&mut self, command: Command) {
+        self.writing.leader = false;
+        self.pending_open_bracket = false;
+        let (name, shown) = match command {
+            Command::ToggleFiles => {
+                self.panels.show_files = !self.panels.show_files;
+                ("Files", self.panels.show_files)
+            }
+            Command::TogglePreview => {
+                self.panels.show_preview = !self.panels.show_preview;
+                ("Preview", self.panels.show_preview)
+            }
+            Command::ToggleOutline => {
+                self.panels.show_outline = !self.panels.show_outline;
+                ("Outline", self.panels.show_outline)
+            }
+            _ => return,
+        };
+        let state = if shown { "shown" } else { "hidden" };
+        let context = match command {
+            Command::ToggleFiles if self.editor.is_none() => {
+                " when editing (Files remains available in browser)"
+            }
+            Command::TogglePreview if self.editor.is_some() => " in browser mode",
+            Command::ToggleOutline if self.editor.is_none() => " when editing",
+            _ if self.editor.is_some() && self.writing.zen.enabled => " after leaving Zen",
+            _ => "",
+        };
+        self.message = format!("{name}: {state}{context} (session only)");
     }
 }

@@ -16,6 +16,7 @@ pub(crate) struct StartupOptions {
     pub(crate) fallback: Appearance,
     pub(crate) auto_themes: AutoThemes,
     pub(crate) browser_width: u16,
+    pub(crate) panels: crate::layout::Panels,
     pub(crate) snippets_dir: PathBuf,
     pub(crate) writing: focus::Writing,
     pub(crate) markdown_settings: markdown::MarkdownSettings,
@@ -34,6 +35,7 @@ pub(crate) fn arguments() -> io::Result<StartupOptions> {
     }
     let config = Config::load()?;
     let browser_width = config.browser_width()?;
+    let panels = config.panels()?;
     let auto_themes = config.auto_themes()?;
     let snippets_dir = config
         .workspace
@@ -105,6 +107,7 @@ pub(crate) fn arguments() -> io::Result<StartupOptions> {
         fallback: system,
         auto_themes,
         browser_width,
+        panels,
         snippets_dir,
         writing: focus::Writing {
             zen: config.zen,

@@ -9,6 +9,11 @@ pub(crate) enum Command {
     SearchTags,
     NarrowBrowser,
     WidenBrowser,
+    NarrowOutline,
+    WidenOutline,
+    ToggleFiles,
+    TogglePreview,
+    ToggleOutline,
     CycleTheme,
     Quit,
     OutgoingLinks,
@@ -52,6 +57,11 @@ impl Command {
         let alt = key.modifiers.contains(KeyModifiers::ALT);
         match scope {
             KeyScope::Global => match key.code {
+                F(2) if key.modifiers.is_empty() => Some(ToggleFiles),
+                F(3) if key.modifiers.is_empty() => Some(TogglePreview),
+                F(4) if key.modifiers.is_empty() => Some(ToggleOutline),
+                Up if key.modifiers == KeyModifiers::ALT => Some(WidenOutline),
+                Down if key.modifiers == KeyModifiers::ALT => Some(NarrowOutline),
                 Char('f') if ctrl => Some(SearchText),
                 Char('t') if alt => Some(SearchTags),
                 Char('h') | Left if key.modifiers == KeyModifiers::ALT => Some(NarrowBrowser),
@@ -89,6 +99,9 @@ impl Command {
                 _ => None,
             },
             KeyScope::Leader if key.modifiers.is_empty() => match key.code {
+                Char('e') => Some(ToggleFiles),
+                Char('p') => Some(TogglePreview),
+                Char('o') => Some(ToggleOutline),
                 Char('z') => Some(Writing("zen")),
                 Char('f') => Some(Writing("focus")),
                 Char('t') => Some(Writing("typewriter")),
@@ -111,6 +124,9 @@ impl Command {
             "q" => Some(Close),
             "q!" => Some(DiscardAndClose),
             "wq" => Some(SaveAndClose),
+            "toggle files" => Some(ToggleFiles),
+            "toggle preview" => Some(TogglePreview),
+            "toggle outline" => Some(ToggleOutline),
             "zen" => Some(Writing("zen")),
             "focus" => Some(Writing("focus")),
             "focus off" => Some(Writing("focus off")),
@@ -184,5 +200,42 @@ mod tests {
         assert_eq!(Command::from_ex("q"), Some(Command::Close));
         assert_eq!(Command::from_ex("q!"), Some(Command::DiscardAndClose));
         assert_eq!(Command::from_ex("set textwidth=100"), None);
+    }
+
+    #[test]
+    fn panel_shortcuts_share_command_ids() {
+        for (function, leader, ex) in [
+            (2, 'e', "toggle files"),
+            (3, 'p', "toggle preview"),
+            (4, 'o', "toggle outline"),
+        ] {
+            let global = Command::from_key(
+                KeyScope::Global,
+                KeyEvent::new(KeyCode::F(function), KeyModifiers::NONE),
+            );
+            assert!(global.is_some());
+            assert_eq!(global, Command::from_ex(ex));
+            assert_eq!(
+                global,
+                Command::from_key(
+                    KeyScope::Leader,
+                    KeyEvent::new(KeyCode::Char(leader), KeyModifiers::NONE)
+                )
+            );
+        }
+        assert_eq!(
+            Command::from_key(
+                KeyScope::Global,
+                KeyEvent::new(KeyCode::Up, KeyModifiers::ALT)
+            ),
+            Some(Command::WidenOutline)
+        );
+        assert_eq!(
+            Command::from_key(
+                KeyScope::Global,
+                KeyEvent::new(KeyCode::Down, KeyModifiers::ALT)
+            ),
+            Some(Command::NarrowOutline)
+        );
     }
 }
