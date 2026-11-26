@@ -167,7 +167,10 @@ impl VaultIndex {
                     let matching: Vec<&str> = file
                         .tags
                         .iter()
-                        .filter(|tag| words.iter().all(|word| tag.to_lowercase().contains(*word)))
+                        .filter(|tag| {
+                            let lower = tag.to_lowercase();
+                            words.iter().all(|word| lower.contains(*word))
+                        })
                         .map(String::as_str)
                         .collect();
                     if !matching.is_empty() {
@@ -194,10 +197,9 @@ fn is_text_note(path: &Path) -> bool {
 }
 
 fn truncate_chars(value: &str, max: usize) -> String {
-    if value.chars().count() <= max {
-        value.to_owned()
-    } else {
-        format!("{}…", value.chars().take(max).collect::<String>())
+    match value.char_indices().nth(max) {
+        Some((end, _)) => format!("{}…", &value[..end]),
+        None => value.to_owned(),
     }
 }
 
@@ -300,6 +302,29 @@ mod tests {
         assert_eq!(index.search(SearchMode::Tags, "#human", 100).len(), 1);
         assert_eq!(index.search(SearchMode::Tags, "affinity", 100).len(), 0);
         assert_eq!(fs::read_to_string(&note).unwrap(), original);
+    }
+
+    #[test]
+    fn tag_search_preserves_case_and_matches_all_terms_per_tag() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(
+            dir.path().join("note.md"),
+            "---\ntags: [Protein, 'VHH Éngineering', 'VHH Binding']\n---\n",
+        )
+        .unwrap();
+        let index = VaultIndex::load(dir.path()).unwrap();
+        let hits = index.search(SearchMode::Tags, "vhh ÉNG", 10);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].excerpt, "tags: VHH Éngineering");
+        assert!(index.search(SearchMode::Tags, "protein vhh", 10).is_empty());
+    }
+
+    #[test]
+    fn excerpt_truncation_preserves_unicode_boundaries() {
+        assert_eq!(truncate_chars("β café", 6), "β café");
+        assert_eq!(truncate_chars("β café", 5), "β caf…");
+        assert_eq!(truncate_chars("β", 0), "…");
+        assert_eq!(truncate_chars("", 0), "");
     }
 
     #[test]

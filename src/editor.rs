@@ -61,7 +61,8 @@ impl OpenNote {
 
     /// Save only if the content has changed AND no other program changed the file.
     pub fn save(&mut self) -> io::Result<bool> {
-        if !self.is_dirty() {
+        let text = self.state.lines.to_string();
+        if !self.is_dirty_text(&text) {
             return Ok(false);
         }
 
@@ -78,7 +79,6 @@ impl OpenNote {
             ));
         }
 
-        let text = self.state.lines.to_string();
         let mut disk_text = if self.crlf {
             text.replace('\n', "\r\n")
         } else {
@@ -111,7 +111,7 @@ fn normalize(disk: &str) -> (String, bool, bool) {
         None => (false, disk),
     };
     let crlf = text.contains("\r\n");
-    (text.replace("\r\n", "\n").to_owned(), crlf, bom)
+    (text.replace("\r\n", "\n"), crlf, bom)
 }
 
 /// Write to a temporary sibling first, then rename it over the original.
@@ -150,6 +150,33 @@ mod tests {
         assert_eq!(editable, "---\nid: abc\n---\n");
         assert!(crlf);
         assert!(bom);
+    }
+
+    #[test]
+    fn unchanged_save_leaves_external_changes_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("note.md");
+        fs::write(&path, "Original\n").unwrap();
+        let mut note = OpenNote::load(path.clone()).unwrap();
+        fs::write(&path, "External\n").unwrap();
+        assert!(!note.save().unwrap());
+        assert_eq!(fs::read_to_string(path).unwrap(), "External\n");
+    }
+
+    #[test]
+    fn edited_save_preserves_bom_crlf_and_final_newline() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("note.md");
+        fs::write(&path, "\u{feff}Original\r\n").unwrap();
+        let mut note = OpenNote::load(path.clone()).unwrap();
+        note.state.lines = lines_from_text("β café\nSecond line\n");
+        assert!(note.save().unwrap());
+        assert!(!note.is_dirty());
+        assert!(!note.save().unwrap());
+        assert_eq!(
+            fs::read_to_string(path).unwrap(),
+            "\u{feff}β café\r\nSecond line\r\n"
+        );
     }
 
     #[test]

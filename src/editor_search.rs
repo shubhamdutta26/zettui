@@ -113,7 +113,6 @@ impl NoteSearch {
     ) {
         let hits = matches(&state.lines.to_string(), query);
         self.count = hits.len();
-        self.painted = hits.clone();
         self.active = 0;
         let chosen = choose(&hits, &origin, direction);
         state.cursor = origin;
@@ -122,7 +121,8 @@ impl NoteSearch {
             self.active = i + 1;
         }
         state.set_highlights(
-            hits.into_iter()
+            hits.iter()
+                .copied()
                 .enumerate()
                 .map(|(i, (start, end))| {
                     Highlight::new(
@@ -137,6 +137,7 @@ impl NoteSearch {
                 })
                 .collect(),
         );
+        self.painted = hits;
     }
 
     pub fn preview(&mut self, state: &mut EditorState, style: Style, current_style: Style) {
@@ -185,6 +186,27 @@ mod tests {
             choose(&hits, &Index2::new(0, 0), Direction::Backward),
             Some(2)
         );
+    }
+
+    #[test]
+    fn jump_retains_all_highlight_ranges() {
+        let mut state = EditorState::new(edtui::Lines::new(vec![
+            "x x".chars().collect(),
+            "x".chars().collect(),
+        ]));
+        let mut search = NoteSearch::default();
+        search.jump(
+            &mut state,
+            "x",
+            Index2::new(0, 0),
+            Direction::Forward,
+            Style::default(),
+            Style::default(),
+        );
+        assert_eq!(search.painted, matches("x x\nx", "x"));
+        assert_eq!(search.count, 3);
+        assert_eq!(search.active, 2);
+        assert_eq!(state.cursor, Index2::new(0, 2));
     }
 
     #[test]

@@ -24,16 +24,13 @@ impl Reference {
         )
     }
 
-    fn matches(&self, query: &str) -> bool {
+    fn matches(&self, words: &[&str]) -> bool {
         let haystack = format!(
             "{} {} {} {}",
             self.key, self.title, self.all_authors, self.year
         )
         .to_lowercase();
-        query
-            .to_lowercase()
-            .split_whitespace()
-            .all(|word| haystack.contains(word))
+        words.iter().all(|word| haystack.contains(*word))
     }
 }
 
@@ -125,10 +122,12 @@ impl Bibliography {
     }
 
     pub fn search(&self, query: &str, max_results: usize) -> Vec<usize> {
+        let query = query.to_lowercase();
+        let words: Vec<&str> = query.split_whitespace().collect();
         self.references
             .iter()
             .enumerate()
-            .filter(|(_, item)| item.matches(query))
+            .filter(|(_, item)| item.matches(&words))
             .take(max_results)
             .map(|(i, _)| i)
             .collect()
@@ -269,6 +268,9 @@ mod tests {
     fn search_is_case_insensitive_and_limited() {
         let bibliography = Bibliography::parse(CSL).unwrap();
         assert_eq!(bibliography.search("YEAST", 10), vec![1]);
+        assert_eq!(bibliography.search("  JAIN  2017 ", 10), vec![0]);
+        assert!(bibliography.search("YEAST JAIN", 10).is_empty());
+        assert!(bibliography.search("YEAST", 0).is_empty());
         assert_eq!(bibliography.search("", 1).len(), 1);
         assert!(bibliography.search("nonexistent", 10).is_empty());
     }

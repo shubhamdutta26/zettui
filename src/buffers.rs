@@ -72,10 +72,10 @@ impl Buffers {
         if index >= self.notes.len() || self.active == Some(index) {
             return false;
         }
-        let path = self.notes[index].path.clone();
-        if self.last.as_ref() != Some(&path) {
+        let path = &self.notes[index].path;
+        if self.last.as_ref() != Some(path) {
             self.previous = self.last.take();
-            self.last = Some(path);
+            self.last = Some(path.clone());
         }
         self.hide();
         self.active = Some(index);
@@ -158,7 +158,7 @@ impl Buffers {
         let Some(index) = self.active else {
             return true;
         };
-        if self.notes[index].is_dirty() && !discard_changes {
+        if !discard_changes && self.notes[index].is_dirty() {
             return false;
         }
         let removed = self.notes.remove(index);
