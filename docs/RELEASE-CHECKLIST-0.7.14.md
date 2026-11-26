@@ -1,6 +1,7 @@
 # Zettui v0.7.14 release validation
 
-Run on the current maintenance/development branch before the release version bump. The checks
+Historical v0.7.14 validation procedures, retained for reuse. For the current
+release gates see [v0.7.15 validation](RELEASE-CHECKLIST-0.7.15.md). The checks
 below are instructions, not a record of completed tests. In particular, the
 maintainer has **not tested statistics exchange on multiple physical computers**.
 Single-host simulated device tests do not establish physical-device compatibility.

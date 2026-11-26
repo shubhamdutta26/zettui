@@ -1,11 +1,13 @@
 # Changelog
 
-## Unreleased — Codebase Audit and Maintenance
+## 0.7.15 — Codebase Maintenance and Stability
 
 ### Added
 
-- Standalone `--check-config` command.
-- Documented CLI, keyboard and Ex command references.
+- Read-only `--check-config` command.
+- Dedicated CLI, keyboard and Ex command references.
+- Regression tests for editing, search, keyboard routing, configuration and statistics CLI failures.
+- Pre-tag Linux packaging and extracted-binary verification in CI.
 
 ### Improved
 
@@ -18,9 +20,10 @@
 
 ### Validation and compatibility
 
-- No version bump or release tag for the maintenance changes.
+- Existing dependencies, configuration defaults and statistics data format retained.
+- Maintainer reports successful local manual regression testing before the version bump, except COSMIC and physical multi-computer statistics exchange, which remain manually unverified.
 - Some inherited Vim multi-key sequences conflict with application-reserved keys. See [Vim commands](docs/VIM-COMMANDS.md).
-- See [release validation](docs/RELEASE-CHECKLIST-0.7.14.md) for pending checks; test definitions are not proof of successful execution.
+- See the [v0.7.15 release checklist](docs/RELEASE-CHECKLIST-0.7.15.md) for pending release-candidate checks.
 
 ## 0.7.14 — Writing Analytics & Goals
 

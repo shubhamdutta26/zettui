@@ -28,14 +28,9 @@ Versions identify development milestones; not all have a separate published rele
 | 0.7.12 | Intelligent Navigation: independent panels, interactive document outline, fuzzy heading search and global command palette |
 | 0.7.13 |        Buffers and Sessions: multiple open notes, theme-aware tabs, fuzzy buffer switching, independent editor state, workspace restoration and hidden-folder visibility       |
 | 0.7.14 | Writing Analytics & Goals: daily activity tracking, goals, dashboard, monthly calendar, yearly heatmap, manual multi-device snapshot exchange and Zettlr statistics migration (physical multi-computer validation pending) |
+| 0.7.15 | Codebase Maintenance and Stability: allocation cleanup, module refactoring, keyboard routing, CLI/configuration validation, documentation and release checks |
 
-## In development
-
-| Milestone | Features |
-| --- | --- |
-| Codebase Audit and Maintenance | Codebase refactoring, performance optimization, modular architecture, input handling improvements, CLI validation, and documentation synchronization |
-
-The release version for these maintenance changes has not yet been assigned. Final integration testing is pending.
+Release validation for v0.7.15 is tracked in the [release checklist](docs/RELEASE-CHECKLIST-0.7.15.md). COSMIC and physical multi-computer statistics exchange remain manually unverified.
 
 ## Planned
 

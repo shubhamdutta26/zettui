@@ -13,7 +13,7 @@ RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --locked
 git diff --check
 ```
 
-`Cargo.lock` is committed; `target/` and `dist/` are generated and ignored. `cargo clean` removes build artifacts, not source. Test interactive changes in a disposable vault, including unsaved changes, search, Unicode, themes and terminal resizing. Rust 1.88 is declared in the manifest; the current CI uses stable Rust and the exact minimum remains to be verified against the lockfile. CI also tests static Linux packages and their CLI on pull requests, main and manual runs; see the [release checklist](RELEASE-CHECKLIST-0.7.14.md).
+`Cargo.lock` is committed; `target/` and `dist/` are generated and ignored. `cargo clean` removes build artifacts, not source. Test interactive changes in a disposable vault, including unsaved changes, search, Unicode, themes and terminal resizing. Rust 1.88 is declared in the manifest; the current CI uses stable Rust and the exact minimum remains to be verified against the lockfile. CI also tests static Linux packages and their CLI on pull requests, main and manual runs; see the [release checklist](RELEASE-CHECKLIST-0.7.15.md).
 
 For documentation changes, compare CLI flags against `src/cli.rs` and
 `src/statistics_cli.rs`, Ex commands and key scopes against `src/commands.rs`,
@@ -23,4 +23,4 @@ when behavior changes. Record actual test results separately from planned checks
 
 Keep comments focused on invariants, edge cases and design decisions. Historical lessons are retained as historical records, not current setup instructions.
 
-For the Intelligent Navigation integration and terminal smoke tests, see [Navigation regression checklist](NAVIGATION-TESTS.md). Use it for navigation regressions in subsequent releases as well. See also the [v0.7.13](RELEASE-CHECKLIST-0.7.13.md) and [v0.7.14 development](RELEASE-CHECKLIST-0.7.14.md) checklists. Multi-computer statistics exchange remains manually unverified on separate physical computers.
+For the Intelligent Navigation integration and terminal smoke tests, see [Navigation regression checklist](NAVIGATION-TESTS.md). Use it for navigation regressions in subsequent releases as well. See also the [v0.7.13](RELEASE-CHECKLIST-0.7.13.md) and [v0.7.14](RELEASE-CHECKLIST-0.7.14.md) checklists for historical and reusable test procedures. Multi-computer statistics exchange remains manually unverified on separate physical computers.

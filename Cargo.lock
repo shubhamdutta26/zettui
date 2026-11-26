@@ -2619,7 +2619,7 @@ dependencies = [
 
 [[package]]
 name = "zettui"
-version = "0.7.14"
+version = "0.7.15"
 dependencies = [
  "chrono",
  "crossterm",

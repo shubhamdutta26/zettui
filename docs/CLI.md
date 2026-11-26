@@ -1,7 +1,6 @@
 # Command-line reference
 
-Commands below reflect `src/cli.rs` and `src/statistics_cli.rs` in the v0.7.13
-source with v0.7.14 writing analytics development. The displayed binary version
+Commands below reflect `src/cli.rs` and `src/statistics_cli.rs` in v0.7.15. The displayed binary version
 is the version from `Cargo.toml`, not a separate feature version.
 
 ## Start Zettui
@@ -55,7 +54,7 @@ zettui "$HOME/Documents/Notes" --theme system
 zettui "$HOME/Documents/Notes" --bibliography "$HOME/Zotero/references.json"
 ```
 
-## Writing statistics (v0.7.14 development)
+## Writing statistics (since v0.7.14)
 
 These standalone commands must be the first argument and do not open the TUI
 or load the note configuration. Extra arguments are rejected. For a relative

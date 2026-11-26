@@ -4,9 +4,11 @@ A local-first, Vim-style terminal notes manager written in Rust. Browse and edit
 
 ## Installation
 
-The manifest currently reports **0.7.13**; this development source also includes
-the planned 0.7.14 writing analytics and maintenance changes. A published release
-may not yet contain these features.
+Zettui **v0.7.15 — Codebase Maintenance and Stability** builds on the writing
+analytics introduced in v0.7.14, with internal cleanup, CLI validation,
+documentation and release checks. See the [changelog](CHANGELOG.md).
+COSMIC compatibility for this version and physical multi-computer statistics
+exchange remain manually unverified.
 
 Download Linux releases from [GitHub Releases](https://github.com/shubhamdutta26/zettui/releases) (portable x86-64 archive, `.deb` for Debian/Ubuntu, `.rpm` for Fedora, or `PKGBUILD` for Arch/Omarchy), or build from source with a compatible Rust toolchain:
 
@@ -69,7 +71,7 @@ Zettui v0.7.12 adds keyboard-driven navigation without changing the plain-text s
 
 The outline and heading search use live, unsaved Markdown. Collapse outline branches with `h`/`l`, select with `j`/`k`, and jump with Enter. The outline is hidden by default. The palette reuses existing commands and safety checks; `Ctrl+P` remains Zotero. See the [user guide](docs/USER-GUIDE.md), [keybindings](docs/KEYBINDINGS.md) and [configuration](docs/CONFIGURATION.md).
 
-## Writing Analytics (v0.7.14 development)
+## Writing Analytics (since v0.7.14)
 
 Open the writing dashboard with `F10`, the command palette or `:analytics` / `:stats`.
 View writing goals, streaks, activity totals and a monthly calendar or yearly
@@ -100,7 +102,7 @@ See [Writing analytics](docs/WRITING-ANALYTICS.md) for configuration and details
 
 ## Buffers and Sessions
 
-Zettui v0.7.13 keeps multiple notes open in memory, with independent editing state, theme-aware tabs and a fuzzy buffer switcher. Use `:hide` to return to the Files browser without closing a note, then Enter to open another note or `F5` to switch back to an existing buffer.
+Since v0.7.13, Zettui keeps multiple notes open in memory, with independent editing state, theme-aware tabs and a fuzzy buffer switcher. Use `:hide` to return to the Files browser without closing a note, then Enter to open another note or `F5` to switch back to an existing buffer.
 
 | Shortcut | Action |
 | --- | --- |

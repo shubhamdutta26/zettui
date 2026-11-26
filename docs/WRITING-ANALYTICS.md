@@ -1,4 +1,4 @@
-# Writing analytics (v0.7.14 development)
+# Writing analytics (introduced in v0.7.14)
 
 ## Quick reference
 
@@ -281,7 +281,7 @@ light and dark themes, at wide and narrow terminal sizes.
 
 ## Phase 5: multi-computer statistics exchange
 
-**Validation status (v0.7.14):** the maintainer has not yet tested this workflow
+**Validation status (v0.7.15):** the maintainer has not yet tested this workflow
 on multiple physical computers. Automated tests simulate independent installations
 using isolated directories on one host. This is not evidence of real-world
 interoperability; keep original backups and use the physical-device checklist
