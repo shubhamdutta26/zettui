@@ -27,6 +27,7 @@ Versions identify development milestones; not all have a separate published rele
 | 0.7.11 | Expanded Markdown, YAML, fenced-code and Quarto highlighting; syntax color overrides |
 | 0.7.12 | Intelligent Navigation: independent panels, interactive document outline, fuzzy heading search and global command palette |
 | 0.7.13 |        Buffers and Sessions: multiple open notes, theme-aware tabs, fuzzy buffer switching, independent editor state, workspace restoration and hidden-folder visibility       |
+| 0.7.14 | Writing Analytics & Goals: daily activity tracking, goals, dashboard, monthly calendar, yearly heatmap, manual multi-device snapshot exchange and Zettlr statistics migration (physical multi-computer validation pending) |
 
 ## Planned
 

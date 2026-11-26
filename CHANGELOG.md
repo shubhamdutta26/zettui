@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.7.14 — Writing Analytics & Goals
+
+### Added
+
+- Local-first daily word and character addition/deletion tracking, with automatic JSON persistence.
+- Daily, weekly, monthly, yearly and lifetime writing statistics, averages and streaks.
+- Configurable daily and weekly word-count goals (`[writing_goals]`).
+- Interactive analytics dashboard (`F10`, `:analytics`, `:stats`), monthly writing calendar and yearly contribution heatmap.
+- Theme-aware, responsive analytics panels, goal progress bars and weekly activity chart.
+- Multi-device statistics snapshot export and duplicate-safe import (`--stats-export FILE`, `--stats-import FILE`, `--stats-device-id`).
+- Historical Zettlr word and character count migration (`--stats-import-zettlr FILE SOURCE`).
+
+### Improved
+
+- Writing analytics documentation, CLI guidance and integration tests.
+- Statistics remain independent of note workspaces and retain device identities during snapshot exchange.
+
+### Compatibility and known limitations
+
+- No new dependencies; existing note files and configurations remain supported. Goals are disabled by default.
+- **Multi-computer statistics exchange has not been tested by the maintainer on multiple physical computers.** Integration tests simulate independent state directories; they do not establish real-world multi-computer compatibility. Keep backups and exchange exported snapshots rather than synchronizing the live statistics file.
+- Zettlr migration preserves word and character counts; historical deletions and Pomodoro data are not imported. Use a stable source identifier for each independent legacy history.
+- Snapshot exchange is manual; automatic cross-device synchronization is not included.
+
 ## 0.7.13 — Buffers
 
 ### Added
