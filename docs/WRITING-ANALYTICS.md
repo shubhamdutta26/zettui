@@ -42,11 +42,11 @@ Illustrative state (not written until the engine is called):
 }
 ```
 
-Future export/import will preserve device identities and merge cumulative counters
+Export/import preserves device identities and merges cumulative counters
 by source and date rather than adding the same snapshot twice. Do not use a shared
 or copied live statistics file as the state of multiple active installations:
-that would reuse one device identity. The separate exchange format and legacy
-Zettlr source handling are deferred to later phases.
+that would reuse one device identity. See Phase 5 below. Legacy Zettlr handling
+is deferred to Phase 6.
 
 ## Phase 1 verification
 
@@ -265,3 +265,70 @@ change.
 
 Run `cargo test --locked analytics_dashboard` and check the three views in both
 light and dark themes, at wide and narrow terminal sizes.
+
+## Phase 5: multi-computer statistics exchange
+
+Transfer complete version-1 JSON snapshots with standalone terminal commands.
+They use the same installation-wide XDG state as the editor and do not load
+notes, configuration, or the TUI. They work even if the editor's configuration
+is invalid. During development, prefix each flag with `cargo run --locked --`
+instead of `zettui`.
+
+1. Close Zettui on computer A to flush pending writing activity. Export to a
+   new file: `zettui --stats-export ~/Downloads/stats-A.json`.
+2. Transfer the exported JSON to computer B (USB, file sharing or a cloud
+   folder). Import with `zettui --stats-import ~/Downloads/stats-A.json`.
+3. Close Zettui on B, export its combined snapshot to a new filename such as
+   `stats-B.json`, transfer it to A and import there. Both now know both histories.
+   Repeat with a new export after subsequent writing sessions.
+4. Open the dashboard (`F10`) to see combined totals. If a dashboard was already
+   open during an import, press `r` to refresh it.
+
+`zettui --stats-device-id` prints (or initializes) the persistent local identity.
+Each installation must have its own ID. A new installation can import an old
+backup without taking its old identity. Never copy a live `statistics.json`
+into the state directories of multiple actively writing installations, or point
+multiple computers at a shared live state directory. Divergent counters for a
+shared ID cannot generally be distinguished from old snapshots; the importer
+rejects detectable non-monotonic conflicts, but cannot detect all cloned IDs.
+If two computers have already shared an ID, stop and keep both original files
+before attempting recovery; automated conflict repair is not supported.
+
+For each device and date, a newer snapshot supersedes an older one only when
+all four cumulative counters are greater than or equal to the earlier values.
+Distinct devices are summed for analytics. An identical or older snapshot
+is a no-op; importing a third computer's merged snapshot also does not count
+previously known history twice. A mixture of increases and decreases for the
+same device/day is rejected. The local identity is always retained. Dates
+remain the local dates originally recorded by each device; no timezone
+conversion is applied.
+
+Imports validate the entire input and resulting daily totals before committing
+under the existing local advisory lock. Invalid JSON, unsupported schemas,
+invalid dates or identifiers, overflows and detected conflicts leave existing
+state unchanged. The source file is never modified. Exports include all known
+devices, use an atomic no-clobber write, and require an existing destination
+directory. An export or explicit device-ID query initializes missing local state.
+Both files use the existing 32 MiB limit. No note contents or paths are included;
+the files do contain writing dates, counts and pseudonymous device IDs.
+
+This is manual snapshot exchange, not continuous sync. A CLI export includes
+only persisted activity: edits still buffered in another process may be missing.
+Always exit the editor cleanly before exporting. Importing while an editor is
+open is safe for persisted and subsequent local edits (the same lock is used),
+but refresh the dashboard afterward. No changes to the UI or goal settings.
+Zettlr JSON has a different schema and is not accepted until Phase 6.
+
+### Phase 5 verification
+
+```sh
+cargo test --locked --lib statistics::transfer::tests
+cargo test --locked --test statistics_transfer
+cargo test --locked
+cargo clippy --all-targets --locked -- -D warnings
+```
+
+The tests exercise same-day aggregation, idempotency, old and new snapshots,
+three-device round trips, conflict/overflow/corrupt input protection, source
+preservation, no-clobber exports, concurrent local writes, and the standalone
+CLI using isolated state directories.

@@ -1,7 +1,10 @@
 //! Local, versioned writing statistics. No note content or paths are stored.
 //!
 //! Each installation owns monotonically increasing daily counters. Keeping
-//! installations separate allows future snapshot imports to be idempotent.
+//! installations separate allows snapshot imports to be idempotent.
+
+mod transfer;
+pub use transfer::MergeSummary;
 
 use chrono::NaiveDate;
 use rustix::fs::{FlockOperation, flock};

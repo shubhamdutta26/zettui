@@ -21,9 +21,13 @@ mod outline;
 mod search;
 mod session;
 mod snippets;
+mod statistics_cli;
 mod system_theme;
 mod theme;
 
 fn main() -> std::io::Result<()> {
+    if statistics_cli::run()? {
+        return Ok(());
+    }
     app::start()
 }
