@@ -80,6 +80,10 @@ impl App {
                 self.handle_vault_search_key(key);
                 continue;
             }
+            if self.heading_search.is_some() {
+                self.handle_heading_search_key(key);
+                continue;
+            }
             if self.note_search.input.is_some() {
                 self.handle_note_search_key(key);
                 continue;

@@ -334,6 +334,7 @@ struct App {
     pending_open_bracket: bool,
     find_dialog: Option<FindDialog>,
     vault_search: Option<VaultSearchDialog>,
+    heading_search: Option<crate::heading_search::HeadingSearch>,
     bibliography_path: Option<PathBuf>,
     theme: Theme,
     theme_choice: ThemeChoice,
@@ -397,6 +398,7 @@ impl App {
             pending_open_bracket: false,
             find_dialog: None,
             vault_search: None,
+            heading_search: None,
             bibliography_path,
             theme,
             theme_choice,
@@ -430,6 +432,7 @@ impl App {
             || self.wiki_completion.is_some()
             || self.find_dialog.is_some()
             || self.vault_search.is_some()
+            || self.heading_search.is_some()
     }
 }
 

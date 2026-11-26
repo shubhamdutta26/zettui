@@ -452,9 +452,12 @@ impl App {
                 )
                 .selection_style(Style::default().fg(theme.selected_fg).bg(theme.selected_bg))
                 .cursor_style(
-                    if note.state.mode == EditorMode::Insert || self.outline_view.focused {
+                    if note.state.mode == EditorMode::Insert
+                        || self.outline_view.focused
+                        || self.heading_search.is_some()
+                    {
                         // Use the hardware bar in Insert mode; hide the painted
-                        // editor cursor while the Outline owns keyboard focus.
+                        // editor cursor while a navigation surface owns keyboard focus.
                         theme.base_style()
                     } else {
                         Style::default().fg(theme.background).bg(theme.accent)
@@ -522,9 +525,9 @@ impl App {
                 note.state.mode.name().to_uppercase()
             };
             let help = if self.outline_view.focused {
-                "j/k Move | h/l Collapse/Expand | Enter Jump | Esc/F6 Editor".to_owned()
+                "j/k Move | h/l Collapse/Expand | Enter Jump | F7 Search | Esc/F6 Editor".to_owned()
             } else if self.writing.leader {
-                "Space: z Zen | f Focus | t Typewriter | e Files | p Preview | o Outline | l Navigate outline | 1/2/3 Focus level | n Numbers | s Status"
+                "Space: z Zen | f Focus | t Typewriter | e Files | p Preview | o Outline | l Navigate outline | h Headings | 1/2/3 Focus level | n Numbers | s Status"
                     .to_owned()
             } else if let Some(input) = &self.note_search.input {
                 format!(
@@ -537,7 +540,7 @@ impl App {
             } else if let Some(command) = &self.command {
                 format!(":{command}▏   Enter run | Esc cancel")
             } else if mode == "NORMAL" {
-                "i Insert | v Visual | / Find | :w Save | :q Close | F2 Files | F4 Outline | F6 Navigate | Ctrl+F Search | Alt+T Tags"
+                "i Insert | v Visual | / Find | :w Save | :q Close | F2 Files | F4 Outline | F6 Navigate | F7 Headings | Ctrl+F Search | Alt+T Tags"
                     .to_owned()
             } else if mode == "INSERT" {
                 "Esc Normal | Ctrl+S Save | Ctrl+P Cite | Ctrl+E Snippet | Ctrl+F Search".to_owned()
@@ -817,6 +820,9 @@ impl App {
         }
         if self.vault_search.is_some() {
             self.draw_vault_search(frame);
+        }
+        if self.heading_search.is_some() {
+            self.draw_heading_search(frame);
         }
     }
 
@@ -1098,6 +1104,65 @@ impl App {
                 ("Shift+Tab", "Previous"),
                 ("Ctrl+U", "Clear"),
             ],
+        );
+    }
+
+    fn draw_heading_search(&self, frame: &mut Frame) {
+        let Some(search) = &self.heading_search else {
+            return;
+        };
+        let theme = self.theme;
+        let Some(inner) = popup_inner(frame, theme, "Search headings", 84, 23) else {
+            return;
+        };
+        let area = picker_body(
+            frame,
+            theme,
+            inner,
+            "Heading title",
+            &search.query,
+            &format!(
+                "{} matches · {} headings",
+                search.matches.len(),
+                search.items.len()
+            ),
+            &[
+                ("Esc", "Cancel"),
+                ("↑↓", "Select"),
+                ("Enter", "Jump"),
+                ("Ctrl+U", "Clear"),
+            ],
+        );
+        let items = search
+            .matches
+            .iter()
+            .map(|&index| {
+                let hit = &search.items[index];
+                let title = if hit.title.is_empty() {
+                    "(untitled)".to_owned()
+                } else {
+                    display_component(&hit.title)
+                };
+                ListItem::new(Line::from(vec![
+                    Span::styled(
+                        format!("H{} · Ln {}  ", hit.level, hit.row + 1),
+                        Style::default().fg(theme.muted),
+                    ),
+                    Span::raw(title),
+                ]))
+            })
+            .collect();
+        popup_list(
+            frame,
+            theme,
+            area,
+            items,
+            search.selected,
+            if search.items.is_empty() {
+                "No headings in this note."
+            } else {
+                "No matching headings."
+            },
         );
     }
 

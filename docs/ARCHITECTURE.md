@@ -10,6 +10,7 @@
 | `app/editing.rs` | Saving, editor command input and in-note search interception |
 | `app/commands.rs` | Shared application-command execution |
 | `app/events.rs` | Terminal lifecycle, cursor shape and input routing |
+| `app/navigation.rs` | Outline and heading-search input, focus and shared cursor jumps |
 | `app/ui.rs` | Main interface and popup rendering |
 
 These modules share `App` privately rather than passing large collections of state between unrelated public interfaces. Methods used by sibling modules have `pub(super)` visibility; implementation helpers remain private.
@@ -22,6 +23,7 @@ These modules share `App` privately rather than passing large collections of sta
 | `editor` | Open note state and safe saving |
 | `editor_search` | In-note search and match positions |
 | `markdown` | Source-preserving styling using character offsets |
+| `fuzzy`, `heading_search` | Dependency-free fuzzy ranking and current-document heading picker snapshot |
 | `outline` | Top-level ATX headings, parent indices, section boundaries and cursor lookup |
 | `focus`, `layout` | Writing modes, dimming and pane geometry |
 | `search`, `links` | Vault search and note relationships |
@@ -38,7 +40,7 @@ These modules share `App` privately rather than passing large collections of sta
 
 ## Heading navigation
 
-`outline::extract` works on an immutable source snapshot and returns headings in source order with zero-based logical rows, nearest shallower parent indices, exclusive section ends, and borrowed raw titles. Focus mode uses the same parser. Extraction does not depend on syntax highlighting or theme settings. The parser handles top-level H1–H6 ATX headings, BOM/CRLF, YAML frontmatter, fenced and indented code, multiline HTML comments and standalone `$$` math blocks. It is a lightweight block scanner, not a full Markdown parser: Setext and nested list/blockquote headings are not supported, and inline HTML/code handling is limited. The outline uses the same source snapshot as editor rendering. `OutlineView` tracks keyboard focus, selection and collapsed branches; a signature of heading rows, levels and titles invalidates stale indices. `app/navigation.rs` coordinates outline keys and cursor jumps without modifying text. Heading search will reuse this parser.
+`outline::extract` works on an immutable source snapshot and returns headings in source order with zero-based logical rows, nearest shallower parent indices, exclusive section ends, and borrowed raw titles. Focus mode uses the same parser. Extraction does not depend on syntax highlighting or theme settings. The parser handles top-level H1–H6 ATX headings, BOM/CRLF, YAML frontmatter, fenced and indented code, multiline HTML comments and standalone `$$` math blocks. It is a lightweight block scanner, not a full Markdown parser: Setext and nested list/blockquote headings are not supported, and inline HTML/code handling is limited. The outline uses the same source snapshot as editor rendering. `OutlineView` tracks keyboard focus, selection and collapsed branches; a signature of heading rows, levels and titles invalidates stale indices. `app/navigation.rs` coordinates outline keys and cursor jumps without modifying text. `heading_search::HeadingSearch` owns a compact heading snapshot extracted from the unsaved editor buffer when the picker opens; it does not depend on outline visibility or collapse state. `fuzzy::score` ranks exact, prefix, substring and ordered-subsequence matches using Unicode lowercase characters and source-order tie-breaking. The event loop routes picker input before editor/global actions, so its snapshot remains stable. Outline and heading search use the same cursor jump helper.
 
 ## Panel layout
 

@@ -15,6 +15,7 @@ pub(crate) enum Command {
     TogglePreview,
     ToggleOutline,
     FocusOutline,
+    SearchHeadings,
     CycleTheme,
     Quit,
     OutgoingLinks,
@@ -62,6 +63,7 @@ impl Command {
                 F(3) if key.modifiers.is_empty() => Some(TogglePreview),
                 F(4) if key.modifiers.is_empty() => Some(ToggleOutline),
                 F(6) if key.modifiers.is_empty() => Some(FocusOutline),
+                F(7) if key.modifiers.is_empty() => Some(SearchHeadings),
                 Up if key.modifiers == KeyModifiers::ALT => Some(WidenOutline),
                 Down if key.modifiers == KeyModifiers::ALT => Some(NarrowOutline),
                 Char('f') if ctrl => Some(SearchText),
@@ -105,6 +107,7 @@ impl Command {
                 Char('p') => Some(TogglePreview),
                 Char('o') => Some(ToggleOutline),
                 Char('l') => Some(FocusOutline),
+                Char('h') => Some(SearchHeadings),
                 Char('z') => Some(Writing("zen")),
                 Char('f') => Some(Writing("focus")),
                 Char('t') => Some(Writing("typewriter")),
@@ -131,6 +134,7 @@ impl Command {
             "toggle preview" => Some(TogglePreview),
             "toggle outline" => Some(ToggleOutline),
             "outline" => Some(FocusOutline),
+            "headings" => Some(SearchHeadings),
             "zen" => Some(Writing("zen")),
             "focus" => Some(Writing("focus")),
             "focus off" => Some(Writing("focus off")),
@@ -169,6 +173,29 @@ mod tests {
         assert_eq!(Command::from_ex("outline"), Some(Command::FocusOutline));
         assert_eq!(
             Command::from_key(KeyScope::Editor, KeyEvent::new(KeyCode::Char('l'), plain)),
+            None
+        );
+    }
+
+    #[test]
+    fn heading_search_bindings_preserve_existing_search_commands() {
+        let plain = KeyModifiers::NONE;
+        let ctrl = KeyModifiers::CONTROL;
+        assert_eq!(
+            Command::from_key(KeyScope::Global, KeyEvent::new(KeyCode::F(7), plain)),
+            Some(Command::SearchHeadings)
+        );
+        assert_eq!(
+            Command::from_key(KeyScope::Leader, KeyEvent::new(KeyCode::Char('h'), plain)),
+            Some(Command::SearchHeadings)
+        );
+        assert_eq!(Command::from_ex("headings"), Some(Command::SearchHeadings));
+        assert_eq!(
+            Command::from_key(KeyScope::Editor, KeyEvent::new(KeyCode::Char('p'), ctrl)),
+            Some(Command::CitationPicker)
+        );
+        assert_eq!(
+            Command::from_key(KeyScope::Editor, KeyEvent::new(KeyCode::Char('h'), plain)),
             None
         );
     }

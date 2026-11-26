@@ -1,6 +1,7 @@
 //! Keyboard ownership and navigation for the live document outline.
 
 use super::App;
+use crate::heading_search::HeadingSearch;
 use crate::{
     commands::{Command, KeyScope},
     markdown, outline,
@@ -51,6 +52,80 @@ impl App {
         self.message.clear();
     }
 
+    /// Both heading navigation surfaces share exactly the same jump behavior.
+    fn jump_to_heading(&mut self, row: usize) {
+        if let Some(note) = &mut self.editor {
+            note.state.cursor = Index2::new(row, 0);
+            note.state.set_viewport_offset(0, row.saturating_sub(1));
+            self.outline_view.focused = false;
+            self.message = format!("Heading: line {}", row + 1);
+        }
+    }
+
+    pub(super) fn open_heading_search(&mut self) {
+        if self.has_active_popup() || self.command.is_some() || self.note_search.input.is_some() {
+            return;
+        }
+        let Some(note) = &self.editor else {
+            self.message = "Open a Markdown note before searching headings.".into();
+            return;
+        };
+        if note.state.mode != EditorMode::Normal {
+            return;
+        }
+        if !markdown::is_markdown(&note.path) {
+            self.message = "Heading search is available for Markdown notes only.".into();
+            return;
+        }
+        // The popup owns input, so the immutable snapshot cannot become stale
+        // through editing. It deliberately ignores outline visibility/collapse.
+        self.heading_search = Some(HeadingSearch::new(&note.state.lines.to_string()));
+        self.writing.leader = false;
+        self.pending_open_bracket = false;
+        self.message.clear();
+    }
+
+    pub(super) fn handle_heading_search_key(&mut self, key: KeyEvent) {
+        let Some(mut search) = self.heading_search.take() else {
+            return;
+        };
+        let ctrl = key.modifiers == KeyModifiers::CONTROL;
+        match key.code {
+            KeyCode::Esc | KeyCode::F(7) if key.modifiers.is_empty() => return,
+            KeyCode::Enter if key.modifiers.is_empty() => {
+                if let Some(row) = search.selected_row() {
+                    self.jump_to_heading(row);
+                    return;
+                }
+            }
+            KeyCode::Up => search.move_selection(false),
+            KeyCode::Down => search.move_selection(true),
+            KeyCode::Char('p') if ctrl => search.move_selection(false),
+            KeyCode::Char('n') if ctrl => search.move_selection(true),
+            KeyCode::Home => search.selected = 0,
+            KeyCode::End => search.selected = search.matches.len().saturating_sub(1),
+            KeyCode::Backspace => {
+                search.query.pop();
+                search.filter();
+            }
+            KeyCode::Char('u') if ctrl => {
+                search.query.clear();
+                search.filter();
+            }
+            KeyCode::Char(ch)
+                if !ch.is_control()
+                    && !key
+                        .modifiers
+                        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+            {
+                search.query.push(ch);
+                search.filter();
+            }
+            _ => {}
+        }
+        self.heading_search = Some(search);
+    }
+
     /// Called only while the outline owns keys. Never forwards text motions to edtui.
     pub(super) fn handle_outline_key(&mut self, key: KeyEvent) {
         if let Some(command @ (Command::Save | Command::CycleTheme)) =
@@ -85,11 +160,7 @@ impl App {
                 KeyCode::Char('l') | KeyCode::Right => view.expand_or_child(&headings),
                 KeyCode::Enter => {
                     if let Some(heading) = view.selected.and_then(|i| headings.get(i)) {
-                        note.state.cursor = Index2::new(heading.row, 0);
-                        note.state
-                            .set_viewport_offset(0, heading.row.saturating_sub(1));
-                        view.focused = false;
-                        self.message = format!("Heading: line {}", heading.row + 1);
+                        self.jump_to_heading(heading.row);
                     }
                 }
                 _ => {}
@@ -156,6 +227,87 @@ mod tests {
             fs::read_to_string(&note.path).unwrap(),
             "# A\nbody\n## B\n# C\n"
         );
+    }
+
+    #[test]
+    fn search_uses_unsaved_headings_and_only_jumps_on_confirmation() {
+        let (_dir, mut app) = app_with_note();
+        app.panels.show_outline = false;
+        app.editor.as_mut().unwrap().state.cursor = Index2::new(2, 3);
+        app.handle_editor_key(key(KeyCode::Char('i')));
+        app.handle_editor_key(key(KeyCode::Char('X')));
+        app.handle_editor_key(key(KeyCode::Esc));
+        let note = app.editor.as_ref().unwrap();
+        assert!(note.is_dirty());
+        let original = note.state.lines.to_string();
+        assert!(original.contains("## XB"));
+        app.editor.as_mut().unwrap().state.cursor = Index2::new(0, 0);
+        app.open_heading_search();
+        assert!(app.has_active_popup());
+        for ch in ['x', 'b'] {
+            app.handle_heading_search_key(key(KeyCode::Char(ch)));
+        }
+        assert_eq!(app.heading_search.as_ref().unwrap().selected_row(), Some(2));
+        assert_eq!(app.editor.as_ref().unwrap().state.cursor, Index2::new(0, 0));
+        app.handle_heading_search_key(key(KeyCode::Esc));
+        assert!(!app.has_active_popup());
+        assert_eq!(app.editor.as_ref().unwrap().state.cursor, Index2::new(0, 0));
+        app.open_heading_search();
+        for ch in ['x', 'b'] {
+            app.handle_heading_search_key(key(KeyCode::Char(ch)));
+        }
+        app.handle_heading_search_key(key(KeyCode::Enter));
+        let note = app.editor.as_ref().unwrap();
+        assert_eq!(note.state.cursor, Index2::new(2, 0));
+        assert_eq!(note.state.lines.to_string(), original);
+        assert!(note.is_dirty());
+        assert!(!app.panels.show_outline);
+        assert!(app.heading_search.is_none());
+        assert_eq!(
+            fs::read_to_string(&note.path).unwrap(),
+            "# A\nbody\n## B\n# C\n"
+        );
+    }
+
+    #[test]
+    fn search_includes_collapsed_headings_and_restores_outline_on_cancel() {
+        let (_dir, mut app) = app_with_note();
+        app.editor.as_mut().unwrap().state.cursor = Index2::new(0, 0);
+        app.toggle_outline_focus();
+        app.handle_outline_key(key(KeyCode::Char('h')));
+        assert!(app.outline_view.is_collapsed(0));
+        app.open_heading_search();
+        app.handle_heading_search_key(key(KeyCode::Char('b')));
+        assert_eq!(app.heading_search.as_ref().unwrap().selected_row(), Some(2));
+        app.handle_heading_search_key(key(KeyCode::Esc));
+        assert!(app.outline_view.focused);
+        app.open_heading_search();
+        app.handle_heading_search_key(key(KeyCode::Char('b')));
+        app.handle_heading_search_key(key(KeyCode::Enter));
+        assert!(!app.outline_view.focused);
+        assert!(app.outline_view.is_collapsed(0));
+        assert_eq!(app.editor.as_ref().unwrap().state.cursor, Index2::new(2, 0));
+    }
+
+    #[test]
+    fn search_works_in_zen_and_no_match_enter_does_not_close() {
+        let (_dir, mut app) = app_with_note();
+        app.handle_editor_key(key(KeyCode::Char('i')));
+        app.open_heading_search();
+        assert!(app.heading_search.is_none());
+        app.handle_editor_key(key(KeyCode::Esc));
+        app.writing.zen.enabled = true;
+        app.open_heading_search();
+        app.handle_heading_search_key(key(KeyCode::Char('z')));
+        app.handle_heading_search_key(key(KeyCode::Enter));
+        assert!(app.heading_search.is_some());
+        app.handle_heading_search_key(KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL));
+        assert_eq!(app.heading_search.as_ref().unwrap().matches.len(), 3);
+        app.handle_heading_search_key(key(KeyCode::End));
+        app.handle_heading_search_key(key(KeyCode::Enter));
+        assert!(app.writing.zen.enabled);
+        assert_eq!(app.editor.as_ref().unwrap().state.cursor, Index2::new(3, 0));
+        assert!(!app.editor.as_ref().unwrap().is_dirty());
     }
 
     #[test]

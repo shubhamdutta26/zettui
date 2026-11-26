@@ -9,6 +9,8 @@ mod editor;
 mod editor_search;
 mod file_ops;
 mod focus;
+mod fuzzy;
+mod heading_search;
 mod layout;
 mod links;
 mod markdown;

@@ -22,6 +22,10 @@
 | Anywhere | `Alt+h` / `Alt+l` (or `Alt+←` / `Alt+→`) | Narrow / widen file-browser pane |
 | Browser / Editor | `F2` / `F3` / `F4` | Toggle Files / Preview / Outline preferences |
 | Editor (Normal) | `F6`, `Space l`, `:outline` | Show and focus Outline; F6 returns to editor |
+| Editor (Normal) / Outline | `F7` | Search headings in the open Markdown note |
+| Editor (Normal) | `Space h`, `:headings` | Search headings without showing the Outline |
+| Heading search | `↑` / `↓`, `Ctrl+P` / `Ctrl+N`, `Home` / `End` | Select previous/next or first/last result |
+| Heading search | `Enter`, `Esc` / `F7`, `Ctrl+U` | Jump, cancel, clear query |
 | Outline | `j` / `k`, `↑` / `↓`, `Home` / `End` | Move through visible headings |
 | Outline | `h` / `←`, `l` / `→` | Collapse or select parent; expand or select first child |
 | Outline | `Enter`, `Esc` | Jump to heading and return to editor; return without moving cursor |
@@ -37,6 +41,10 @@
 ## Panel visibility
 
 F2 toggles Files while editing; closing the note always restores the file browser without changing the preference. F3 toggles the browser Preview. F4 toggles the Outline of the open note. In Normal mode, `Space e`, `Space p`, `Space o` and `:toggle files`, `:toggle preview`, `:toggle outline` perform the same actions. Function keys work in browser and editor modes (except when a modal picker owns input). The editor always remains available and Preview never receives keyboard focus. F6 (Normal mode), `Space l` or `:outline` opens and focuses the Outline. Its selection is independent of the editor cursor until Enter jumps; Esc or F6 returns without moving the cursor. Collapsing a branch only hides outline entries, not note text. A collapsed ancestor represents the current section when its active descendant is hidden. Collapse state is per open document and resets if heading rows, levels or titles change. Hiding the Outline or shrinking the terminal until it cannot be displayed returns focus to the editor. Sidebars temporarily disappear in Zen; narrow terminals temporarily omit the Outline if necessary. Panel width changes and toggles last for the session only; settings in `[layout]` set startup preferences. Outline width changes by five percentage points, within 15–50%. Files resizing is unchanged.
+
+## Heading search
+
+F7, `Space h` or `:headings` opens a searchable list of the current Markdown note's headings in Normal mode. F7 also works with the Outline focused. Empty queries show source order; typing ranks case-insensitive exact, prefix, substring and ordered-subsequence matches, so `sec` can match `Size exclusion chromatography`. Results show heading level and one-based line number; duplicate titles are independent. Use arrows or Ctrl+N/Ctrl+P to move, Home/End for the first/last result, Ctrl+U to clear, Enter to jump or Esc/F7 to cancel. Ctrl+P still opens Zotero outside this picker. Search includes unsaved and collapsed headings, works in Zen and does not change panel visibility or save the note. It searches raw heading titles in the open note, not all files. Esc restores the previous focus; Enter returns to the editor. No new configuration is needed.
 
 ## Distraction-free writing
 
