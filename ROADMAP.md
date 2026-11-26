@@ -26,12 +26,12 @@ Versions identify development milestones; not all have a separate published rele
 | 0.7.10 | Native COSMIC v2, Omarchy and terminal themes, contrast adjustment, repository maintenance and caching |
 | 0.7.11 | Expanded Markdown, YAML, fenced-code and Quarto highlighting; syntax color overrides |
 | 0.7.12 | Intelligent Navigation: independent panels, interactive document outline, fuzzy heading search and global command palette |
+| 0.7.13 |        Buffers and Sessions: multiple open notes, theme-aware tabs, fuzzy buffer switching, independent editor state, workspace restoration and hidden-folder visibility       |
 
 ## Planned
 
 | Milestone | Possible work |
 | --- | --- |
-| 0.7.13 | Buffers and Sessions: multiple open notes, theme-aware tabs, fuzzy buffer switching, independent editor state, workspace restoration and hidden-folder visibility (release validation) |
 | 0.8.0 | Optional note metadata panel and further configurable UI elements |
 | 0.8.x | Search highlighting, ranked results, faster indexing, optional inline hashtag index |
 | 0.9.x | Link-aware rename/move and broken-link reports |

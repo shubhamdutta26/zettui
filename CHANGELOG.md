@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.7.13 — Buffers
+
+### Added
+
+- Multiple open note buffers with independent editing states.
+- Theme-aware buffer tabs with modified-note indicators.
+- Fuzzy buffer picker and Vim-style buffer navigation.
+- Independent cursor, viewport, undo/redo and search history.
+- Workspace-specific session persistence.
+- Automatic restoration of open buffers and active notes.
+- Restoration of panel visibility, dimensions and browser location.
+- Hidden-folder visibility toggle using F9.
+- Configurable buffer, session and browser preferences.
+- Application-wide save and quit commands.
+- Buffer and session commands in the command palette.
+
+### Improved
+
+- Protection against unsaved changes across multiple buffers.
+- Protection against external file modifications.
+- File operation safety for open notes.
+- Compact buffer tab styling and alignment.
+- Integration tests and documentation.
+
+### Compatibility
+
+- Existing configuration files remain supported.
+- No new dependencies.
+- Session metadata is stored outside the notes directory.
+
 ## 0.7.12 — Intelligent Navigation
 
 - Centralize application command dispatch across keyboard bindings, Ex commands and the new palette.
