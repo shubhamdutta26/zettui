@@ -88,6 +88,10 @@ impl App {
                 self.execute_command(command)?;
                 continue;
             }
+            if self.outline_view.focused {
+                self.handle_outline_key(key);
+                continue;
+            }
             if self.editor.is_some() {
                 self.handle_editor_key(key);
                 continue;

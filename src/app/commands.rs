@@ -23,6 +23,7 @@ impl App {
             Command::ToggleFiles | Command::TogglePreview | Command::ToggleOutline => {
                 self.toggle_panel(command);
             }
+            Command::FocusOutline => self.toggle_outline_focus(),
             Command::CycleTheme => self.cycle_theme(),
             Command::Quit => {
                 // Browser-only binding. Do not permit a future caller to bypass dirty notes.

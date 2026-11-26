@@ -155,23 +155,29 @@ fn picker_body(
     areas[1]
 }
 
-/// Read-only outline for the current buffer. Keyboard focus and jumps arrive in Phase 4.
+/// Render live headings; selection is independent of the cursor while focused.
 fn draw_outline(
     frame: &mut Frame,
     theme: Theme,
     area: Rect,
-    source: &str,
+    headings: Option<&[outline::Heading<'_>]>,
+    view: &outline::OutlineView,
     row: usize,
-    is_markdown: bool,
+    focused: bool,
 ) {
     let block = Block::bordered()
         .title(" Outline ")
         .padding(Padding::horizontal(1))
-        .border_style(Style::default().fg(theme.border))
-        .title_style(Style::default().fg(theme.muted));
+        .border_type(if focused {
+            BorderType::Thick
+        } else {
+            BorderType::Plain
+        })
+        .border_style(Style::default().fg(if focused { theme.accent } else { theme.border }))
+        .title_style(Style::default().fg(if focused { theme.accent } else { theme.muted }));
     let inner = block.inner(area);
     frame.render_widget(block, area);
-    if !is_markdown {
+    let Some(headings) = headings else {
         frame.render_widget(
             Paragraph::new("Markdown notes only")
                 .style(Style::default().fg(theme.muted))
@@ -179,42 +185,63 @@ fn draw_outline(
             inner,
         );
         return;
+    };
+    if headings.is_empty() {
+        let message = "No headings";
+        frame.render_widget(
+            Paragraph::new(message)
+                .style(Style::default().fg(theme.muted))
+                .wrap(Wrap { trim: false }),
+            inner,
+        );
+        return;
     }
-    let headings = outline::extract(source);
-    let active = outline::active_heading(&headings, row);
-    let items: Vec<ListItem<'_>> = headings
+    let active = view.active_visible(headings, row);
+    let visible = view.visible(headings);
+    let items: Vec<ListItem<'_>> = visible
         .iter()
-        .map(|h| {
+        .map(|&i| {
+            let h = &headings[i];
             let title = if h.title.is_empty() {
                 "(untitled)".to_owned()
             } else {
                 display_component(h.title)
             };
-            ListItem::new(format!("{}{}", "  ".repeat(h.level - 1), title))
-                .style(Style::default().fg(theme.foreground))
+            let branch = if !outline::OutlineView::has_children(headings, i) {
+                "  "
+            } else if view.is_collapsed(i) {
+                "▸ "
+            } else {
+                "▾ "
+            };
+            let marker = if active == Some(i) { "• " } else { "  " };
+            ListItem::new(format!(
+                "{marker}{}{branch}{title}",
+                "  ".repeat(h.level - 1)
+            ))
+            .style(Style::default().fg(if active == Some(i) {
+                theme.accent
+            } else {
+                theme.foreground
+            }))
         })
         .collect();
-    if headings.is_empty() {
-        frame.render_widget(
-            Paragraph::new("No headings").style(Style::default().fg(theme.muted)),
-            inner,
-        );
-    } else {
-        let mut state = ListState::default();
-        state.select(active);
-        frame.render_stateful_widget(
-            List::new(items)
-                .highlight_symbol("▏ ")
-                .highlight_style(Style::default().fg(theme.selected_fg).bg(theme.selected_bg)),
-            inner,
-            &mut state,
-        );
-    }
+    let mut state = ListState::default();
+    let selected = view
+        .selected
+        .and_then(|i| visible.iter().position(|&v| v == i));
+    state.select(selected);
+    frame.render_stateful_widget(
+        List::new(items)
+            .highlight_symbol("▏ ")
+            .highlight_style(Style::default().fg(theme.selected_fg).bg(theme.selected_bg)),
+        inner,
+        &mut state,
+    );
 }
 
 impl App {
     pub(super) fn draw(&mut self, frame: &mut Frame) {
-        let show_editor_cursor = !self.has_active_popup() && self.note_search.input.is_none();
         let theme = self.theme;
         frame.render_widget(Block::default().style(theme.base_style()), frame.area());
         let zen = self.editor.is_some() && self.writing.zen.enabled;
@@ -243,8 +270,17 @@ impl App {
             panes[1] = focus::centered(areas[1], self.writing.zen.width.clamp(20, 240));
         }
 
+        // A hidden or unusably short outline must never retain input ownership.
+        if self.outline_view.focused && (panes[2].width == 0 || panes[2].height < 3) {
+            self.outline_view.focused = false;
+            self.message = "Outline unavailable at this terminal size or layout.".into();
+        }
+        let show_editor_cursor = !self.outline_view.focused
+            && !self.has_active_popup()
+            && self.note_search.input.is_none();
         let browser_active = self.editor.is_none() && !self.has_active_popup();
-        let editor_active = self.editor.is_some() && !self.has_active_popup();
+        let editor_active =
+            self.editor.is_some() && !self.outline_view.focused && !self.has_active_popup();
         // Show the actual directory of the open note, or the current browser folder.
         let directory = self
             .editor
@@ -358,13 +394,21 @@ impl App {
                 .to_owned();
             let source = note.state.lines.to_string();
             if panes[2].width > 0 && panes[2].height > 0 {
+                let is_markdown = markdown::is_markdown(&note.path);
+                let headings = if is_markdown {
+                    outline::extract(&source)
+                } else {
+                    Vec::new()
+                };
+                self.outline_view.sync(&headings, note.state.cursor.row);
                 draw_outline(
                     frame,
                     theme,
                     panes[2],
-                    &source,
+                    is_markdown.then_some(headings.as_slice()),
+                    &self.outline_view,
                     note.state.cursor.row,
-                    markdown::is_markdown(&note.path),
+                    self.outline_view.focused && !popup_active,
                 );
             }
             let modified = note.is_dirty_text(&source);
@@ -407,13 +451,15 @@ impl App {
                         .unwrap_or(ratatui::style::Color::Reset)),
                 )
                 .selection_style(Style::default().fg(theme.selected_fg).bg(theme.selected_bg))
-                .cursor_style(if note.state.mode == EditorMode::Insert {
-                    // Neutralize EdTUI's painted block cursor so the real
-                    // terminal can render its blinking vertical bar.
-                    theme.base_style()
-                } else {
-                    Style::default().fg(theme.background).bg(theme.accent)
-                })
+                .cursor_style(
+                    if note.state.mode == EditorMode::Insert || self.outline_view.focused {
+                        // Use the hardware bar in Insert mode; hide the painted
+                        // editor cursor while the Outline owns keyboard focus.
+                        theme.base_style()
+                    } else {
+                        Style::default().fg(theme.background).bg(theme.accent)
+                    },
+                )
                 .hide_status_line();
             let focus_range = if self.writing.focus.enabled && note.state.mode != EditorMode::Visual
             {
@@ -466,15 +512,19 @@ impl App {
             if show_editor_cursor && let Some(cursor) = note.state.cursor_screen_position() {
                 frame.set_cursor_position((cursor.x, cursor.y));
             }
-            let mode = if self.note_search.input.is_some() {
+            let mode = if self.outline_view.focused {
+                "OUTLINE".to_owned()
+            } else if self.note_search.input.is_some() {
                 "SEARCH".to_owned()
             } else if self.command.is_some() {
                 "COMMAND".to_owned()
             } else {
                 note.state.mode.name().to_uppercase()
             };
-            let help = if self.writing.leader {
-                "Space: z Zen | f Focus | t Typewriter | e Files | p Preview | o Outline | 1/2/3 Focus level | n Numbers | s Status"
+            let help = if self.outline_view.focused {
+                "j/k Move | h/l Collapse/Expand | Enter Jump | Esc/F6 Editor".to_owned()
+            } else if self.writing.leader {
+                "Space: z Zen | f Focus | t Typewriter | e Files | p Preview | o Outline | l Navigate outline | 1/2/3 Focus level | n Numbers | s Status"
                     .to_owned()
             } else if let Some(input) = &self.note_search.input {
                 format!(
@@ -487,7 +537,7 @@ impl App {
             } else if let Some(command) = &self.command {
                 format!(":{command}▏   Enter run | Esc cancel")
             } else if mode == "NORMAL" {
-                "i Insert | v Visual | / Find | :w Save | :q Close | F2 Files | F4 Outline | Ctrl+F Search | Alt+T Tags"
+                "i Insert | v Visual | / Find | :w Save | :q Close | F2 Files | F4 Outline | F6 Navigate | Ctrl+F Search | Alt+T Tags"
                     .to_owned()
             } else if mode == "INSERT" {
                 "Esc Normal | Ctrl+S Save | Ctrl+P Cite | Ctrl+E Snippet | Ctrl+F Search".to_owned()

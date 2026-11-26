@@ -88,6 +88,9 @@ impl App {
             }
             Command::ToggleOutline => {
                 self.panels.show_outline = !self.panels.show_outline;
+                if !self.panels.show_outline {
+                    self.outline_view.focused = false;
+                }
                 ("Outline", self.panels.show_outline)
             }
             _ => return,

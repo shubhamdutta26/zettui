@@ -14,6 +14,7 @@ pub(crate) enum Command {
     ToggleFiles,
     TogglePreview,
     ToggleOutline,
+    FocusOutline,
     CycleTheme,
     Quit,
     OutgoingLinks,
@@ -60,6 +61,7 @@ impl Command {
                 F(2) if key.modifiers.is_empty() => Some(ToggleFiles),
                 F(3) if key.modifiers.is_empty() => Some(TogglePreview),
                 F(4) if key.modifiers.is_empty() => Some(ToggleOutline),
+                F(6) if key.modifiers.is_empty() => Some(FocusOutline),
                 Up if key.modifiers == KeyModifiers::ALT => Some(WidenOutline),
                 Down if key.modifiers == KeyModifiers::ALT => Some(NarrowOutline),
                 Char('f') if ctrl => Some(SearchText),
@@ -102,6 +104,7 @@ impl Command {
                 Char('e') => Some(ToggleFiles),
                 Char('p') => Some(TogglePreview),
                 Char('o') => Some(ToggleOutline),
+                Char('l') => Some(FocusOutline),
                 Char('z') => Some(Writing("zen")),
                 Char('f') => Some(Writing("focus")),
                 Char('t') => Some(Writing("typewriter")),
@@ -127,6 +130,7 @@ impl Command {
             "toggle files" => Some(ToggleFiles),
             "toggle preview" => Some(TogglePreview),
             "toggle outline" => Some(ToggleOutline),
+            "outline" => Some(FocusOutline),
             "zen" => Some(Writing("zen")),
             "focus" => Some(Writing("focus")),
             "focus off" => Some(Writing("focus off")),
@@ -150,6 +154,24 @@ impl Command {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn outline_focus_bindings_do_not_replace_editor_motions() {
+        let plain = KeyModifiers::NONE;
+        assert_eq!(
+            Command::from_key(KeyScope::Global, KeyEvent::new(KeyCode::F(6), plain)),
+            Some(Command::FocusOutline)
+        );
+        assert_eq!(
+            Command::from_key(KeyScope::Leader, KeyEvent::new(KeyCode::Char('l'), plain)),
+            Some(Command::FocusOutline)
+        );
+        assert_eq!(Command::from_ex("outline"), Some(Command::FocusOutline));
+        assert_eq!(
+            Command::from_key(KeyScope::Editor, KeyEvent::new(KeyCode::Char('l'), plain)),
+            None
+        );
+    }
 
     #[test]
     fn shortcuts_keep_their_context() {

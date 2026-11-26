@@ -21,6 +21,10 @@
 | Anywhere | `Ctrl+F`, `Alt+T` | Full-text search; search YAML tags |
 | Anywhere | `Alt+h` / `Alt+l` (or `Alt+←` / `Alt+→`) | Narrow / widen file-browser pane |
 | Browser / Editor | `F2` / `F3` / `F4` | Toggle Files / Preview / Outline preferences |
+| Editor (Normal) | `F6`, `Space l`, `:outline` | Show and focus Outline; F6 returns to editor |
+| Outline | `j` / `k`, `↑` / `↓`, `Home` / `End` | Move through visible headings |
+| Outline | `h` / `←`, `l` / `→` | Collapse or select parent; expand or select first child |
+| Outline | `Enter`, `Esc` | Jump to heading and return to editor; return without moving cursor |
 | Browser / Editor | `Alt+↑` / `Alt+↓` | Widen / narrow outline preference |
 | Anywhere | `Ctrl+G` | Cycle native, terminal and built-in themes |
 | Search popup | `Tab`, `↑` / `↓`, `Enter`, `Esc` | Toggle text/tags, select result, open, cancel |
@@ -32,7 +36,7 @@
 
 ## Panel visibility
 
-F2 toggles Files while editing; closing the note always restores the file browser without changing the preference. F3 toggles the browser Preview. F4 toggles the read-only Outline of the open note. In Normal mode, `Space e`, `Space p`, `Space o` and `:toggle files`, `:toggle preview`, `:toggle outline` perform the same actions. Function keys work in browser and editor modes (except when a modal picker owns input). The editor always remains available and the Preview and Outline do not receive keyboard focus in this phase. Sidebars temporarily disappear in Zen; narrow terminals temporarily omit the Outline if necessary. Panel width changes and toggles last for the session only; settings in `[layout]` set startup preferences. Outline width changes by five percentage points, within 15–50%. Files resizing is unchanged.
+F2 toggles Files while editing; closing the note always restores the file browser without changing the preference. F3 toggles the browser Preview. F4 toggles the Outline of the open note. In Normal mode, `Space e`, `Space p`, `Space o` and `:toggle files`, `:toggle preview`, `:toggle outline` perform the same actions. Function keys work in browser and editor modes (except when a modal picker owns input). The editor always remains available and Preview never receives keyboard focus. F6 (Normal mode), `Space l` or `:outline` opens and focuses the Outline. Its selection is independent of the editor cursor until Enter jumps; Esc or F6 returns without moving the cursor. Collapsing a branch only hides outline entries, not note text. A collapsed ancestor represents the current section when its active descendant is hidden. Collapse state is per open document and resets if heading rows, levels or titles change. Hiding the Outline or shrinking the terminal until it cannot be displayed returns focus to the editor. Sidebars temporarily disappear in Zen; narrow terminals temporarily omit the Outline if necessary. Panel width changes and toggles last for the session only; settings in `[layout]` set startup preferences. Outline width changes by five percentage points, within 15–50%. Files resizing is unchanged.
 
 ## Distraction-free writing
 

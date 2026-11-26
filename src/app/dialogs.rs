@@ -47,6 +47,7 @@ impl App {
         if let Some(note) = &mut self.editor
             && note.path == hit.path
         {
+            self.outline_view.focused = false;
             note.state.cursor = Index2::new(hit.line.saturating_sub(1), 0);
             note.state
                 .set_viewport_offset(0, hit.line.saturating_sub(2));
@@ -621,6 +622,7 @@ impl App {
             self.select_path(&target);
         }
         self.note_search.reset_matches();
+        self.outline_view.reset();
         self.editor = Some(new_note);
         self.editor_keys = EditorEventHandler::default();
         self.pending_open_bracket = false;

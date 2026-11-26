@@ -189,6 +189,129 @@ pub fn active_heading(headings: &[Heading<'_>], row: usize) -> Option<usize> {
     headings.partition_point(|h| h.row <= row).checked_sub(1)
 }
 
+/// Per-document UI state, separate from the source and from editor cursor ownership.
+#[derive(Debug, Default)]
+pub(crate) struct OutlineView {
+    pub focused: bool,
+    pub selected: Option<usize>,
+    collapsed: std::collections::BTreeSet<usize>,
+    signature: Vec<(usize, usize, String)>,
+}
+
+impl OutlineView {
+    pub fn reset(&mut self) {
+        *self = Self::default();
+    }
+
+    /// Clear stale index-based state only when the heading structure changes.
+    /// Editing body text without moving headings retains collapsed branches.
+    pub fn sync(&mut self, headings: &[Heading<'_>], row: usize) {
+        if !self
+            .signature
+            .iter()
+            .map(|(r, l, t)| (*r, *l, t.as_str()))
+            .eq(headings.iter().map(|h| (h.row, h.level, h.title)))
+        {
+            self.signature = headings
+                .iter()
+                .map(|h| (h.row, h.level, h.title.to_owned()))
+                .collect();
+            self.collapsed.clear();
+            self.selected = None;
+        }
+        if headings.is_empty() {
+            self.focused = false;
+            self.selected = None;
+            return;
+        }
+        if !self.focused || self.selected.is_none() {
+            self.selected = self.active_visible(headings, row);
+            if self.focused && self.selected.is_none() {
+                self.selected = Some(0);
+            }
+        }
+    }
+
+    pub fn has_children(headings: &[Heading<'_>], index: usize) -> bool {
+        headings
+            .get(index + 1)
+            .is_some_and(|h| h.parent == Some(index))
+    }
+
+    pub fn is_collapsed(&self, index: usize) -> bool {
+        self.collapsed.contains(&index)
+    }
+
+    /// Return the outermost collapsed ancestor, or the heading itself.
+    fn visible_ancestor(&self, headings: &[Heading<'_>], index: usize) -> usize {
+        let mut result = index;
+        let mut parent = headings[index].parent;
+        while let Some(i) = parent {
+            if self.is_collapsed(i) {
+                result = i;
+            }
+            parent = headings[i].parent;
+        }
+        result
+    }
+
+    pub fn active_visible(&self, headings: &[Heading<'_>], row: usize) -> Option<usize> {
+        active_heading(headings, row).map(|i| self.visible_ancestor(headings, i))
+    }
+
+    pub fn visible(&self, headings: &[Heading<'_>]) -> Vec<usize> {
+        (0..headings.len())
+            .filter(|&i| self.visible_ancestor(headings, i) == i)
+            .collect()
+    }
+
+    pub fn move_selection(&mut self, headings: &[Heading<'_>], down: bool) {
+        let visible = self.visible(headings);
+        if visible.is_empty() {
+            return;
+        }
+        let position = self
+            .selected
+            .and_then(|i| visible.iter().position(|&v| v == i));
+        let next = match position {
+            Some(i) if down => (i + 1).min(visible.len() - 1),
+            Some(i) => i.saturating_sub(1),
+            None => 0,
+        };
+        self.selected = Some(visible[next]);
+    }
+
+    pub fn select_edge(&mut self, headings: &[Heading<'_>], last: bool) {
+        let visible = self.visible(headings);
+        self.selected = if last {
+            visible.last()
+        } else {
+            visible.first()
+        }
+        .copied();
+    }
+
+    pub fn collapse_or_parent(&mut self, headings: &[Heading<'_>]) {
+        let Some(i) = self.selected else {
+            return;
+        };
+        if Self::has_children(headings, i) && !self.is_collapsed(i) {
+            self.collapsed.insert(i);
+        } else if let Some(parent) = headings[i].parent {
+            self.selected = Some(parent);
+        }
+    }
+
+    pub fn expand_or_child(&mut self, headings: &[Heading<'_>]) {
+        let Some(i) = self.selected else {
+            return;
+        };
+        if !self.collapsed.remove(&i) && Self::has_children(headings, i) {
+            self.selected = Some(i + 1);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -300,5 +423,74 @@ mod tests {
         for text in ["", "plain\ntext", "> # Quote\n- # List", "Title\n====="] {
             assert!(extract(text).is_empty());
         }
+    }
+}
+
+#[cfg(test)]
+mod view_tests {
+    use super::*;
+
+    #[test]
+    fn collapse_skips_descendants_and_preserves_nested_collapses() {
+        let headings = extract("# A\n## B\n### C\n## D\n# E");
+        let mut view = OutlineView {
+            focused: true,
+            ..OutlineView::default()
+        };
+        view.sync(&headings, 1);
+        assert_eq!(view.selected, Some(1));
+        view.collapse_or_parent(&headings);
+        assert_eq!(view.visible(&headings), [0, 1, 3, 4]);
+        assert_eq!(view.active_visible(&headings, 2), Some(1));
+        view.collapse_or_parent(&headings);
+        assert_eq!(view.selected, Some(0));
+        view.collapse_or_parent(&headings);
+        assert_eq!(view.visible(&headings), [0, 4]);
+        view.expand_or_child(&headings);
+        assert_eq!(view.visible(&headings), [0, 1, 3, 4]);
+        view.expand_or_child(&headings);
+        assert_eq!(view.selected, Some(1));
+        view.expand_or_child(&headings);
+        assert_eq!(view.visible(&headings), [0, 1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn selection_stays_independent_until_focus_returns() {
+        let headings = extract("# A\n## B\n# C");
+        let mut view = OutlineView::default();
+        view.sync(&headings, 0);
+        view.focused = true;
+        view.select_edge(&headings, true);
+        view.move_selection(&headings, true);
+        view.sync(&headings, 0);
+        assert_eq!(view.selected, Some(2));
+        view.move_selection(&headings, false);
+        assert_eq!(view.selected, Some(1));
+        view.select_edge(&headings, false);
+        view.move_selection(&headings, false);
+        assert_eq!(view.selected, Some(0));
+        view.focused = false;
+        view.sync(&headings, 2);
+        assert_eq!(view.selected, Some(2));
+    }
+
+    #[test]
+    fn structure_changes_invalidate_indices_but_body_edits_do_not() {
+        let mut view = OutlineView::default();
+        let original = extract("# A\nbody\n## Same\n# Same");
+        view.sync(&original, 0);
+        view.collapse_or_parent(&original);
+        let edited = extract("# A\nchanged body\n## Same\n# Same");
+        view.sync(&edited, 2);
+        assert_eq!(view.selected, Some(0));
+        assert!(view.is_collapsed(0));
+        let moved = extract("# A\nbody\nmore body\n## Same\n# Same");
+        view.sync(&moved, 3);
+        assert!(!view.is_collapsed(0));
+        assert_eq!(view.selected, Some(1));
+        view.focused = true;
+        view.sync(&[], 0);
+        assert!(!view.focused);
+        assert_eq!(view.selected, None);
     }
 }

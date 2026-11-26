@@ -24,7 +24,7 @@ The active Files panel or opened-note editor uses heavy Unicode border character
 
 ## Panel layout
 
-Use F2 to hide/show Files while editing, F3 to hide/show Preview in browser mode, and F4 to show/hide the Outline of the open note. The outline shows current unsaved Markdown headings and follows the cursor, but is read-only for now. Alt+Up/Down adjusts its preferred width. The editor stays visible; closing a note restores Files so browsing remains possible. Zen and narrow terminals temporarily hide sidebars without forgetting their preferences. See [keyboard shortcuts](KEYBINDINGS.md) for Normal-mode alternatives.
+Use F2 to hide/show Files while editing, F3 to hide/show Preview in browser mode, and F4 to show/hide the Outline of the open note. The outline shows current unsaved Markdown headings and follows the cursor. Press F6 in Normal mode to focus it, use j/k to select headings, h/l to collapse or expand branches (or move to parent/child), and Enter to jump to the heading. Esc or F6 returns without moving the cursor. Alt+Up/Down adjusts its preferred width. The editor stays visible; closing a note restores Files so browsing remains possible. Zen and narrow terminals temporarily hide sidebars without forgetting their preferences. See [keyboard shortcuts](KEYBINDINGS.md) for Normal-mode alternatives.
 
 ## Notes and snippets
 

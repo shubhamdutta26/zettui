@@ -88,6 +88,7 @@ impl App {
             match OpenNote::load(path) {
                 Ok(note) => {
                     self.note_search.reset_matches();
+                    self.outline_view.reset();
                     self.editor = Some(note);
                     self.editor_keys = EditorEventHandler::default();
                     self.pending_open_bracket = false;

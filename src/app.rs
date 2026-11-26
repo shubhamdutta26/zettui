@@ -6,6 +6,7 @@ mod commands;
 mod dialogs;
 mod editing;
 mod events;
+mod navigation;
 mod ui;
 
 use std::{
@@ -345,6 +346,7 @@ struct App {
     theme_overrides: ColorOverrides,
     browser_width_percent: u16,
     panels: crate::layout::Panels,
+    outline_view: crate::outline::OutlineView,
     writing: focus::Writing,
     markdown_settings: markdown::MarkdownSettings,
     highlight_cache: markdown::HighlightCache,
@@ -407,6 +409,7 @@ impl App {
             theme_overrides,
             browser_width_percent: DEFAULT_BROWSER_PERCENT,
             panels: crate::layout::Panels::default(),
+            outline_view: crate::outline::OutlineView::default(),
             writing: focus::Writing::default(),
             markdown_settings: markdown::MarkdownSettings::default(),
             highlight_cache: markdown::HighlightCache::default(),
