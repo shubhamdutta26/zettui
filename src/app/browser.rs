@@ -1,8 +1,6 @@
 //! Directory navigation and file previews.
 
 use super::{App, Entry};
-use crate::editor::OpenNote;
-use edtui::EditorEventHandler;
 use std::{fs, io};
 
 impl App {
@@ -85,16 +83,12 @@ impl App {
             self.current_dir = path;
             self.refresh()?;
         } else {
-            match OpenNote::load(path) {
-                Ok(note) => {
-                    self.note_search.reset_matches();
-                    self.outline_view.reset();
-                    self.editor = Some(note);
-                    self.editor_keys = EditorEventHandler::default();
-                    self.pending_open_bracket = false;
-                    self.wiki_completion = None;
-                    self.command = None;
-                    self.message = "Editor opened. Press i to insert text.".to_owned();
+            match self.editor.open(&path) {
+                Ok(changed) => {
+                    if changed {
+                        self.reset_buffer_context();
+                    }
+                    self.message = format!("Editor opened. {} open buffer(s).", self.editor.len());
                 }
                 Err(e) => self.message = format!("Cannot edit: {e}"),
             }

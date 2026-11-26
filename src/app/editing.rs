@@ -4,12 +4,12 @@ use super::App;
 use crate::commands::{Command, KeyScope};
 use crate::editor_search::Direction;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use edtui::EditorMode;
+use edtui::{EditorEventHandler, EditorMode};
 use ratatui::style::Style;
 
 impl App {
     pub(super) fn save_editor(&mut self) -> bool {
-        let Some(note) = &mut self.editor else {
+        let Some(note) = self.editor.as_mut() else {
             return false;
         };
         match note.save() {
@@ -28,21 +28,40 @@ impl App {
         }
     }
 
-    pub(super) fn close_editor(&mut self, discard_changes: bool) {
-        if self.editor.as_ref().is_some_and(|note| note.is_dirty()) && !discard_changes {
-            self.message = "Unsaved changes! Use :w to save or :q! to discard.".to_owned();
-            return;
-        }
+    /// Reset transient input and view state, but never recreate an open note.
+    pub(super) fn reset_buffer_context(&mut self) {
+        self.editor_keys = EditorEventHandler::default();
         self.note_search.reset_matches();
         self.outline_view.reset();
         self.heading_search = None;
-        self.editor = None;
         self.writing.leader = false;
         self.wiki_completion = None;
         self.pending_open_bracket = false;
         self.command = None;
+        self.highlight_cache = crate::markdown::HighlightCache::default();
+    }
+
+    pub(super) fn hide_editor(&mut self) {
+        self.editor.hide();
+        self.reset_buffer_context();
         self.update_preview();
-        self.message = "Returned to file browser.".to_owned();
+        self.message = format!(
+            "Returned to file browser. {} open buffer(s).",
+            self.editor.len()
+        );
+    }
+
+    pub(super) fn close_editor(&mut self, discard_changes: bool) {
+        if !self.editor.close(discard_changes) {
+            self.message = "Unsaved changes! Use :w to save or :q! to discard.".to_owned();
+            return;
+        }
+        self.reset_buffer_context();
+        self.update_preview();
+        self.message = format!(
+            "Returned to file browser. {} open buffer(s).",
+            self.editor.len()
+        );
     }
 
     /// Minimal Vim-style application commands (separate from edtui's text motions).
@@ -57,7 +76,7 @@ impl App {
     }
 
     pub(super) fn handle_note_search_key(&mut self, key: KeyEvent) {
-        let Some(note) = &mut self.editor else {
+        let Some(note) = self.editor.as_mut() else {
             self.note_search.input = None;
             return;
         };
@@ -135,7 +154,7 @@ impl App {
             self.handle_note_search_key(key);
             return true;
         }
-        let Some(note) = &mut self.editor else {
+        let Some(note) = self.editor.as_mut() else {
             return false;
         };
         if note.state.mode != EditorMode::Normal
@@ -253,7 +272,7 @@ impl App {
         }
         // Ordinary editing can invalidate the previous match coordinates.
         self.note_search.painted.clear();
-        if let Some(note) = &mut self.editor {
+        if let Some(note) = self.editor.as_mut() {
             note.state.clear_highlights();
         }
 
@@ -291,7 +310,7 @@ impl App {
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
         });
         let open_picker = opening_bracket && self.pending_open_bracket;
-        if let Some(note) = &mut self.editor {
+        if let Some(note) = self.editor.as_mut() {
             self.editor_keys.on_key_event(key, &mut note.state);
         }
         self.pending_open_bracket = opening_bracket && !open_picker;

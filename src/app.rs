@@ -19,8 +19,8 @@ use edtui::EditorEventHandler;
 use ratatui::text::Span;
 
 use crate::bibliography::Bibliography;
+use crate::buffers::Buffers;
 use crate::cli::{StartupOptions, arguments};
-use crate::editor::OpenNote;
 use crate::editor_search::NoteSearch;
 use crate::layout::DEFAULT_BROWSER_PERCENT;
 use crate::links::{LinkItem, NoteSuggestion};
@@ -321,7 +321,7 @@ struct App {
     entries: Vec<Entry>,
     selected: usize,
     preview: String,
-    editor: Option<OpenNote>,
+    editor: Buffers,
     editor_keys: EditorEventHandler,
     command: Option<String>,
     note_search: NoteSearch,
@@ -386,7 +386,7 @@ impl App {
             entries: Vec::new(),
             selected: 0,
             preview: String::new(),
-            editor: None,
+            editor: Buffers::default(),
             editor_keys: EditorEventHandler::default(),
             command: None,
             note_search: NoteSearch::default(),
@@ -738,11 +738,11 @@ mod lesson75_search_app_tests {
         assert_eq!(dialog.matches.len(), 1);
         app.handle_vault_search_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert!(app.vault_search.is_none());
-        assert_eq!(app.editor.unwrap().path, target);
+        assert_eq!(app.editor.as_ref().unwrap().path, target);
     }
 
     #[test]
-    fn search_refuses_to_discard_unsaved_changes() {
+    fn search_switches_notes_without_discarding_unsaved_changes() {
         let dir = tempfile::tempdir().unwrap();
         let first = dir.path().join("First.md");
         let second = dir.path().join("Second.md");
@@ -768,8 +768,15 @@ mod lesson75_search_app_tests {
         dialog.filter();
         assert_eq!(dialog.matches.len(), 1);
         app.handle_vault_search_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-        assert!(app.vault_search.is_some());
-        assert_eq!(app.editor.as_ref().unwrap().path, first);
+        assert!(app.vault_search.is_none());
+        assert_eq!(app.editor.as_ref().unwrap().path, second);
+        assert_eq!(app.editor.len(), 2);
+        app.previous_note();
+        let note = app.editor.as_ref().unwrap();
+        assert_eq!(note.path, first);
+        assert!(note.is_dirty());
+        assert!(note.state.lines.to_string().contains('X'));
+        assert_eq!(fs::read_to_string(&first).unwrap(), "# First\n");
     }
 }
 

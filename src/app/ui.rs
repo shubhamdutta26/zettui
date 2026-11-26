@@ -385,7 +385,7 @@ impl App {
         }
 
         let popup_active = self.has_active_popup();
-        let (mode, location, help, stats, dirty_state) = if let Some(note) = &mut self.editor {
+        let (mode, location, help, stats, dirty_state) = if let Some(note) = self.editor.as_mut() {
             let filename = note
                 .path
                 .file_name()

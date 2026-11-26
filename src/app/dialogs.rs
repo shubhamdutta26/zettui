@@ -5,13 +5,12 @@ use super::{
     VaultSearchDialog, WikiCompletionDialog,
 };
 use crate::bibliography::Bibliography;
-use crate::editor::OpenNote;
 use crate::links::Index;
 use crate::search::{SearchHit, SearchMode, VaultIndex};
 use crate::snippets::{Field, Snippet, load_snippets};
 use crate::{file_ops, snippets};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use edtui::{EditorEventHandler, EditorMode, Index2};
+use edtui::{EditorMode, Index2};
 use std::path::PathBuf;
 
 impl App {
@@ -28,15 +27,6 @@ impl App {
     }
 
     fn open_search_hit(&mut self, hit: SearchHit) -> bool {
-        if self
-            .editor
-            .as_ref()
-            .is_some_and(|note| note.path != hit.path && note.is_dirty())
-        {
-            self.message =
-                "Unsaved changes: save with :w before opening a search result.".to_owned();
-            return false;
-        }
         if !self
             .editor
             .as_ref()
@@ -44,13 +34,21 @@ impl App {
         {
             self.open_link_target(hit.path.clone(), true);
         }
-        if let Some(note) = &mut self.editor
+        if let Some(note) = self.editor.as_mut()
             && note.path == hit.path
         {
             self.outline_view.focused = false;
-            note.state.cursor = Index2::new(hit.line.saturating_sub(1), 0);
-            note.state
-                .set_viewport_offset(0, hit.line.saturating_sub(2));
+            // The disk index may be stale relative to an unsaved buffer.
+            let last_row = note
+                .state
+                .lines
+                .to_string()
+                .split('\n')
+                .count()
+                .saturating_sub(1);
+            let row = hit.line.saturating_sub(1).min(last_row);
+            note.state.cursor = Index2::new(row, 0);
+            note.state.set_viewport_offset(0, row.saturating_sub(1));
             self.message = format!("Search result: {}:{}", hit.path.display(), hit.line);
             return true;
         }
@@ -164,7 +162,7 @@ impl App {
 
     /// Build the index on demand so newly created or renamed notes are visible.
     pub(super) fn open_wiki_completion(&mut self) {
-        let Some(note) = &self.editor else {
+        let Some(note) = self.editor.as_ref() else {
             return;
         };
         if note.state.mode != EditorMode::Insert {
@@ -188,7 +186,7 @@ impl App {
     /// The editor already contains the opening `[[` characters. Add only the
     /// resolved target and closing `]]`, through EdTUI for correct undo history.
     fn insert_wiki_completion(&mut self, link: &str) {
-        let Some(note) = &mut self.editor else {
+        let Some(note) = self.editor.as_mut() else {
             return;
         };
         if note.state.mode != EditorMode::Insert {
@@ -256,7 +254,7 @@ impl App {
     /// Re-read the file every time Ctrl+P is pressed, so Zotero auto-exports
     /// become available immediately without restarting the application.
     pub(super) fn open_snippet_picker(&mut self) {
-        let Some(note) = &self.editor else {
+        let Some(note) = self.editor.as_ref() else {
             return;
         };
         if !note.state.lines.to_string().is_empty() {
@@ -283,7 +281,7 @@ impl App {
                 return;
             }
         };
-        let Some(note) = &mut self.editor else {
+        let Some(note) = self.editor.as_mut() else {
             return;
         };
         // Never erase or merge with an existing note, even if it changed while
@@ -450,7 +448,7 @@ impl App {
     }
 
     fn insert_citation(&mut self, key: &str) {
-        let Some(note) = &mut self.editor else {
+        let Some(note) = self.editor.as_mut() else {
             return;
         };
         if note.state.mode != EditorMode::Normal && note.state.mode != EditorMode::Insert {
@@ -535,12 +533,8 @@ impl App {
 
     /// Build an index only when requested; it does not change any note files.
     pub(super) fn show_links(&mut self, backlinks: bool) {
-        let source = if let Some(note) = &self.editor {
-            if note.is_dirty() {
-                self.message =
-                    "Save with :w before following links; unsaved edits are protected.".to_owned();
-                return;
-            }
+        let unsaved = self.editor.as_ref().is_some_and(|note| note.is_dirty());
+        let source = if let Some(note) = self.editor.as_ref() {
             note.path.clone()
         } else {
             let Some(entry) = self.entries.get(self.selected) else {
@@ -578,7 +572,11 @@ impl App {
                     items,
                     selected: 0,
                 });
-                self.message.clear();
+                self.message = if unsaved {
+                    "Links reflect saved files; unsaved edits remain in memory.".to_owned()
+                } else {
+                    String::new()
+                };
             }
             Ok(_) => {
                 self.message = if backlinks {
@@ -592,59 +590,49 @@ impl App {
         }
     }
 
-    /// Open a linked note; refuse to discard unsaved edits. History is kept
-    /// only for note-to-note navigation (Ctrl+T), not ordinary browser entry.
-    fn open_link_target(&mut self, target: PathBuf, record_history: bool) {
-        if self.editor.as_ref().is_some_and(OpenNote::is_dirty) {
-            self.message = "Unsaved changes: save with :w before opening another note.".to_owned();
-            return;
-        }
-        if self.editor.as_ref().is_some_and(|note| note.path == target) {
-            self.message = "Already editing this note.".to_owned();
-            return;
-        }
-        // Load BEFORE changing the file browser or current editor.
-        let new_note = match OpenNote::load(target.clone()) {
-            Ok(note) => note,
+    /// Open or activate a linked note without discarding other buffers.
+    /// History is kept for note-to-note navigation, not ordinary browser entry.
+    fn open_link_target(&mut self, target: PathBuf, record_history: bool) -> bool {
+        let old_path = self.editor.as_ref().map(|note| note.path.clone());
+        match self.editor.open(&target) {
+            Ok(false) => {
+                self.message = "Already editing this note.".to_owned();
+                return true;
+            }
+            Ok(true) => {}
             Err(e) => {
                 self.message = format!("Cannot open linked note: {e}");
-                return;
+                return false;
             }
-        };
-        if record_history && let Some(old) = &self.editor {
-            self.history.push(old.path.clone());
         }
+        if record_history && let Some(old) = old_path {
+            self.history.push(old);
+        }
+        let target = self.editor.as_ref().expect("opened buffer").path.clone();
+        self.reset_buffer_context();
         if let Some(parent) = target.parent() {
             self.current_dir = parent.to_path_buf();
             if let Err(e) = self.refresh() {
                 self.message = format!("Link opened, but browser refresh failed: {e}");
+                return true;
             }
             self.select_path(&target);
         }
-        self.note_search.reset_matches();
-        self.outline_view.reset();
-        self.editor = Some(new_note);
-        self.editor_keys = EditorEventHandler::default();
-        self.pending_open_bracket = false;
-        self.wiki_completion = None;
-        self.command = None;
-        self.message = format!("Opened linked note: {}", target.display());
+        self.message = format!(
+            "Opened note: {} ({} open buffers)",
+            target.display(),
+            self.editor.len()
+        );
+        true
     }
 
     pub(super) fn previous_note(&mut self) {
-        if self.editor.as_ref().is_some_and(OpenNote::is_dirty) {
-            self.message = "Save with :w before returning to the previous note.".to_owned();
-            return;
-        }
         let Some(path) = self.history.last().cloned() else {
             self.message = "No previous linked note in history.".to_owned();
             return;
         };
-        if path.exists() {
+        if self.open_link_target(path, false) {
             self.history.pop();
-            self.open_link_target(path, false);
-        } else {
-            self.message = "Previous note no longer exists; history unchanged.".to_owned();
         }
     }
 
@@ -682,6 +670,12 @@ impl App {
     }
 
     pub(super) fn begin_prompt(&mut self, kind: PromptKind) {
+        if self.prompt_affects_buffer(&kind) {
+            self.message =
+                "Close affected open buffers before renaming, moving or trashing this entry."
+                    .to_owned();
+            return;
+        }
         let input = match &kind {
             PromptKind::Rename { source } => source
                 .file_name()
@@ -703,7 +697,21 @@ impl App {
         }
     }
 
+    fn prompt_affects_buffer(&self, kind: &PromptKind) -> bool {
+        match kind {
+            PromptKind::Rename { source }
+            | PromptKind::Move { source }
+            | PromptKind::Trash { source } => self.editor.affects_open_note(source),
+            _ => false,
+        }
+    }
+
     fn run_prompt(&mut self, prompt: Prompt) {
+        // Recheck at execution, not just when the prompt is opened.
+        if self.prompt_affects_buffer(&prompt.kind) {
+            self.message = "Close affected open buffers before changing this entry.".to_owned();
+            return;
+        }
         let result = match &prompt.kind {
             PromptKind::NewNote => file_ops::create_note(&self.current_dir, &prompt.input),
             PromptKind::NewFolder => file_ops::create_folder(&self.current_dir, &prompt.input),

@@ -162,6 +162,51 @@ mod tests {
     }
 
     #[test]
+    fn hidden_dirty_buffers_block_quit_and_file_operations() {
+        let (dir, mut app) = fixture();
+        let first = dir.path().join("Navigation.md");
+        let second = dir.path().join("Second.md");
+        fs::write(&second, "Second note").unwrap();
+        app.refresh().unwrap();
+        app.select_path(&first);
+        press(&mut app, KeyCode::Enter);
+        type_text(&mut app, "iX");
+        press(&mut app, KeyCode::Esc);
+        let before = app.editor.as_ref().unwrap().state.lines.to_string();
+        let cursor = app.editor.as_ref().unwrap().state.cursor;
+        type_text(&mut app, ":hide");
+        press(&mut app, KeyCode::Enter);
+        assert!(app.editor.is_none());
+        assert_eq!(app.editor.len(), 1);
+        press(&mut app, KeyCode::Char('q'));
+        assert!(app.message.contains("Unsaved buffers"));
+        for code in ['r', 'm', 'd'] {
+            press(&mut app, KeyCode::Char(code));
+            assert!(app.prompt.is_none());
+            assert!(first.exists());
+        }
+        app.select_path(&second);
+        press(&mut app, KeyCode::Enter);
+        assert_eq!(app.editor.len(), 2);
+        type_text(&mut app, ":q");
+        press(&mut app, KeyCode::Enter);
+        assert_eq!(app.editor.len(), 1);
+        app.select_path(&first);
+        press(&mut app, KeyCode::Enter);
+        assert_eq!(app.editor.as_ref().unwrap().state.lines.to_string(), before);
+        assert_eq!(app.editor.as_ref().unwrap().state.cursor, cursor);
+        assert!(app.editor.as_ref().unwrap().is_dirty());
+        type_text(&mut app, ":wq");
+        press(&mut app, KeyCode::Enter);
+        assert_eq!(app.editor.len(), 0);
+        assert_eq!(fs::read_to_string(&first).unwrap(), before);
+        assert!(
+            app.route_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE))
+                .unwrap()
+        );
+    }
+
+    #[test]
     fn ex_bar_owns_global_shortcuts_until_confirmed() {
         let (_dir, mut app) = fixture();
         press(&mut app, KeyCode::Enter);

@@ -24,17 +24,11 @@ impl App {
                 note.is_some_and(|note| markdown::is_markdown(&note.path))
                     && !self.writing.zen.enabled
             }
-            Save | Close | SaveAndClose | Writing(_) => editing,
+            Save | Hide | Close | SaveAndClose | Writing(_) => editing,
             CitationPicker => editing && self.bibliography_path.is_some(),
             SnippetPicker => note.is_some_and(|note| note.state.lines.to_string().is_empty()),
-            OutgoingLinks | Backlinks => {
-                if let Some(note) = note {
-                    !note.is_dirty()
-                } else {
-                    selected.is_some_and(|entry| !entry.is_dir)
-                }
-            }
-            PreviousNote => !self.history.is_empty() && note.is_none_or(|note| !note.is_dirty()),
+            OutgoingLinks | Backlinks => editing || selected.is_some_and(|entry| !entry.is_dir),
+            PreviousNote => !self.history.is_empty(),
             FindFilename | NewNote | NewFolder | Refresh | Quit => !editing,
             OpenSelection | Rename | Move | Trash => !editing && selected.is_some(),
             ParentFolder => !editing && self.current_dir != self.root,

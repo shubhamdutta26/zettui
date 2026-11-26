@@ -16,7 +16,7 @@ impl App {
             self.message.clear();
             return;
         }
-        let Some(note) = &self.editor else {
+        let Some(note) = self.editor.as_ref() else {
             self.message = "Open a Markdown note before focusing the outline.".into();
             return;
         };
@@ -54,7 +54,7 @@ impl App {
 
     /// Both heading navigation surfaces share exactly the same jump behavior.
     fn jump_to_heading(&mut self, row: usize) {
-        if let Some(note) = &mut self.editor {
+        if let Some(note) = self.editor.as_mut() {
             note.state.cursor = Index2::new(row, 0);
             note.state.set_viewport_offset(0, row.saturating_sub(1));
             self.outline_view.focused = false;
@@ -66,7 +66,7 @@ impl App {
         if self.has_active_popup() || self.command.is_some() || self.note_search.input.is_some() {
             return;
         }
-        let Some(note) = &self.editor else {
+        let Some(note) = self.editor.as_ref() else {
             self.message = "Open a Markdown note before searching headings.".into();
             return;
         };
@@ -143,7 +143,7 @@ impl App {
                 self.message.clear();
                 return;
             }
-            let Some(note) = &mut self.editor else {
+            let Some(note) = self.editor.as_mut() else {
                 self.outline_view.reset();
                 return;
             };

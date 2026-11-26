@@ -2,6 +2,7 @@
 
 mod app;
 mod bibliography;
+mod buffers;
 mod cli;
 mod command_palette;
 mod commands;

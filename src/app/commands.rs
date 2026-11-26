@@ -31,6 +31,10 @@ impl App {
                 // Browser-only binding. Do not permit a future caller to bypass dirty notes.
                 if self.editor.is_some() {
                     self.message = "Close the note before quitting.".to_owned();
+                } else if self.editor.any_dirty() {
+                    self.message =
+                        "Unsaved buffers remain. Reopen them to save or discard before quitting."
+                            .to_owned();
                 } else {
                     return Ok(true);
                 }
@@ -81,6 +85,7 @@ impl App {
             Command::Save => {
                 self.save_editor();
             }
+            Command::Hide => self.hide_editor(),
             Command::Close => self.close_editor(false),
             Command::DiscardAndClose => self.close_editor(true),
             Command::SaveAndClose => {

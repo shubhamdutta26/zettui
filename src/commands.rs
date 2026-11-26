@@ -37,6 +37,7 @@ pub(crate) enum Command {
     CitationPicker,
     SnippetPicker,
     Save,
+    Hide,
     Close,
     DiscardAndClose,
     SaveAndClose,
@@ -130,6 +131,7 @@ impl Command {
         use Command::*;
         match input.trim() {
             "w" => Some(Save),
+            "hide" => Some(Hide),
             "q" => Some(Close),
             "q!" => Some(DiscardAndClose),
             "wq" => Some(SaveAndClose),
@@ -253,6 +255,12 @@ pub(crate) const CATALOG: &[CommandInfo] = &[
         title: "Save and close note",
         shortcut: ":wq",
         aliases: "write exit",
+    },
+    CommandInfo {
+        command: Command::Hide,
+        title: "Return to browser (keep buffer open)",
+        shortcut: ":hide",
+        aliases: "hide park buffer browse notes",
     },
     CommandInfo {
         command: Command::Close,
