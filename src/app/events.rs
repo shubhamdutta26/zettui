@@ -202,6 +202,81 @@ mod tests {
     }
 
     #[test]
+    fn modified_browser_keys_do_not_open_prompts_or_quit() {
+        let (dir, mut app) = fixture();
+        for (code, modifiers) in [
+            ('d', KeyModifiers::CONTROL),
+            ('m', KeyModifiers::ALT),
+            ('r', KeyModifiers::CONTROL),
+            ('n', KeyModifiers::CONTROL),
+            ('q', KeyModifiers::ALT),
+        ] {
+            assert!(
+                !app.route_key(KeyEvent::new(KeyCode::Char(code), modifiers))
+                    .unwrap()
+            );
+            assert!(!app.has_active_popup());
+        }
+        assert!(app.editor.is_none());
+        assert!(dir.path().join("Navigation.md").exists());
+        press(&mut app, KeyCode::Char('d'));
+        assert!(app.prompt.is_some());
+        press(&mut app, KeyCode::Esc);
+        assert!(!app.has_active_popup());
+        assert!(dir.path().join("Navigation.md").exists());
+    }
+
+    #[test]
+    fn insert_text_does_not_trigger_normal_mode_commands() {
+        let (dir, mut app) = fixture();
+        let path = dir.path().join("Empty.md");
+        fs::write(&path, "").unwrap();
+        app.editor.open(&path).unwrap();
+        press(&mut app, KeyCode::Char('i'));
+        let literal = ":w /?nN ]b [b bc";
+        type_text(&mut app, literal);
+        for code in [KeyCode::F(5), KeyCode::F(6), KeyCode::F(7), KeyCode::F(8)] {
+            press(&mut app, code);
+        }
+        assert!(!app.has_active_popup());
+        assert!(app.command.is_none());
+        assert!(app.note_search.input.is_none());
+        assert!(!app.outline_view.focused);
+        let note = app.editor.as_ref().unwrap();
+        assert_eq!(note.state.mode, EditorMode::Insert);
+        assert_eq!(note.state.lines.to_string(), literal);
+        assert!(note.is_dirty());
+        press(&mut app, KeyCode::Esc);
+        type_text(&mut app, ":w");
+        press(&mut app, KeyCode::Enter);
+        assert_eq!(fs::read_to_string(path).unwrap(), literal);
+    }
+
+    #[test]
+    fn note_search_owns_keys_until_cancelled() {
+        let (_dir, mut app) = fixture();
+        press(&mut app, KeyCode::Enter);
+        let panels = app.panels;
+        let original = app.editor.as_ref().unwrap().state.lines.to_string();
+        type_text(&mut app, "/Second");
+        assert!(app.note_search.input.is_some());
+        for code in [KeyCode::F(2), KeyCode::F(5), KeyCode::F(8), KeyCode::F(10)] {
+            press(&mut app, code);
+        }
+        assert_eq!(app.panels, panels);
+        assert!(!app.has_active_popup());
+        assert!(app.note_search.input.is_some());
+        press(&mut app, KeyCode::Esc);
+        assert!(app.note_search.input.is_none());
+        assert_eq!(
+            app.editor.as_ref().unwrap().state.lines.to_string(),
+            original
+        );
+        press(&mut app, KeyCode::F(8));
+        assert!(app.command_palette.is_some());
+    }
+
+    #[test]
     fn statistics_track_edits_not_navigation_search_or_save() {
         let (dir, mut app) = fixture();
         let state = dir.path().join("statistics.json");

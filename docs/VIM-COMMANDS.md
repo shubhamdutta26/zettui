@@ -3,8 +3,7 @@
 Zettui embeds `edtui` (pinned to `0.11.7`) for modal text editing. It is not
 Vim or Neovim itself and does not load Vim plugins or a vimrc. This reference
 covers the application-owned Ex commands and intercepted search/leader keys.
-The underlying editing engine's full motion/operator/keymap inventory is not
-vendored in this repository and is not certified by this reference.
+The inherited commands below were checked against the [edtui 0.11.7 reference](https://docs.rs/edtui/0.11.7/edtui/#keybindings). They are source/documentation-verified, not runtime-certified; the full upstream keymap is not vendored.
 
 ## Application Ex commands
 
@@ -76,3 +75,39 @@ intercept keys, including `Ctrl+O`, `Ctrl+B`, `Ctrl+T`, `Ctrl+P`, `Ctrl+E`,
 
 See [Keyboard shortcuts](KEYBINDINGS.md) for browser, picker and editor bindings,
 and [Buffers and Sessions](BUFFERS-AND-SESSIONS.md) for save and discard semantics.
+
+## Inherited Vim editing keys
+
+Outside Zettui's own modal controls and reserved bindings, the pinned editing
+engine supplies the following common keys. This is a grouped reference, not a
+claim of complete Neovim compatibility.
+
+| Mode | Keys | Purpose |
+| --- | --- | --- |
+| Normal | `h`, `j`, `k`, `l` | Cursor movement |
+| Normal | `w`, `e`, `b` | Word navigation |
+| Normal | `0`, `_`, `$`, `Home`, `End` | Line positions |
+| Normal | `gg`, `G`, `%` | Document boundaries / matching delimiter |
+| Normal | `Ctrl+D`, `Ctrl+U`, `PageDown`, `PageUp` | Half/full-page navigation |
+| Normal | `i`, `a`, `A`, `o`, `O` | Begin inserting or open a line |
+| Normal | `x`, `dd`, `dw`, `dW`, `diw`, `diW`, `D` | Delete text |
+| Normal | `cw`, `cW`, `ciw`, `ciW` | Change text |
+| Normal | `J`, `.`, `u`, `Ctrl+R` | Join, repeat change, undo, redo |
+| Normal / Visual | `v`, `viw`, `y`, `yy`, `p`, `P` | Select, yank and paste (according to mode) |
+| Insert | `Esc`, `Enter`, `Backspace`, `Ctrl+H`, `Delete` | Leave Insert, newline, delete |
+| Insert | Arrow keys, `Home`, `End`, `Ctrl+Left`, `Ctrl+Right` | Cursor navigation |
+| Insert | `PageUp`, `PageDown`, `Ctrl+U` | Page navigation / delete toward line start |
+
+### Known routing limitations
+
+- Normal-mode `n`, `N`, `/`, `?`, `:`, Space and `[` / `]` are intercepted
+  by Zettui before edtui sees them. This can also interfere with multi-key
+  motions and text objects, e.g. `fn` or `di[`. Character-target motions
+  (`f`, `t`, `df`, `dt`, `cf`, `ct`) are inherited but not fully verified.
+- `Ctrl+E` opens the snippet picker, not an external editor. `Ctrl+F` opens
+  vault search; the other reserved Ctrl keys are listed above.
+- The pinned editor's pending key sequence is private. Changing its routing
+  requires further integration testing; Phase 4 does not attempt to emulate
+  it in Zettui or change the existing reserved keys.
+- The application consumes key-press events only; explicit terminal Repeat
+  and Release events are ignored. Holding a key depends on terminal encoding.

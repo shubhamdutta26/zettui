@@ -115,7 +115,7 @@ See [Buffers and Sessions](docs/BUFFERS-AND-SESSIONS.md) for the full command re
 - [Buffers and Sessions](docs/BUFFERS-AND-SESSIONS.md)
 - [Configuration](docs/CONFIGURATION.md)
 - [Keyboard shortcuts and writing modes](docs/KEYBINDINGS.md)
-- [Vim-style application commands](docs/VIM-COMMANDS.md)
+- [Vim commands, inherited editing keys and limitations](docs/VIM-COMMANDS.md)
 - [Command-line reference](docs/CLI.md)
 - [Writing analytics](docs/WRITING-ANALYTICS.md)
 - [Architecture](docs/ARCHITECTURE.md)

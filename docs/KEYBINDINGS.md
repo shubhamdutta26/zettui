@@ -5,7 +5,7 @@
 Shortcuts are context-sensitive. Active dialogs, pickers, in-note search input and
 the Ex command bar take precedence over global shortcuts. Editor text motions
 not intercepted by Zettui are delegated to the pinned `edtui` editing engine.
-See [Vim-style commands](VIM-COMMANDS.md) for the application-level Ex reference.
+See [Vim-style commands](VIM-COMMANDS.md) for the Ex reference, inherited editor keys and known conflicts. Browser file actions require plain keys (Shift is allowed for uppercase keys); Ctrl+G and Ctrl+T remain browser shortcuts. Global shortcuts are resolved before browser actions.
 
 | Context | Keys | Action |
 | --- | --- | --- |
@@ -52,8 +52,9 @@ See [Vim-style commands](VIM-COMMANDS.md) for the application-level Ex reference
 | Outline | `Enter`, `Esc` | Jump to heading and return to editor; return without moving cursor |
 | Global (outside modal input) | `Alt+↑` / `Alt+↓` | Widen / narrow outline preference |
 | Browser / Editor / Outline | `Ctrl+G` | Cycle native, terminal and built-in themes |
-| Search popup | `Tab`, `↑` / `↓`, `Enter`, `Esc` | Toggle text/tags, select result, open, cancel |
-| Pickers | `↑` / `↓`, `Enter`, `Esc`, `Ctrl+U` | Select, confirm, cancel, clear search (where supported) |
+| Vault search | `Tab`, `↑` / `↓`, `Enter`, `Esc` | Switch text/tags, select, open, cancel |
+| Filename search | `↑` / `↓`, `Enter`, `Esc` | Select result; confirm selection in Files (Enter again opens); cancel |
+| Vault / filename / wiki-link / snippet / citation pickers | Type, `Backspace`, `↑` / `↓`, `Enter`, `Esc`, `Ctrl+U` | Filter, edit query, select, confirm, cancel, clear query |
 | Buffer picker | `↑` / `↓`, `Ctrl+P` / `Ctrl+N`, `Enter`, `Esc` / `F5`, `Ctrl+U` | Select, activate, cancel, clear query |
 | In-note search input | Type, `Backspace`, `Ctrl+U`, `Enter`, `Esc` | Edit query, clear, confirm or cancel |
 | Ex command bar | Type, `Backspace`, `Enter`, `Esc` | Edit command, execute or cancel |
@@ -67,7 +68,7 @@ See [Vim-style commands](VIM-COMMANDS.md) for the application-level Ex reference
 
 ## Panel visibility
 
-F2 toggles Files while editing; closing the note always restores the file browser without changing the preference. F3 toggles the browser Preview. F4 toggles the Outline of the open note. In Normal mode, `Space e`, `Space p`, `Space o` and `:toggle files`, `:toggle preview`, `:toggle outline` perform the same actions. Function keys work in browser and editor modes (except when a modal picker owns input). The editor always remains available and Preview never receives keyboard focus. F2/F3/F4 change session preferences even when the corresponding panel is not currently displayed. F6 (Normal mode), `Space l` or `:outline` opens and focuses the Outline. Its selection is independent of the editor cursor until Enter jumps; Esc or F6 returns without moving the cursor. Collapsing a branch only hides outline entries, not note text. A collapsed ancestor represents the current section when its active descendant is hidden. Collapse state is per open document and resets if heading rows, levels or titles change. Hiding the Outline or shrinking the terminal until it cannot be displayed returns focus to the editor. Sidebars temporarily disappear in Zen; narrow terminals temporarily omit the Outline if necessary. Panel width changes and toggles last for the session only; settings in `[layout]` set startup preferences. Outline width changes by five percentage points, within 15–50%. Files resizing is unchanged.
+F2 toggles Files while editing; closing the note always restores the file browser without changing the preference. F3 toggles the browser Preview. F4 toggles the Outline of the open note. In Normal mode, `Space e`, `Space p`, `Space o` and `:toggle files`, `:toggle preview`, `:toggle outline` perform the same actions. F2/F3/F4 work in browser and editor modes (except when modal input owns the keys). F5–F8 have the mode restrictions in the table above. The editor always remains available and Preview never receives keyboard focus. F2/F3/F4 change session preferences even when the corresponding panel is not currently displayed. F6 (Normal mode), `Space l` or `:outline` opens and focuses the Outline. Its selection is independent of the editor cursor until Enter jumps; Esc or F6 returns without moving the cursor. Collapsing a branch only hides outline entries, not note text. A collapsed ancestor represents the current section when its active descendant is hidden. Collapse state is per open document and resets if heading rows, levels or titles change. Hiding the Outline or shrinking the terminal until it cannot be displayed returns focus to the editor. Sidebars temporarily disappear in Zen; narrow terminals temporarily omit the Outline if necessary. Panel width changes and toggles last for the session only; settings in `[layout]` set startup preferences. Outline width changes by five percentage points, within 15–50%. Files resizing is unchanged.
 
 ## Heading search
 

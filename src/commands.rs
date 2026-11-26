@@ -90,26 +90,35 @@ impl Command {
                 Char('l') | Right if key.modifiers == KeyModifiers::ALT => Some(WidenBrowser),
                 _ => None,
             },
-            KeyScope::Browser => match key.code {
-                Char('g') if ctrl => Some(CycleTheme),
-                Char('q') => Some(Quit),
-                Char('o') => Some(OutgoingLinks),
-                Char('b') => Some(Backlinks),
-                Char('/') => Some(FindFilename),
-                Char('t') if ctrl => Some(PreviousNote),
-                Char('n') => Some(NewNote),
-                Char('N') => Some(NewFolder),
-                Char('r') => Some(Rename),
-                Char('m') => Some(Move),
-                Char('d') => Some(Trash),
-                Char('R') => Some(Refresh),
-                Char('j') | Down => Some(MoveDown),
-                Char('k') | Up => Some(MoveUp),
-                Enter => Some(OpenSelection),
-                Char('l') | Right => Some(EnterFolder),
-                Char('h') | Backspace | Left => Some(ParentFolder),
+            KeyScope::Browser if key.modifiers == KeyModifiers::CONTROL => match key.code {
+                Char('g') => Some(CycleTheme),
+                Char('t') => Some(PreviousNote),
                 _ => None,
             },
+            // A modified key must not fall through to a plain file operation.
+            // Shift is allowed for terminals that report it with uppercase letters.
+            KeyScope::Browser
+                if key.modifiers.is_empty() || key.modifiers == KeyModifiers::SHIFT =>
+            {
+                match key.code {
+                    Char('q') => Some(Quit),
+                    Char('o') => Some(OutgoingLinks),
+                    Char('b') => Some(Backlinks),
+                    Char('/') => Some(FindFilename),
+                    Char('n') => Some(NewNote),
+                    Char('N') => Some(NewFolder),
+                    Char('r') => Some(Rename),
+                    Char('m') => Some(Move),
+                    Char('d') => Some(Trash),
+                    Char('R') => Some(Refresh),
+                    Char('j') | Down => Some(MoveDown),
+                    Char('k') | Up => Some(MoveUp),
+                    Enter => Some(OpenSelection),
+                    Char('l') | Right => Some(EnterFolder),
+                    Char('h') | Backspace | Left => Some(ParentFolder),
+                    _ => None,
+                }
+            }
             KeyScope::Editor if ctrl => match key.code {
                 Char('o') => Some(OutgoingLinks),
                 Char('b') => Some(Backlinks),
@@ -528,6 +537,101 @@ pub(crate) const CATALOG: &[CommandInfo] = &[
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn browser_modified_keys_do_not_fall_through_to_plain_commands() {
+        for modifiers in [
+            KeyModifiers::CONTROL,
+            KeyModifiers::ALT,
+            KeyModifiers::CONTROL | KeyModifiers::ALT,
+        ] {
+            for code in ['q', 'd', 'm', 'r', 'n', 'N', 'j', 'k', 'o', 'b', '/'] {
+                assert_eq!(
+                    Command::from_key(
+                        KeyScope::Browser,
+                        KeyEvent::new(KeyCode::Char(code), modifiers)
+                    ),
+                    None
+                );
+            }
+            assert_eq!(
+                Command::from_key(KeyScope::Browser, KeyEvent::new(KeyCode::Enter, modifiers)),
+                None
+            );
+        }
+        for (code, modifiers, expected) in [
+            ('d', KeyModifiers::NONE, Command::Trash),
+            ('q', KeyModifiers::NONE, Command::Quit),
+            ('N', KeyModifiers::SHIFT, Command::NewFolder),
+            ('R', KeyModifiers::SHIFT, Command::Refresh),
+            ('g', KeyModifiers::CONTROL, Command::CycleTheme),
+            ('t', KeyModifiers::CONTROL, Command::PreviousNote),
+        ] {
+            assert_eq!(
+                Command::from_key(
+                    KeyScope::Browser,
+                    KeyEvent::new(KeyCode::Char(code), modifiers)
+                ),
+                Some(expected)
+            );
+        }
+    }
+
+    #[test]
+    fn documented_ex_commands_resolve_to_expected_actions() {
+        use Command::*;
+        for (input, expected) in [
+            ("w", Save),
+            ("hide", Hide),
+            ("buffers", BufferPicker),
+            ("ls", BufferPicker),
+            ("bn", NextBuffer),
+            ("bp", PreviousBuffer),
+            ("b#", AlternateBuffer),
+            ("bd", CloseBuffer),
+            ("bonly", CloseOtherBuffers),
+            ("toggle tabs", ToggleTabs),
+            ("toggle hidden", ToggleHiddenFolders),
+            ("toggle hidden folders", ToggleHiddenFolders),
+            ("wa", SaveAll),
+            ("qa", QuitAll),
+            ("qall", QuitAll),
+            ("wqa", SaveQuitAll),
+            ("wqall", SaveQuitAll),
+            ("q", Close),
+            ("q!", DiscardAndClose),
+            ("wq", SaveAndClose),
+            ("toggle files", ToggleFiles),
+            ("toggle preview", TogglePreview),
+            ("toggle outline", ToggleOutline),
+            ("outline", FocusOutline),
+            ("headings", SearchHeadings),
+            ("commands", OpenPalette),
+            ("analytics", WritingAnalytics),
+            ("stats", WritingAnalytics),
+            ("zen", Writing("zen")),
+            ("focus", Writing("focus")),
+            ("focus off", Writing("focus off")),
+            ("focus line", Writing("focus line")),
+            ("focus paragraph", Writing("focus paragraph")),
+            ("focus section", Writing("focus section")),
+            ("typewriter", Writing("typewriter")),
+            ("set number", Writing("set number")),
+            ("set nonumber", Writing("set nonumber")),
+            ("set wrap", Writing("set wrap")),
+            ("set nowrap", Writing("set nowrap")),
+            ("set status", Writing("set status")),
+            ("set nostatus", Writing("set nostatus")),
+            ("toggle number", Writing("toggle number")),
+            ("toggle status", Writing("toggle status")),
+        ] {
+            assert_eq!(Command::from_ex(input), Some(expected), "{input}");
+            assert_eq!(Command::from_ex(&format!("  {input}  ")), Some(expected));
+        }
+        for input in ["qa!", "W", "!ls", "", "set textwidth=80"] {
+            assert_eq!(Command::from_ex(input), None, "{input}");
+        }
+    }
 
     #[test]
     fn hidden_folder_shortcuts_share_command() {
