@@ -1,5 +1,6 @@
 //! Buffer edit accumulation and periodic persistence, independent of the UI.
 
+use crate::analytics::{self, Goals, Report};
 use crate::statistics::{Activity, Store};
 use chrono::NaiveDate;
 use std::{
@@ -15,6 +16,7 @@ const FLUSH_INTERVAL: Duration = Duration::from_secs(2);
 /// Dates are assigned at edit time, not flush time (including across midnight).
 pub struct Tracker {
     store: Option<Store>,
+    goals: Goals,
     pending: BTreeMap<NaiveDate, Activity>,
     last_attempt: Instant,
     warning: Option<String>,
@@ -22,8 +24,13 @@ pub struct Tracker {
 
 impl Tracker {
     pub fn new(path: Option<PathBuf>) -> Self {
+        Self::with_goals(path, Goals::default())
+    }
+
+    pub fn with_goals(path: Option<PathBuf>, goals: Goals) -> Self {
         Self {
             store: path.map(Store::new),
+            goals,
             pending: BTreeMap::new(),
             last_attempt: Instant::now(),
             warning: None,
@@ -37,6 +44,24 @@ impl Tracker {
             *total = total.checked_add(delta)?;
         }
         Ok(())
+    }
+
+    /// Combine the latest persisted device totals with unflushed local edits.
+    /// Read errors are propagated, not silently presented as empty history.
+    pub fn daily_totals(&self) -> io::Result<BTreeMap<NaiveDate, Activity>> {
+        let mut totals = match &self.store {
+            Some(store) => store.daily_totals()?,
+            None => BTreeMap::new(),
+        };
+        for (&date, &activity) in &self.pending {
+            let total = totals.entry(date).or_default();
+            *total = total.checked_add(activity)?;
+        }
+        Ok(totals)
+    }
+
+    pub fn report(&self, today: NaiveDate) -> io::Result<Report> {
+        analytics::report(&self.daily_totals()?, today, self.goals)
     }
 
     pub fn warning(&self) -> Option<&str> {
@@ -82,6 +107,31 @@ mod tests {
 
     fn day(n: u32) -> NaiveDate {
         NaiveDate::from_ymd_opt(2026, 11, n).unwrap()
+    }
+
+    #[test]
+    fn reports_include_pending_edits_without_double_counting_or_creating_state() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("statistics.json");
+        let goals = Goals {
+            daily_words: 4,
+            weekly_words: 10,
+        };
+        let mut tracker = Tracker::with_goals(Some(path.clone()), goals);
+        assert_eq!(tracker.report(day(26)).unwrap().today.totals.words_added, 0);
+        assert!(!path.exists());
+        tracker.record_edit(day(26), "", "hello world").unwrap();
+        let before = tracker.report(day(26)).unwrap();
+        assert_eq!(before.daily_goal.unwrap().percent(), 50);
+        assert!(!path.exists());
+        tracker.flush().unwrap();
+        assert_eq!(tracker.report(day(26)).unwrap(), before);
+        tracker
+            .record_edit(day(26), "hello world", "hello world again")
+            .unwrap();
+        assert_eq!(tracker.report(day(26)).unwrap().today.totals.words_added, 3);
+        fs::write(path, "invalid data").unwrap();
+        assert!(tracker.report(day(26)).is_err());
     }
 
     #[test]

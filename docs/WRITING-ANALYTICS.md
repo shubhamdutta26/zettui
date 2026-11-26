@@ -117,3 +117,44 @@ switching buffers, searching and quitting should not change those counts.
 Reopening Zettui and adding further text should accumulate activity rather than
 reset the device or the previous counters. Use an isolated test directory to
 avoid contaminating actual writing statistics.
+
+## Phase 3: analytics and writing goals
+
+`zettui::analytics` computes inclusive date-range summaries, calendar-day
+averages, writing-day counts and current/longest streaks. `Tracker::report`
+combines all saved devices with the local pending edits without forcing a save.
+Reading a missing state file returns an empty history and does not initialize
+an installation. Invalid state and aggregation overflow are reported as errors.
+
+Reports include today, Monday-start week to date, month to date, year to date
+and all time (first recorded date through today, or today for empty history).
+Future dates are excluded. Averages use all elapsed calendar days, including
+zero-activity days. A writing day contains a positive word or character addition;
+a deletion-only day does not extend a streak. A current streak can end yesterday
+if today has no additions yet. Longest streaks are historical through today.
+
+Optional goals are loaded at startup from the normal configuration:
+
+```toml
+[writing_goals]
+daily_words = 1000
+weekly_words = 5000
+```
+
+Both default to zero (disabled independently). Targets are nonnegative integers.
+Goals measure gross word additions, including accepted insertions and undo/redo
+as described in Phase 2; deleted words do not reduce progress. The report includes
+actual words, target, remaining words, reached status and a capped percentage
+(floored at whole percent). Over-target writing remains visible in actual totals.
+Goals are configuration, not statistics data, and do not modify past records.
+The interactive display is deferred to Phase 4; this phase adds no new hotkeys.
+
+### Phase 3 verification
+
+```sh
+cargo test --locked --lib analytics::tests
+cargo test --locked --lib writing_activity::tests
+cargo test --locked writing_goals_default_to_disabled_and_accept_independent_targets
+cargo test --locked
+cargo clippy --all-targets --locked -- -D warnings
+```

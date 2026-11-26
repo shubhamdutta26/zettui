@@ -61,6 +61,8 @@ All keys are optional. Restart Zettui after changing the file. Session commands 
 | `layout` | `show_files` | `true`; while editing; always visible in browser |
 | `layout` | `show_preview` | `true`; browser mode only |
 | `layout` | `show_outline` | `false`; editor mode only; interactive Markdown outline |
+| `writing_goals` | `daily_words` | `0` (disabled); positive gross word-addition target per local day |
+| `writing_goals` | `weekly_words` | `0` (disabled); positive gross word-addition target per Monday-start week |
 | `editor` | `line_numbers` | `true` |
 | `editor` | `word_wrap` | `true`; visual wrapping |
 | `markdown` | `syntax_highlighting` | `true`; master switch for editor and preview |

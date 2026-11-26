@@ -23,6 +23,7 @@ pub struct Config {
     pub buffers: BufferSettings,
     pub browser: BrowserSettings,
     pub session: crate::session::Settings,
+    pub writing_goals: zettui::analytics::Goals,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -172,6 +173,23 @@ fn expand_path(path: PathBuf, config_dir: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn writing_goals_default_to_disabled_and_accept_independent_targets() {
+        assert_eq!(
+            Config::default().writing_goals,
+            zettui::analytics::Goals::default()
+        );
+        let config: Config = toml::from_str("[writing_goals]\ndaily_words = 500").unwrap();
+        assert_eq!(config.writing_goals.daily_words, 500);
+        assert_eq!(config.writing_goals.weekly_words, 0);
+        let config: Config = toml::from_str("[writing_goals]\nweekly_words = 2500").unwrap();
+        assert_eq!(config.writing_goals.weekly_words, 2500);
+        assert!(toml::from_str::<Config>("[writing_goals]\ndaily_words = -1").is_err());
+        assert!(toml::from_str::<Config>("[writing_goals]\nunknown = 1").is_err());
+        let example: Config = toml::from_str(include_str!("../config.example.toml")).unwrap();
+        assert_eq!(example.writing_goals, zettui::analytics::Goals::default());
+    }
 
     #[test]
     fn hidden_folder_config_defaults_and_override() {

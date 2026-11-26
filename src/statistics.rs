@@ -201,6 +201,15 @@ impl Store {
         }
     }
 
+    /// Read the current atomic snapshot without creating state or a lock file.
+    /// A concurrent first write may not yet be visible, which is safe for reports.
+    pub fn daily_totals(&self) -> io::Result<BTreeMap<NaiveDate, Activity>> {
+        match self.read()? {
+            Some(stats) => stats.daily_totals(),
+            None => Ok(BTreeMap::new()),
+        }
+    }
+
     /// Persist an edit delta for the supplied local calendar date. The caller
     /// decides what constitutes a writing edit (implemented in Phase 2).
     pub fn record(&self, date: NaiveDate, activity: Activity) -> io::Result<Statistics> {

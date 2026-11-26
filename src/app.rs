@@ -471,6 +471,7 @@ pub(crate) fn start() -> io::Result<()> {
         panels,
         snippets_dir,
         writing,
+        writing_goals,
         markdown_settings,
         session_settings,
         show_tab_bar,
@@ -494,8 +495,9 @@ pub(crate) fn start() -> io::Result<()> {
     app.restore_session();
     // Enable recording only for the real application, after session restoration.
     // Test fixtures remain isolated from the user's installation-wide state.
-    app.statistics = Some(zettui::writing_activity::Tracker::new(
+    app.statistics = Some(zettui::writing_activity::Tracker::with_goals(
         zettui::statistics::state_path(),
+        writing_goals,
     ));
     let result = ratatui::run(|terminal| app.run(terminal));
     // Attempt a final flush even if the terminal loop returned an I/O error.

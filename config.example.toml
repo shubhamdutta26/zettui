@@ -42,6 +42,10 @@ restore_layout = true # Restore panel widths/visibility, tabs and hidden-folder 
 [browser]
 show_hidden_folders = false # F9 toggles dot-prefixed folders; .git stays hidden.
 
+[writing_goals]
+daily_words = 0 # Disabled; set to a positive word target, e.g. 1000.
+weekly_words = 0 # Disabled; Monday-start week, e.g. 5000.
+
 [editor]
 line_numbers = true
 word_wrap = true # Visual wrapping only; never inserts line breaks.
