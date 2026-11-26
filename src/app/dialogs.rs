@@ -13,6 +13,38 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use edtui::{EditorMode, Index2};
 use std::path::PathBuf;
 
+/// Apply the shared search-picker keys; return whether filtering is required.
+/// Enter, Escape and picker-specific actions are handled by each caller.
+fn picker_input(key: KeyEvent, query: &mut String, selected: &mut usize, count: usize) -> bool {
+    match key.code {
+        KeyCode::Up => *selected = selected.saturating_sub(1),
+        KeyCode::Down => {
+            if *selected + 1 < count {
+                *selected += 1;
+            }
+        }
+        KeyCode::Backspace => {
+            query.pop();
+            return true;
+        }
+        KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            query.clear();
+            return true;
+        }
+        // Typing is search input, so j/k are not navigation while searching.
+        KeyCode::Char(ch)
+            if !key
+                .modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+        {
+            query.push(ch);
+            return true;
+        }
+        _ => {}
+    }
+    false
+}
+
 impl App {
     pub(super) fn open_vault_search(&mut self, mode: SearchMode) {
         match VaultIndex::load(&self.root) {
@@ -68,16 +100,6 @@ impl App {
                 dialog.filter();
                 self.vault_search = Some(dialog);
             }
-            KeyCode::Up => {
-                dialog.selected = dialog.selected.saturating_sub(1);
-                self.vault_search = Some(dialog);
-            }
-            KeyCode::Down => {
-                if dialog.selected + 1 < dialog.matches.len() {
-                    dialog.selected += 1;
-                }
-                self.vault_search = Some(dialog);
-            }
             KeyCode::Enter => {
                 if let Some(hit) = dialog.matches.get(dialog.selected).cloned() {
                     if !self.open_search_hit(hit) {
@@ -88,26 +110,13 @@ impl App {
                     self.vault_search = Some(dialog);
                 }
             }
-            KeyCode::Backspace => {
-                dialog.query.pop();
-                dialog.filter();
+            _ => {
+                let count = dialog.matches.len();
+                if picker_input(key, &mut dialog.query, &mut dialog.selected, count) {
+                    dialog.filter();
+                }
                 self.vault_search = Some(dialog);
             }
-            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                dialog.query.clear();
-                dialog.filter();
-                self.vault_search = Some(dialog);
-            }
-            KeyCode::Char(ch)
-                if !key
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-            {
-                dialog.query.push(ch);
-                dialog.filter();
-                self.vault_search = Some(dialog);
-            }
-            _ => self.vault_search = Some(dialog),
         }
     }
 
@@ -127,36 +136,13 @@ impl App {
                     self.find_dialog = Some(dialog);
                 }
             }
-            KeyCode::Up => {
-                dialog.selected = dialog.selected.saturating_sub(1);
-                self.find_dialog = Some(dialog);
-            }
-            KeyCode::Down => {
-                if dialog.selected + 1 < dialog.matches.len() {
-                    dialog.selected += 1;
+            _ => {
+                let count = dialog.matches.len();
+                if picker_input(key, &mut dialog.query, &mut dialog.selected, count) {
+                    dialog.filter(&self.entries);
                 }
                 self.find_dialog = Some(dialog);
             }
-            KeyCode::Backspace => {
-                dialog.query.pop();
-                dialog.filter(&self.entries);
-                self.find_dialog = Some(dialog);
-            }
-            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                dialog.query.clear();
-                dialog.filter(&self.entries);
-                self.find_dialog = Some(dialog);
-            }
-            KeyCode::Char(c)
-                if !key
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-            {
-                dialog.query.push(c);
-                dialog.filter(&self.entries);
-                self.find_dialog = Some(dialog);
-            }
-            _ => self.find_dialog = Some(dialog),
         }
     }
 
@@ -209,16 +195,6 @@ impl App {
             KeyCode::Esc => {
                 self.message = "Link picker canceled; [[ remains in the note.".to_owned();
             }
-            KeyCode::Up => {
-                dialog.selected = dialog.selected.saturating_sub(1);
-                self.wiki_completion = Some(dialog);
-            }
-            KeyCode::Down => {
-                if dialog.selected + 1 < dialog.matches.len() {
-                    dialog.selected += 1;
-                }
-                self.wiki_completion = Some(dialog);
-            }
             KeyCode::Enter => {
                 if let Some(&index) = dialog.matches.get(dialog.selected) {
                     let link = dialog.suggestions[index].link.clone();
@@ -228,26 +204,13 @@ impl App {
                     self.wiki_completion = Some(dialog);
                 }
             }
-            KeyCode::Backspace => {
-                dialog.query.pop();
-                dialog.filter();
+            _ => {
+                let count = dialog.matches.len();
+                if picker_input(key, &mut dialog.query, &mut dialog.selected, count) {
+                    dialog.filter();
+                }
                 self.wiki_completion = Some(dialog);
             }
-            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                dialog.query.clear();
-                dialog.filter();
-                self.wiki_completion = Some(dialog);
-            }
-            KeyCode::Char(c)
-                if !key
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-            {
-                dialog.query.push(c);
-                dialog.filter();
-                self.wiki_completion = Some(dialog);
-            }
-            _ => self.wiki_completion = Some(dialog),
         }
     }
 
@@ -321,16 +284,6 @@ impl App {
             KeyCode::Esc => {
                 self.message = "Snippet picker canceled.".to_owned();
             }
-            KeyCode::Up => {
-                picker.selected = picker.selected.saturating_sub(1);
-                self.snippet_picker = Some(picker);
-            }
-            KeyCode::Down => {
-                if picker.selected + 1 < picker.matches.len() {
-                    picker.selected += 1;
-                }
-                self.snippet_picker = Some(picker);
-            }
             KeyCode::Enter => {
                 if let Some(&index) = picker.matches.get(picker.selected) {
                     let snippet = picker.items[index].clone();
@@ -350,26 +303,13 @@ impl App {
                     self.snippet_picker = Some(picker);
                 }
             }
-            KeyCode::Backspace => {
-                picker.query.pop();
-                picker.filter();
+            _ => {
+                let count = picker.matches.len();
+                if picker_input(key, &mut picker.query, &mut picker.selected, count) {
+                    picker.filter();
+                }
                 self.snippet_picker = Some(picker);
             }
-            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                picker.query.clear();
-                picker.filter();
-                self.snippet_picker = Some(picker);
-            }
-            KeyCode::Char(ch)
-                if !key
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-            {
-                picker.query.push(ch);
-                picker.filter();
-                self.snippet_picker = Some(picker);
-            }
-            _ => self.snippet_picker = Some(picker),
         }
     }
 
@@ -488,16 +428,6 @@ impl App {
             KeyCode::Esc => {
                 self.message = "Citation picker closed.".to_owned();
             }
-            KeyCode::Up => {
-                dialog.selected = dialog.selected.saturating_sub(1);
-                self.citation_picker = Some(dialog);
-            }
-            KeyCode::Down => {
-                if dialog.selected + 1 < dialog.matches.len() {
-                    dialog.selected += 1;
-                }
-                self.citation_picker = Some(dialog);
-            }
             KeyCode::Enter => {
                 if let Some(&index) = dialog.matches.get(dialog.selected) {
                     let citekey = dialog.bibliography.references[index].key.clone();
@@ -507,27 +437,13 @@ impl App {
                     self.citation_picker = Some(dialog);
                 }
             }
-            KeyCode::Backspace => {
-                dialog.query.pop();
-                dialog.filter();
+            _ => {
+                let count = dialog.matches.len();
+                if picker_input(key, &mut dialog.query, &mut dialog.selected, count) {
+                    dialog.filter();
+                }
                 self.citation_picker = Some(dialog);
             }
-            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                dialog.query.clear();
-                dialog.filter();
-                self.citation_picker = Some(dialog);
-            }
-            // Typing is search input, so j/k are not navigation while searching.
-            KeyCode::Char(c)
-                if !key
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-            {
-                dialog.query.push(c);
-                dialog.filter();
-                self.citation_picker = Some(dialog);
-            }
-            _ => self.citation_picker = Some(dialog),
         }
     }
 
@@ -786,6 +702,64 @@ impl App {
                 self.prompt = Some(prompt);
             }
             _ => self.prompt = Some(prompt),
+        }
+    }
+}
+
+#[cfg(test)]
+mod picker_input_tests {
+    use super::*;
+
+    #[test]
+    fn navigation_is_bounded_and_does_not_request_filtering() {
+        let mut query = String::new();
+        let mut selected = 0;
+        for (code, count, expected) in [
+            (KeyCode::Up, 0, 0),
+            (KeyCode::Down, 0, 0),
+            (KeyCode::Down, 2, 1),
+            (KeyCode::Down, 2, 1),
+            (KeyCode::Up, 2, 0),
+        ] {
+            let key = KeyEvent::new(code, KeyModifiers::NONE);
+            assert!(!picker_input(key, &mut query, &mut selected, count));
+            assert_eq!(selected, expected);
+        }
+        assert!(query.is_empty());
+    }
+
+    #[test]
+    fn unicode_typing_backspace_and_clear_request_filtering() {
+        let mut query = String::from("a");
+        let mut selected = 0;
+        for (code, modifiers, expected) in [
+            (KeyCode::Char('é'), KeyModifiers::NONE, "aé"),
+            (KeyCode::Backspace, KeyModifiers::NONE, "a"),
+            (KeyCode::Char('j'), KeyModifiers::NONE, "aj"),
+            (KeyCode::Char('u'), KeyModifiers::CONTROL, ""),
+            (KeyCode::Backspace, KeyModifiers::NONE, ""),
+        ] {
+            let key = KeyEvent::new(code, modifiers);
+            assert!(picker_input(key, &mut query, &mut selected, 0));
+            assert_eq!(query, expected);
+        }
+    }
+
+    #[test]
+    fn modified_typing_and_picker_specific_keys_are_ignored() {
+        let mut query = String::from("keep");
+        let mut selected = 1;
+        for (code, modifiers) in [
+            (KeyCode::Char('x'), KeyModifiers::CONTROL),
+            (KeyCode::Char('x'), KeyModifiers::ALT),
+            (KeyCode::Enter, KeyModifiers::NONE),
+            (KeyCode::Esc, KeyModifiers::NONE),
+            (KeyCode::Tab, KeyModifiers::NONE),
+        ] {
+            let key = KeyEvent::new(code, modifiers);
+            assert!(!picker_input(key, &mut query, &mut selected, 2));
+            assert_eq!(query, "keep");
+            assert_eq!(selected, 1);
         }
     }
 }

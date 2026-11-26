@@ -6,13 +6,14 @@
 | --- | --- |
 | `app/browser.rs` | Directory listing, selection, navigation and previews |
 | `app/appearance.rs` | Theme resolution, live refresh, cycling and pane resizing |
-| `app/dialogs.rs` | Picker actions, search, links, citations, snippets and file prompts |
+| `app/dialogs.rs` | Picker actions, shared search-picker input, links, citations, snippets and file prompts |
 | `app/editing.rs` | Saving, editor command input and in-note search interception |
 | `app/commands.rs` | Shared application-command execution |
 | `app/events.rs` | Terminal lifecycle, cursor shape and input routing |
 | `app/palette.rs` | Context checks, command palette lifecycle and keyboard routing |
 | `app/navigation.rs` | Outline and heading-search input, focus and shared cursor jumps |
-| `app/ui.rs` | Main interface and popup rendering |
+| `app/ui.rs` | Main interface, outline, buffer tabs and status rendering |
+| `app/ui/popups.rs` | Shared popup chrome and picker rendering |
 | `app/buffer_navigation.rs` | Buffer switching, prefix keys, picker and bulk-save actions |
 | `app/session.rs` | Capture and restore workspace session metadata |
 | `app/analytics_dashboard.rs` and child modules | Dashboard lifecycle, key handling, Overview, Month and Year rendering |
@@ -27,7 +28,8 @@ These modules share `App` privately rather than passing large collections of sta
 | `theme`, `system_theme` | Built-in palettes, native/terminal providers, user overrides |
 | `editor` | Open note state and safe saving |
 | `editor_search` | In-note search and match positions |
-| `markdown` | Source-preserving styling using character offsets |
+| `markdown` | Source-preserving styling using character offsets, block routing and highlight cache |
+| `markdown/yaml.rs`, `markdown/code.rs` | Stateful YAML and fenced-code lexers |
 | `fuzzy`, `heading_search` | Dependency-free fuzzy ranking and current-document heading picker snapshot |
 | `outline` | Top-level ATX headings, parent indices, section boundaries and cursor lookup |
 | `focus`, `layout` | Writing modes, dimming and pane geometry |
@@ -47,6 +49,8 @@ These modules share `App` privately rather than passing large collections of sta
 - Terminal palette queries run before the event loop, not while reading key events.
 - Preserve character offsets for Unicode text and editor search overlays.
 - Keep system theme fallback and explicit user override precedence intact.
+
+The vault, filename, wiki-link, snippet and citation pickers share query editing and bounded Up/Down selection. Each retains its own filtering, acceptance and cancellation behavior. Other pickers retain their distinct key policies.
 
 ## Heading navigation
 
