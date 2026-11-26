@@ -29,7 +29,39 @@ pub struct Activity {
 }
 
 impl Activity {
-    fn checked_add(self, other: Self) -> io::Result<Self> {
+    /// Measure one visible edit. Words follow the editor's whitespace-token
+    /// count; characters are Unicode scalar values, not UTF-8 bytes.
+    pub fn between(before: &str, after: &str) -> Self {
+        if before == after {
+            return Self::default();
+        }
+        let old_words = before.split_whitespace().count() as u64;
+        let new_words = after.split_whitespace().count() as u64;
+        // Remove the shared prefix and suffix without splitting Unicode.
+        // One event may replace a span rather than merely change its length.
+        let prefix: usize = before
+            .chars()
+            .zip(after.chars())
+            .take_while(|(a, b)| a == b)
+            .map(|(ch, _)| ch.len_utf8())
+            .sum();
+        let old = &before[prefix..];
+        let new = &after[prefix..];
+        let suffix = old
+            .chars()
+            .rev()
+            .zip(new.chars().rev())
+            .take_while(|(a, b)| a == b)
+            .count();
+        Self {
+            words_added: new_words.saturating_sub(old_words),
+            words_deleted: old_words.saturating_sub(new_words),
+            characters_added: (new.chars().count() - suffix) as u64,
+            characters_deleted: (old.chars().count() - suffix) as u64,
+        }
+    }
+
+    pub(crate) fn checked_add(self, other: Self) -> io::Result<Self> {
         let add = |a: u64, b: u64| {
             a.checked_add(b)
                 .ok_or_else(|| invalid("Writing statistics counter overflow"))
@@ -172,12 +204,20 @@ impl Store {
     /// Persist an edit delta for the supplied local calendar date. The caller
     /// decides what constitutes a writing edit (implemented in Phase 2).
     pub fn record(&self, date: NaiveDate, activity: Activity) -> io::Result<Statistics> {
+        self.record_batch(&BTreeMap::from([(date, activity)]))
+    }
+
+    /// Commit all pending dates in one transaction. On failure no date is
+    /// committed, so the caller can safely retry the entire batch.
+    pub fn record_batch(&self, pending: &BTreeMap<NaiveDate, Activity>) -> io::Result<Statistics> {
         let _lock = self.lock()?;
         let mut stats = match self.read()? {
             Some(stats) => stats,
             None => Statistics::new()?,
         };
-        stats.record(date, activity)?;
+        for (&date, &activity) in pending {
+            stats.record(date, activity)?;
+        }
         self.save(&stats)?;
         Ok(stats)
     }
@@ -260,6 +300,58 @@ mod tests {
             characters_added: n * 5,
             ..Activity::default()
         }
+    }
+
+    #[test]
+    fn edit_deltas_count_words_and_unicode_characters() {
+        assert_eq!(Activity::between("same", "same"), Activity::default());
+        assert_eq!(
+            Activity::between("hello", "hello 世界"),
+            Activity {
+                words_added: 1,
+                characters_added: 3,
+                ..Activity::default()
+            }
+        );
+        assert_eq!(
+            Activity::between("hello 世界", "hello"),
+            Activity {
+                words_deleted: 1,
+                characters_deleted: 3,
+                ..Activity::default()
+            }
+        );
+        assert_eq!(
+            Activity::between("aéz", "a界z"),
+            Activity {
+                characters_added: 1,
+                characters_deleted: 1,
+                ..Activity::default()
+            }
+        );
+        assert_eq!(Activity::between("a", "ab").words_added, 0);
+        assert_eq!(Activity::between("ab", "a b").words_added, 1);
+        assert_eq!(Activity::between("a b", "ab").words_deleted, 1);
+    }
+
+    #[test]
+    fn batch_failure_does_not_commit_any_date() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("statistics.json");
+        let store = Store::new(path.clone());
+        store
+            .record(
+                day(26),
+                Activity {
+                    words_added: u64::MAX,
+                    ..Activity::default()
+                },
+            )
+            .unwrap();
+        let before = fs::read(&path).unwrap();
+        let pending = BTreeMap::from([(day(25), activity(2)), (day(26), activity(1))]);
+        assert!(store.record_batch(&pending).is_err());
+        assert_eq!(fs::read(&path).unwrap(), before);
     }
 
     #[test]

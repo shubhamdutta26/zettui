@@ -275,6 +275,11 @@ fn draw_outline(
 impl App {
     pub(super) fn draw(&mut self, frame: &mut Frame) {
         let theme = self.theme;
+        let statistics_warning = self
+            .statistics
+            .as_ref()
+            .and_then(zettui::writing_activity::Tracker::warning)
+            .map(str::to_owned);
         frame.render_widget(Block::default().style(theme.base_style()), frame.area());
         let zen = self.editor.is_some() && self.writing.zen.enabled;
         let interactive = self.command.is_some()
@@ -286,7 +291,8 @@ impl App {
         } else if interactive {
             2
         } else {
-            u16::from(self.writing.zen.show_status_bar) + u16::from(!self.message.is_empty())
+            u16::from(self.writing.zen.show_status_bar)
+                + u16::from(!self.message.is_empty() || statistics_warning.is_some())
         };
         let areas = Layout::vertical([
             Constraint::Length(u16::from(!zen || self.writing.zen.show_title)),
@@ -698,6 +704,12 @@ impl App {
                 Style::default().fg(theme.accent),
             ));
         }
+        if statistics_warning.is_some() {
+            status.push(Span::styled(
+                "  Stats unsaved",
+                Style::default().fg(theme.warning),
+            ));
+        }
         let location_width = usize::from(areas[2].width)
             .saturating_sub(status.iter().map(Span::width).sum::<usize>() + 2);
         if location_width > 0 && !zen && !tabs_visible {
@@ -710,7 +722,9 @@ impl App {
             Constraint::Length(u16::from(
                 !zen || interactive || self.writing.zen.show_status_bar,
             )),
-            Constraint::Length(u16::from(!zen || interactive || !self.message.is_empty())),
+            Constraint::Length(u16::from(
+                !zen || interactive || !self.message.is_empty() || statistics_warning.is_some(),
+            )),
             Constraint::Length(u16::from(footer_height > 2)),
         ])
         .split(areas[2]);
@@ -777,9 +791,14 @@ impl App {
                 footer_rows[1],
             );
         }
-        if !zen || (!interactive && !self.message.is_empty()) {
+        if !zen || (!interactive && (!self.message.is_empty() || statistics_warning.is_some())) {
+            let message = match statistics_warning {
+                Some(error) if self.message.is_empty() => format!("Writing stats unsaved: {error}"),
+                Some(error) => format!("{} | Writing stats unsaved: {error}", self.message),
+                None => self.message.clone(),
+            };
             frame.render_widget(
-                Paragraph::new(self.message.as_str()).style(theme.base_style()),
+                Paragraph::new(message).style(theme.base_style()),
                 footer_rows[if zen { 1 } else { 2 }],
             );
         }

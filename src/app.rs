@@ -324,6 +324,7 @@ struct App {
     selected: usize,
     preview: String,
     editor: Buffers,
+    statistics: Option<zettui::writing_activity::Tracker>,
     buffer_picker: Option<crate::buffer_switcher::BufferSwitcher>,
     buffer_prefix: Option<char>,
     show_tab_bar: bool,
@@ -395,6 +396,7 @@ impl App {
             selected: 0,
             preview: String::new(),
             editor: Buffers::default(),
+            statistics: None,
             buffer_picker: None,
             buffer_prefix: None,
             show_tab_bar: true,
@@ -490,7 +492,19 @@ pub(crate) fn start() -> io::Result<()> {
     app.show_hidden_folders = show_hidden_folders;
     app.refresh()?;
     app.restore_session();
-    ratatui::run(|terminal| app.run(terminal))?;
+    // Enable recording only for the real application, after session restoration.
+    // Test fixtures remain isolated from the user's installation-wide state.
+    app.statistics = Some(zettui::writing_activity::Tracker::new(
+        zettui::statistics::state_path(),
+    ));
+    let result = ratatui::run(|terminal| app.run(terminal));
+    // Attempt a final flush even if the terminal loop returned an I/O error.
+    if let Some(tracker) = &mut app.statistics
+        && let Err(error) = tracker.flush()
+    {
+        eprintln!("Writing statistics not saved (pending activity lost on exit): {error}");
+    }
+    result?;
     // Report failures after leaving the alternate screen. Note saves remain intact.
     if let Err(error) = app.persist_session() {
         eprintln!("Session not saved: {error}");

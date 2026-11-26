@@ -22,6 +22,9 @@ impl App {
     fn run_loop(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
         let mut previous_insert_mode = None;
         loop {
+            if let Some(tracker) = &mut self.statistics {
+                tracker.flush_if_due();
+            }
             let in_insert = self
                 .editor
                 .as_ref()
@@ -51,8 +54,33 @@ impl App {
         }
     }
 
-    /// Route one terminal key; true requests application exit.
+    /// Observe the result of a routed key, including modal insertions and Vim
+    /// commands. Never compare the contents of two different buffers.
     fn route_key(&mut self, key: KeyEvent) -> io::Result<bool> {
+        let before = if key.kind == KeyEventKind::Press && self.statistics.is_some() {
+            self.editor
+                .as_ref()
+                .map(|note| (note.path.clone(), note.state.lines.to_string()))
+        } else {
+            None
+        };
+        let result = self.dispatch_key(key);
+        if let Some((path, before)) = before
+            && let Some(note) = self.editor.as_ref().filter(|note| note.path == path)
+            && let Some(tracker) = &mut self.statistics
+            && let Err(error) = tracker.record_edit(
+                chrono::Local::now().date_naive(),
+                &before,
+                &note.state.lines.to_string(),
+            )
+        {
+            self.message = format!("Writing statistics edit not counted: {error}");
+        }
+        result
+    }
+
+    /// Route one terminal key; true requests application exit.
+    fn dispatch_key(&mut self, key: KeyEvent) -> io::Result<bool> {
         if key.kind != KeyEventKind::Press {
             return Ok(false);
         }
@@ -164,6 +192,46 @@ mod tests {
         for ch in text.chars() {
             press(app, KeyCode::Char(ch));
         }
+    }
+
+    #[test]
+    fn statistics_track_edits_not_navigation_search_or_save() {
+        let (dir, mut app) = fixture();
+        let state = dir.path().join("statistics.json");
+        let note = dir.path().join("Empty.md");
+        fs::write(&note, "").unwrap();
+        app.statistics = Some(zettui::writing_activity::Tracker::new(Some(state.clone())));
+        press(&mut app, KeyCode::Enter);
+        app.editor.open(&note).unwrap();
+        press(&mut app, KeyCode::Char('i'));
+        type_text(&mut app, "hello world");
+        press(&mut app, KeyCode::Backspace);
+        press(&mut app, KeyCode::Esc);
+        type_text(&mut app, ":w");
+        press(&mut app, KeyCode::Enter);
+        type_text(&mut app, "/hello");
+        press(&mut app, KeyCode::Esc);
+        type_text(&mut app, "[b");
+        type_text(&mut app, "]b");
+        assert_eq!(app.editor.as_ref().unwrap().path, note);
+        assert_eq!(
+            app.editor.as_ref().unwrap().state.lines.to_string(),
+            "hello worl"
+        );
+        app.statistics.as_mut().unwrap().flush().unwrap();
+        let totals = zettui::statistics::Store::new(state)
+            .load()
+            .unwrap()
+            .daily_totals()
+            .unwrap();
+        // Sum dates in case the test happens to cross local midnight.
+        assert_eq!(totals.values().map(|a| a.words_added).sum::<u64>(), 2);
+        assert_eq!(totals.values().map(|a| a.characters_added).sum::<u64>(), 11);
+        assert_eq!(
+            totals.values().map(|a| a.characters_deleted).sum::<u64>(),
+            1
+        );
+        assert_eq!(totals.values().map(|a| a.words_deleted).sum::<u64>(), 0);
     }
 
     #[test]
