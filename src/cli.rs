@@ -23,7 +23,7 @@ pub(crate) struct StartupOptions {
 }
 
 /// Command line syntax:
-///   zettui [NOTES_DIR] [--bibliography PATH] [--theme NAME]
+///   `zettui [NOTES_DIR] [--bibliography PATH] [--theme NAME]`
 /// Configuration acts as a default; explicit CLI arguments win.
 pub(crate) fn arguments() -> io::Result<StartupOptions> {
     if env::args()

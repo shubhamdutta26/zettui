@@ -50,7 +50,7 @@ These modules share `App` privately rather than passing large collections of sta
 
 ## Panel layout
 
-`layout::Panels` holds session visibility preferences and preferred outline width. Its geometry method returns `[Files, Editor/Preview, Outline]`, reserving the active pane and suppressing the outline on small terminals. Browser mode always retains Files; editor mode always retains the editor. Zen temporarily suppresses sidebars without changing preferences. The event loop routes modal keys first, then global commands, then focused Outline keys before editor/browser input. Preview remains read-only; the Outline does not forward editing motions to edtui. Panel commands flow through the shared command dispatcher and do not mutate the note buffer or configuration file.
+`layout::Panels` holds session visibility preferences and preferred outline width. Its geometry method returns `[Files, Editor/Preview, Outline]`, reserving the active pane and suppressing the outline on small terminals. Browser mode always retains Files; editor mode always retains the editor. Zen temporarily suppresses sidebars without changing preferences. The event loop routes modal keys first, then the in-note search and Ex command bar, then global commands, then focused Outline keys before editor/browser input. `App::route_key` provides a testable single-key path used by the real terminal loop. Global shortcuts clear pending leader and wiki-link prefix state. Preview remains read-only; the Outline does not forward editing motions to edtui. Panel commands flow through the shared command dispatcher and do not mutate the note buffer or configuration file.
 
 ## Rendering and theme caches
 

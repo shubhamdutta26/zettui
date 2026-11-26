@@ -47,6 +47,20 @@ Syntax colors inherit the active theme (including COSMIC and Omarchy). Optional 
 
 Highlighting is source-preserving and lexical, not a full Markdown renderer, YAML validator or programming-language parser. Quarto chunks are highlighted, not executed.
 
+## Intelligent Navigation
+
+The upcoming v0.7.12 adds keyboard-driven navigation without changing the plain-text storage model.
+
+| Shortcut | Action |
+| --- | --- |
+| `F2` / `F3` / `F4` | Toggle Files / Preview / Outline preferences |
+| `F6` | Focus Outline or return to editor |
+| `F7` | Fuzzy-search headings in the open Markdown note |
+| `F8` | Search and execute available application commands |
+| `Alt+↑` / `Alt+↓` | Resize Outline |
+
+The outline and heading search use live, unsaved Markdown. Collapse outline branches with `h`/`l`, select with `j`/`k`, and jump with Enter. The outline is hidden by default. The palette reuses existing commands and safety checks; `Ctrl+P` remains Zotero. See the [user guide](docs/USER-GUIDE.md), [keybindings](docs/KEYBINDINGS.md) and [configuration](docs/CONFIGURATION.md).
+
 ## Documentation
 
 - [User guide](docs/USER-GUIDE.md)

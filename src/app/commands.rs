@@ -1,4 +1,4 @@
-//! Shared execution of application commands from keyboard and future pickers.
+//! Shared execution of application commands from keyboard and command palette.
 
 use super::{App, FindDialog, PromptKind};
 use crate::{commands::Command, search::SearchMode};

@@ -139,7 +139,7 @@ fn invalid(message: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message.to_owned())
 }
 
-/// Citation commands use [@key]. Reject whitespace and delimiters that would break this syntax.
+/// Citation commands use `[@key]`. Reject whitespace and delimiters that would break this syntax.
 fn valid_key(key: &str) -> bool {
     !key.is_empty()
         && key.chars().all(|c| {

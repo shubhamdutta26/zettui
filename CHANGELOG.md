@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased (0.7.12 — Intelligent Navigation)
+
+- Centralize application command dispatch across keyboard bindings, Ex commands and the new palette.
+- Add a shared H1–H6 ATX heading parser and section hierarchy for Outline, heading search and Focus mode.
+- Add independently configurable Files, Preview and Outline visibility and widths, with temporary Zen and narrow-terminal layouts.
+- Add interactive Outline selection, collapse/expand, cursor tracking and heading jumps.
+- Add fuzzy heading search over the live buffer, including collapsed and unsaved headings.
+- Add a context-aware fuzzy command palette (`F8`, `Space c`, `:commands`), preserving Zotero's `Ctrl+P` binding and existing file safety checks.
+- Keep the Ex command bar isolated from global shortcuts; add event-routing and external-change regression tests.
+
 ## 0.7.11
 
 - Expand Markdown source highlighting with nested emphasis, escaped delimiters, balanced link destinations, autolinks, citations, mathematics and improved table detection.

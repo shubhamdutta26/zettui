@@ -24,16 +24,17 @@ Versions identify development milestones; not all have a separate published rele
 | 0.7.8 | Mode indicators, word count, cursor position, breadcrumbs and redesigned pickers |
 | 0.7.9 | Markdown highlighting, Zen, Focus, Typewriter, structured configuration and heading overrides |
 | 0.7.10 | Native COSMIC v2, Omarchy and terminal themes, contrast adjustment, repository maintenance and caching |
+| 0.7.11 | Expanded Markdown, YAML, fenced-code and Quarto highlighting; syntax color overrides |
 
 ## Release preparation
 
-0.7.11: expanded Markdown and YAML highlighting, language-specific fenced-code highlighting, Quarto-style fence recognition, configurable syntax colors and distinct automatic heading colors. Implementation and documentation updated; final regression tests and release pending.
+0.7.12 — Intelligent Navigation: shared heading parser, independent panels, interactive outline, fuzzy heading search and global command palette. Final regression tests and release preparation pending.
 
 ## Planned
 
 | Milestone | Possible work |
 | --- | --- |
-| 0.8.0 | Optional note metadata panel, configurable UI elements; refine existing sidebar resizing |
+| 0.8.0 | Optional note metadata panel and further configurable UI elements |
 | 0.8.x | Search highlighting, ranked results, faster indexing, optional inline hashtag index |
 | 0.9.x | Link-aware rename/move and broken-link reports |
 | Later | In-editor snippet tab stops, ARM64 packages, configurable ZKN IDs |

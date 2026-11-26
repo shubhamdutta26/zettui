@@ -60,7 +60,7 @@ All keys are optional. Restart Zettui after changing the file. Session commands 
 | `layout` | `outline_width_percent` | `25`; preferred percent, integer 15–50 |
 | `layout` | `show_files` | `true`; while editing; always visible in browser |
 | `layout` | `show_preview` | `true`; browser mode only |
-| `layout` | `show_outline` | `false`; editor mode only, read-only in this phase |
+| `layout` | `show_outline` | `false`; editor mode only; interactive Markdown outline |
 | `editor` | `line_numbers` | `true` |
 | `editor` | `word_wrap` | `true`; visual wrapping |
 | `markdown` | `syntax_highlighting` | `true`; master switch for editor and preview |

@@ -28,6 +28,14 @@ Use F2 to hide/show Files while editing, F3 to hide/show Preview in browser mode
 
 Press F7 (or `Space h` / `:headings` in Normal mode) to fuzzy-search headings in the current note, even with the Outline hidden or in Zen. Type a partial title or abbreviation, select a result with arrows, and press Enter to jump. Search uses the live unsaved buffer, includes collapsed branches and distinguishes repeated titles by line number. Esc cancels without moving the cursor.
 
+## Global command palette
+
+Press F8 from the browser, Normal-mode editor or focused Outline. `Space c` and `:commands` also work in the Normal-mode editor. Search by title, shortcut or alias (for example `delete`, `zotero`, `resize`, or `srchhdngs`). Use arrows or Ctrl+N/Ctrl+P to select, Enter to execute and Esc to cancel. Ctrl+P still opens Zotero outside the navigation pickers; Ctrl+Shift+P is not a separate palette shortcut.
+
+Only context-appropriate commands are offered. Trash still requires confirmation, closing a modified note still requires saving or explicit discard, and a file changed externally is not overwritten. The palette cannot run shell commands or bypass an active dialog, Insert mode or Visual mode.
+
+Heading navigation recognizes top-level ATX headings (`#` through `######`), not Setext or list/blockquote headings. It ignores YAML frontmatter, fenced and indented code, multiline HTML comments and standalone display math. See [keyboard shortcuts](KEYBINDINGS.md) for all navigation bindings.
+
 ## Notes and snippets
 
 - `[[Note Name]]` links, outgoing links, and backlinks work across your notes; duplicate filenames may require folder-qualified links.
