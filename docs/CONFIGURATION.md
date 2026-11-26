@@ -193,3 +193,20 @@ Terminal mode samples RGB background and foreground at startup using terminal-co
 Test on Omarchy by switching between two dark themes, then between dark and light themes while a note is open. Verify editor, preview, search, selection, dialogs, focus and headings update without modifying the note.
 
 Test on COSMIC by toggling light/dark and changing the accent or custom palette while a note is open. Existing overrides remain in effect.
+
+
+## Writing goals and statistics storage
+
+```toml
+[writing_goals]
+daily_words = 1000
+weekly_words = 5000
+```
+
+Both targets default to `0` (disabled) and are independently configurable.
+They measure gross word additions per local calendar day or Monday-start week;
+deletions do not reduce progress. Restart Zettui after changing the configuration.
+Statistics live in `$XDG_STATE_HOME/zettui/statistics.json` (default
+`~/.local/state/zettui/statistics.json`), separate from configuration and note
+workspaces. Keep one independent state per installation; exchange exported
+snapshots instead of synchronizing the live file. See [writing analytics](WRITING-ANALYTICS.md).

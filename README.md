@@ -67,7 +67,7 @@ Open the writing dashboard with `F10`, the command palette or `:analytics`.
 View writing goals, streaks, activity totals and a monthly calendar or yearly
 heatmap. `Tab` switches views, `h`/`l` and `j`/`k` navigate calendar dates,
 `[`/`]` move periods, `t` returns to today, `r` refreshes and `Esc` closes.
-Transfer writing history between computers without double counting:
+Exchange writing history between computers using duplicate-safe snapshot merging:
 
 ```bash
 zettui --stats-export ~/Downloads/writing-stats.json
@@ -78,6 +78,12 @@ zettui --stats-device-id
 Exit the editor before exporting to include all pending edits. Keep each computer's
 live statistics file separate; exchange snapshots instead. Exports require a new
 filename and never replace an existing file.
+
+**Validation status:** multi-computer snapshot exchange has automated test coverage
+using isolated state directories, but the maintainer has not yet tested it on
+multiple physical computers. Keep backups of your original statistics and test
+with disposable state before relying on cross-computer exchange.
+
 Import legacy Zettlr history with `zettui --stats-import-zettlr FILE SOURCE`
 (e.g. `desktop`). Reuse the same source label for the same history; never import
 a combined history alongside its original component files.

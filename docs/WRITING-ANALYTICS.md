@@ -96,7 +96,7 @@ exit while persistence is failing may lose the pending in-memory activity.
 
 State remains installation-wide and is not created until the first tracked edit
 is flushed. No note text or filename is persisted. The analytics dashboard and
-writing-goal settings are deferred to later phases. No new dependencies or
+writing-goal settings are described below. No new dependencies or
 schema/version changes are required.
 
 ### Phase 2 verification
@@ -146,7 +146,7 @@ as described in Phase 2; deleted words do not reduce progress. The report includ
 actual words, target, remaining words, reached status and a capped percentage
 (floored at whole percent). Over-target writing remains visible in actual totals.
 Goals are configuration, not statistics data, and do not modify past records.
-The interactive display is deferred to Phase 4; this phase adds no new hotkeys.
+The interactive display is described in Phase 4.
 
 ### Phase 3 verification
 
@@ -176,10 +176,11 @@ returns to the current buffer or browser without saving/discarding edits.
 - `Tab` / Shift+Tab cycle views, `1`–`3` select a view, `t` / Home returns to
   today, `r` refreshes, `Esc` / `q` / `F10` closes. Future dates cannot be selected.
 
-Fixed intensity bands: `·` zero, `+` character additions without word additions,
-`-` deletion-only, `░` 1–249, `▒` 250–499, `▓` 500–999, `█` 1000+ words added.
-Future dates have no mark. The active theme supplies colors; the symbols retain
-meaning without color. Short terminals show selected-date details instead of
+Fixed intensity bands: 0, 1–249, 250–499, 500–999 and 1000+ words added.
+The full calendars use theme-derived shading; the compact fallback uses
+`·`, `░`, `▒`, `▓`, `█` respectively. Character-only and deletion-only activity
+use `+` and `-` markers (unless the selection/today marker takes precedence).
+Future dates are not counted. See the selected-day panel for exact counters. Short terminals show selected-date details instead of
 clipping the calendar grid; terminals smaller than 30x8 request resizing.
 
 The dashboard reads one consistent snapshot (persisted devices plus pending local
@@ -241,8 +242,9 @@ cell shows `*` without changing its activity color; today shows `o` when not
 selected. Future and out-of-year dates remain blank. All four counters appear
 in the selected-date panel below the graph.
 
-Wide terminals show two-character tiles separated by gaps; smaller terminals
-show single-character tiles, or a week window that follows the selected date.
+Wide terminals use symmetric half-cell edges around centered ASCII markers;
+smaller terminals use single-character tiles or a week window that follows
+the selected date.
 Very short terminals show selected-date details instead of clipping the grid.
 Existing day/week/year shortcuts, the Overview, and the Month grid are unchanged.
 
@@ -266,6 +268,12 @@ Run `cargo test --locked analytics_dashboard` and check the three views in both
 light and dark themes, at wide and narrow terminal sizes.
 
 ## Phase 5: multi-computer statistics exchange
+
+**Validation status (v0.7.14):** the maintainer has not yet tested this workflow
+on multiple physical computers. Automated tests simulate independent installations
+using isolated directories on one host. This is not evidence of real-world
+interoperability; keep original backups and use the physical-device checklist
+in [release validation](RELEASE-CHECKLIST-0.7.14.md).
 
 Transfer complete version-1 JSON snapshots with standalone terminal commands.
 They use the same installation-wide XDG state as the editor and do not load
@@ -387,3 +395,12 @@ cargo clippy --all-targets --locked -- -D warnings
 
 To test without touching existing writing data, set `XDG_STATE_HOME` to an
 absolute temporary directory before running the migration or dashboard.
+
+## Phase 7: integration and release validation
+
+The `writing_analytics_integration` test combines the legacy import CLI, native
+edit tracking, pending and persisted activity, writing goals, streaks and
+round-trip snapshot merging using temporary independent state directories.
+Run `cargo test --locked --test writing_analytics_integration` and follow the
+[release checklist](RELEASE-CHECKLIST-0.7.14.md). Actual multi-computer testing
+remains pending; do not mark that check as passed based on simulated tests.

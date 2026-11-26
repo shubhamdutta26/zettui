@@ -44,3 +44,36 @@ Heading navigation recognizes top-level ATX headings (`#` through `######`), not
 - `Ctrl+F` searches saved text in nested folders; `Alt+T` searches YAML frontmatter `tags:`. Search does not include unsaved edits or inline `#hashtags`. Files larger than 1 MiB are skipped.
 
 See [writing modes and shortcuts](KEYBINDINGS.md).
+
+
+## Writing analytics
+
+Press F10 from the browser or Normal-mode editor (`:analytics`, `:stats` or
+F8 command palette also work). Select `1` Overview, `2` Month or `3` Year;
+Tab cycles the views. Use `h`/`l` by day, `j`/`k` by week, `[`/`]` by period,
+`t` for today, `r` to refresh and Esc to close. Overview scrolls with `j`/`k`
+or PageUp/PageDown. Closing the dashboard preserves the current note and edits.
+
+To enable word goals, add to your Zettui configuration and restart:
+
+```toml
+[writing_goals]
+daily_words = 1000
+weekly_words = 5000
+```
+
+Zero disables a goal. Counters track gross edit activity, including accepted
+insertions and undo/redo, rather than the saved length of your notes. Statistics
+are installation-wide; the dashboard includes pending activity and the editor
+flushes periodically and on graceful exit.
+
+Import historical Zettlr data (use a stable source label per independent history):
+
+```sh
+zettui --stats-import-zettlr "$HOME/.config/Zettlr/stats.json" desktop
+```
+
+For source builds use `cargo run --locked --` instead of `zettui`. Export/import
+snapshots to exchange history; never share the live state file. Real multi-computer
+exchange has not yet been tested by the maintainer. See [writing analytics](WRITING-ANALYTICS.md)
+for counting rules, storage, source labels, backups, transfer instructions and limitations.
