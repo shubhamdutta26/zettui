@@ -22,6 +22,7 @@ These modules share `App` privately rather than passing large collections of sta
 | `editor` | Open note state and safe saving |
 | `editor_search` | In-note search and match positions |
 | `markdown` | Source-preserving styling using character offsets |
+| `outline` | Top-level ATX headings, parent indices, section boundaries and cursor lookup |
 | `focus`, `layout` | Writing modes, dimming and pane geometry |
 | `search`, `links` | Vault search and note relationships |
 | `bibliography`, `snippets` | Read-only reference and template loading |
@@ -34,6 +35,10 @@ These modules share `App` privately rather than passing large collections of sta
 - Terminal palette queries run before the event loop, not while reading key events.
 - Preserve character offsets for Unicode text and editor search overlays.
 - Keep system theme fallback and explicit user override precedence intact.
+
+## Heading navigation
+
+`outline::extract` works on an immutable source snapshot and returns headings in source order with zero-based logical rows, nearest shallower parent indices, exclusive section ends, and borrowed raw titles. Focus mode uses the same parser. Extraction does not depend on syntax highlighting or theme settings. The parser handles top-level H1–H6 ATX headings, BOM/CRLF, YAML frontmatter, fenced and indented code, multiline HTML comments and standalone `$$` math blocks. It is a lightweight block scanner, not a full Markdown parser: Setext and nested list/blockquote headings are not supported, and inline HTML/code handling is limited. UI rendering and heading search are subsequent phases.
 
 ## Rendering and theme caches
 

@@ -12,6 +12,7 @@ mod focus;
 mod layout;
 mod links;
 mod markdown;
+mod outline;
 mod search;
 mod snippets;
 mod system_theme;

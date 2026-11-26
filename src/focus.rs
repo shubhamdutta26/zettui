@@ -1,5 +1,5 @@
 //! Writing-mode state and display-only helpers.
-use crate::theme::Theme;
+use crate::{outline, theme::Theme};
 use ratatui::{
     layout::Rect,
     style::{Color, Style},
@@ -156,76 +156,34 @@ pub fn centered(area: Rect, width: u16) -> Rect {
     let w = width.min(area.width);
     Rect::new(area.x + (area.width - w) / 2, area.y, w, area.height)
 }
-fn heading(line: &str) -> Option<usize> {
-    let s = line.trim_start();
-    let n = s.bytes().take_while(|&b| b == b'#').count();
-    ((1..=6).contains(&n)
-        && s.get(n..)
-            .is_some_and(|s| s.is_empty() || s.starts_with(char::is_whitespace)))
-    .then_some(n)
-}
-/// Logical-line range. Markdown headings inside fenced code and YAML are ignored.
+/// Logical-line range using the shared Markdown heading parser.
 pub fn active_range(text: &str, row: usize, mode: FocusMode) -> Range<usize> {
     let lines: Vec<_> = text.split('\n').collect();
     let row = row.min(lines.len() - 1);
     if mode == FocusMode::Line {
         return row..row + 1;
     }
-    let mut headings = vec![None; lines.len()];
-    let mut fence: Option<(char, usize)> = None;
-    let mut yaml = false;
-    for (i, line) in lines.iter().enumerate() {
-        let s = line.trim();
-        if i == 0 && s == "---" {
-            yaml = true;
-            continue;
-        }
-        if yaml {
-            if matches!(s, "---" | "...") {
-                yaml = false;
-            }
-            continue;
-        }
-        if let Some((m, n)) = fence {
-            let k = s.chars().take_while(|&c| c == m).count();
-            if k >= n && s.chars().skip(k).all(char::is_whitespace) {
-                fence = None;
-            }
-            continue;
-        }
-        if let Some(m) = s.chars().next().filter(|c| matches!(*c, '`' | '~')) {
-            let k = s.chars().take_while(|&c| c == m).count();
-            if k >= 3 {
-                fence = Some((m, k));
-                continue;
-            }
-        }
-        headings[i] = heading(line);
-    }
+    let headings = outline::extract(text);
     if mode == FocusMode::Paragraph {
-        if lines[row].trim().is_empty() || headings[row].is_some() {
+        let is_heading = |row| headings.binary_search_by_key(&row, |h| h.row).is_ok();
+        if lines[row].trim().is_empty() || is_heading(row) {
             return row..row + 1;
         }
         let mut a = row;
         let mut b = row + 1;
-        while a > 0 && !lines[a - 1].trim().is_empty() && headings[a - 1].is_none() {
+        while a > 0 && !lines[a - 1].trim().is_empty() && !is_heading(a - 1) {
             a -= 1;
         }
-        while b < lines.len() && !lines[b].trim().is_empty() && headings[b].is_none() {
+        while b < lines.len() && !lines[b].trim().is_empty() && !is_heading(b) {
             b += 1;
         }
         return a..b;
     }
-    if let Some(a) = (0..=row).rev().find(|&i| headings[i].is_some()) {
-        let level = headings[a].unwrap();
-        let b = (row + 1..lines.len())
-            .find(|&i| headings[i].is_some_and(|n| n <= level))
-            .unwrap_or(lines.len());
-        a..b
+    if let Some(index) = outline::active_heading(&headings, row) {
+        let heading = &headings[index];
+        heading.row..heading.end_row
     } else {
-        0..(row + 1..lines.len())
-            .find(|&i| headings[i].is_some())
-            .unwrap_or(lines.len())
+        0..headings.first().map_or(lines.len(), |h| h.row)
     }
 }
 pub fn dim(style: Style, t: Theme, strength: f32) -> Style {
@@ -254,6 +212,19 @@ mod tests {
             active_range("# A\n```r\n# fake\n```\ntext\n# B", 4, FocusMode::Section),
             0..5
         );
+    }
+    #[test]
+    fn section_ignores_comments_math_and_indented_code() {
+        let t = "# A\n<!--\n# Fake\n-->\n$$\n## Fake\n$$\n    # Code\ntext\n# B";
+        assert_eq!(active_range(t, 8, FocusMode::Section), 0..9);
+    }
+    #[test]
+    fn section_includes_children_and_stops_at_sibling() {
+        let t = "intro\n# A\ntext\n## Child\nbody\n# B\n";
+        assert_eq!(active_range(t, 0, FocusMode::Section), 0..1);
+        assert_eq!(active_range(t, 2, FocusMode::Section), 1..5);
+        assert_eq!(active_range(t, 4, FocusMode::Section), 3..5);
+        assert_eq!(active_range(t, 6, FocusMode::Section), 5..7);
     }
     #[test]
     fn narrow() {
