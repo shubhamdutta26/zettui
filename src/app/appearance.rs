@@ -59,16 +59,13 @@ impl App {
     /// Resize panes for this session without changing the configuration file.
     pub(super) fn resize_browser(&mut self, grow: bool) {
         self.browser_width_percent = resize_browser_percent(self.browser_width_percent, grow);
-        self.message = format!(
-            "Files preferred width: {}% (session only)",
-            self.browser_width_percent,
-        );
+        self.message = format!("Files preferred width: {}%", self.browser_width_percent,);
     }
 
     pub(super) fn resize_outline(&mut self, grow: bool) {
         self.panels.resize_outline(grow);
         self.message = format!(
-            "Outline preferred width: {}% (session only)",
+            "Outline preferred width: {}%",
             self.panels.outline_width_percent
         );
     }
@@ -105,6 +102,6 @@ impl App {
             _ if self.editor.is_some() && self.writing.zen.enabled => " after leaving Zen",
             _ => "",
         };
-        self.message = format!("{name}: {state}{context} (session only)");
+        self.message = format!("{name}: {state}{context}");
     }
 }

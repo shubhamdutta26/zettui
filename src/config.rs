@@ -20,6 +20,8 @@ pub struct Config {
     pub focus: crate::focus::FocusSettings,
     pub editor: crate::focus::EditorSettings,
     pub markdown: crate::markdown::MarkdownSettings,
+    pub buffers: BufferSettings,
+    pub session: crate::session::Settings,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -49,6 +51,18 @@ pub struct LayoutSettings {
     pub show_files: Option<bool>,
     pub show_preview: Option<bool>,
     pub show_outline: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub(crate) struct BufferSettings {
+    pub show_tab_bar: bool,
+}
+
+impl Default for BufferSettings {
+    fn default() -> Self {
+        Self { show_tab_bar: true }
+    }
 }
 
 impl Config {
@@ -151,6 +165,24 @@ fn expand_path(path: PathBuf, config_dir: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn session_and_tab_settings_are_backward_compatible() {
+        let defaults = Config::default();
+        assert!(defaults.session.enabled);
+        assert!(defaults.session.restore_on_startup);
+        assert!(defaults.session.restore_cursor);
+        assert!(defaults.session.restore_layout);
+        assert!(defaults.buffers.show_tab_bar);
+        let cfg: Config = toml::from_str(
+            "[buffers]\nshow_tab_bar = false\n[session]\nenabled = false\nrestore_cursor = false",
+        )
+        .unwrap();
+        assert!(!cfg.buffers.show_tab_bar);
+        assert!(!cfg.session.enabled);
+        assert!(!cfg.session.restore_cursor);
+        assert!(cfg.session.restore_layout);
+    }
 
     #[test]
     fn parses_config_and_optional_fields() {

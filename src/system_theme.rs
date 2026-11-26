@@ -69,7 +69,7 @@ fn channels(c: Color) -> (u8, u8, u8) {
         _ => (0, 0, 0),
     }
 }
-fn blend(a: Color, b: Color, amount: f64) -> Color {
+pub(crate) fn blend(a: Color, b: Color, amount: f64) -> Color {
     let (r, g, bl) = channels(a);
     let (x, y, z) = channels(b);
     let mix = |a: u8, b: u8| (f64::from(a) * (1.0 - amount) + f64::from(b) * amount).round() as u8;
@@ -91,7 +91,7 @@ fn contrast(a: Color, b: Color) -> f64 {
     let (a, b) = (luminance(a), luminance(b));
     (a.max(b) + 0.05) / (a.min(b) + 0.05)
 }
-fn readable(color: Color, bg: Color, fg: Color, enabled: bool) -> Color {
+pub(crate) fn readable(color: Color, bg: Color, fg: Color, enabled: bool) -> Color {
     if !enabled || contrast(color, bg) >= 4.5 {
         return color;
     }

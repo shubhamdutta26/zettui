@@ -9,6 +9,7 @@ mod editing;
 mod events;
 mod navigation;
 mod palette;
+mod session;
 mod ui;
 
 use std::{
@@ -326,6 +327,8 @@ struct App {
     buffer_picker: Option<crate::buffer_switcher::BufferSwitcher>,
     buffer_prefix: Option<char>,
     show_tab_bar: bool,
+    session_settings: crate::session::Settings,
+    quit_requested: bool,
     editor_keys: EditorEventHandler,
     command: Option<String>,
     note_search: NoteSearch,
@@ -394,6 +397,8 @@ impl App {
             buffer_picker: None,
             buffer_prefix: None,
             show_tab_bar: true,
+            session_settings: crate::session::Settings::default(),
+            quit_requested: false,
             editor_keys: EditorEventHandler::default(),
             command: None,
             note_search: NoteSearch::default(),
@@ -463,6 +468,8 @@ pub(crate) fn start() -> io::Result<()> {
         snippets_dir,
         writing,
         markdown_settings,
+        session_settings,
+        show_tab_bar,
     } = arguments()?;
     let mut app = App::new(root, bibliography, choice, overrides, fallback, auto_themes)?;
     app.system_theme = system_theme;
@@ -475,7 +482,15 @@ pub(crate) fn start() -> io::Result<()> {
     app.snippets_dir = snippets_dir;
     app.writing = writing;
     app.markdown_settings = markdown_settings;
-    ratatui::run(|terminal| app.run(terminal))
+    app.session_settings = session_settings;
+    app.show_tab_bar = show_tab_bar;
+    app.restore_session();
+    ratatui::run(|terminal| app.run(terminal))?;
+    // Report failures after leaving the alternate screen. Note saves remain intact.
+    if let Err(error) = app.persist_session() {
+        eprintln!("Session not saved: {error}");
+    }
+    Ok(())
 }
 
 #[cfg(test)]

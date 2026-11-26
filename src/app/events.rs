@@ -106,7 +106,7 @@ impl App {
         // Ex input owns its keys just like the other modal inputs.
         if self.command.is_some() {
             self.handle_editor_key(key);
-            return Ok(false);
+            return Ok(std::mem::take(&mut self.quit_requested));
         }
         if let Some(command) = Command::from_key(KeyScope::Global, key) {
             self.writing.leader = false;
@@ -120,7 +120,7 @@ impl App {
         }
         if self.editor.is_some() {
             self.handle_editor_key(key);
-            return Ok(false);
+            return Ok(std::mem::take(&mut self.quit_requested));
         }
         if let Some(command) = Command::from_key(KeyScope::Browser, key) {
             return self.execute_command(command);
@@ -164,6 +164,41 @@ mod tests {
         for ch in text.chars() {
             press(app, KeyCode::Char(ch));
         }
+    }
+
+    #[test]
+    fn quit_all_refuses_dirty_inactive_buffers_and_save_quit_preserves_open_set() {
+        let (dir, mut app) = fixture();
+        let a = dir.path().join("Alpha.md");
+        let b = dir.path().join("Beta.md");
+        fs::write(&a, "Alpha").unwrap();
+        fs::write(&b, "Beta").unwrap();
+        app.editor.open(&a).unwrap();
+        press(&mut app, KeyCode::Char('i'));
+        type_text(&mut app, "X");
+        press(&mut app, KeyCode::Esc);
+        app.editor.open(&b).unwrap();
+        type_text(&mut app, ":qa");
+        press(&mut app, KeyCode::Enter);
+        assert!(app.editor.any_dirty());
+        assert_eq!(app.editor.len(), 2);
+        // A conflicting external edit must block save-and-quit as well.
+        fs::write(&a, "External").unwrap();
+        type_text(&mut app, ":wqa");
+        press(&mut app, KeyCode::Enter);
+        assert_eq!(fs::read_to_string(&a).unwrap(), "External");
+        assert!(app.editor.any_dirty());
+        // Once the conflict is resolved, the same command may exit safely.
+        fs::write(&a, "Alpha").unwrap();
+        type_text(&mut app, ":wqa");
+        assert!(
+            app.route_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+                .unwrap()
+        );
+        assert!(!app.editor.any_dirty());
+        assert_eq!(app.editor.len(), 2);
+        assert_eq!(app.editor.as_ref().unwrap().path, b);
+        assert!(fs::read_to_string(&a).unwrap().contains('X'));
     }
 
     #[test]

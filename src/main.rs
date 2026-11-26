@@ -19,6 +19,7 @@ mod links;
 mod markdown;
 mod outline;
 mod search;
+mod session;
 mod snippets;
 mod system_theme;
 mod theme;

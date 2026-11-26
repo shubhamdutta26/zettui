@@ -39,6 +39,19 @@ impl App {
                     return Ok(true);
                 }
             }
+            Command::QuitAll => {
+                if self.editor.any_dirty() {
+                    self.message = "Unsaved buffers remain. Use :wa or :wqa to save all.".into();
+                } else {
+                    return Ok(true);
+                }
+            }
+            Command::SaveQuitAll => {
+                self.save_all_buffers();
+                if !self.editor.any_dirty() {
+                    return Ok(true);
+                }
+            }
             Command::OutgoingLinks => self.show_links(false),
             Command::Backlinks => self.show_links(true),
             Command::FindFilename => {
@@ -116,10 +129,12 @@ impl App {
         Ok(false)
     }
 
-    /// Editor actions cannot request application exit; report any I/O error.
+    /// Forward an application-wide quit signal from editor input to event routing.
     pub(super) fn execute_editor_command(&mut self, command: Command) {
-        if let Err(error) = self.execute_command(command) {
-            self.message = format!("Command failed: {error}");
+        match self.execute_command(command) {
+            Ok(true) => self.quit_requested = true,
+            Ok(false) => {}
+            Err(error) => self.message = format!("Command failed: {error}"),
         }
     }
 }

@@ -12,6 +12,38 @@ use ratatui::{
     widgets::{Block, BorderType, Clear, List, ListItem, ListState, Padding, Paragraph, Wrap},
 };
 
+/// Use a distinct tab surface even when the theme surface equals the background.
+fn buffer_tab_style(theme: Theme, active: bool) -> Style {
+    use crate::system_theme::{blend, readable};
+    use ratatui::style::Color;
+
+    let rgb_base =
+        matches!(theme.background, Color::Rgb(..)) && matches!(theme.foreground, Color::Rgb(..));
+    let bg = if active {
+        theme.accent
+    } else if rgb_base {
+        blend(theme.background, theme.foreground, 0.18)
+    } else {
+        theme.selected_bg
+    };
+    let preferred = if active {
+        theme.background
+    } else {
+        theme.foreground
+    };
+    let fg = if matches!(bg, Color::Rgb(..)) && rgb_base {
+        readable(preferred, bg, theme.foreground, true)
+    } else {
+        preferred
+    };
+    let style = Style::default().fg(fg).bg(bg);
+    if active {
+        style.add_modifier(Modifier::BOLD)
+    } else {
+        style
+    }
+}
+
 /// Shared popup chrome. All dimensions are terminal cells; small screens retain
 /// a visible list row and a compact help line whenever possible.
 fn popup_inner(
@@ -386,12 +418,12 @@ impl App {
             frame.render_stateful_widget(list, panes[0], &mut state);
         }
 
-        if !zen
+        let tabs_visible = !zen
             && self.show_tab_bar
             && self.editor.is_some()
             && panes[1].height >= 4
-            && panes[1].width > 0
-        {
+            && panes[1].width > 1;
+        if tabs_visible {
             let area = Rect::new(panes[1].x, panes[1].y, panes[1].width, 1);
             self.draw_buffer_tabs(frame, area);
             panes[1].y += 1;
@@ -428,7 +460,6 @@ impl App {
             let dirty = if modified { " [+]" } else { "" };
             let title = format!(" {filename}{dirty} ");
             let border = Block::bordered()
-                .title(title)
                 .border_type(if editor_active {
                     BorderType::Thick
                 } else {
@@ -447,6 +478,11 @@ impl App {
                 } else {
                     theme.muted
                 }));
+            let border = if tabs_visible {
+                border
+            } else {
+                border.title(title)
+            };
             let mut inner = if zen {
                 panes[1]
             } else {
@@ -560,8 +596,7 @@ impl App {
             } else if let Some(command) = &self.command {
                 format!(":{command}▏   Enter run | Esc cancel")
             } else if mode == "NORMAL" {
-                "i Insert | :w Save | :q Close | F8 Commands | F7 Headings | F4 Outline | / Find | Ctrl+F Search"
-                    .to_owned()
+                "i Insert | :w Save | F5 Buffers | F8 Commands | / Find".to_owned()
             } else if mode == "INSERT" {
                 "Esc Normal | Ctrl+S Save | Ctrl+P Cite | Ctrl+E Snippet | Ctrl+F Search".to_owned()
             } else {
@@ -665,7 +700,7 @@ impl App {
         }
         let location_width = usize::from(areas[2].width)
             .saturating_sub(status.iter().map(Span::width).sum::<usize>() + 2);
-        if location_width > 0 && !zen {
+        if location_width > 0 && !zen && !tabs_visible {
             status.push(Span::styled(
                 format!("  {}", tail_label(&location, location_width)),
                 Style::default().fg(theme.muted),
@@ -1170,32 +1205,56 @@ impl App {
                 )
             })
             .collect();
-        let width = usize::from(area.width);
+        // Reserve the first cell for a half-cell tab edge aligned with the border.
+        let width = usize::from(area.width.saturating_sub(1));
+        if width == 0 {
+            return;
+        }
         let mut start = 0;
         let mut used = labels[..=active]
             .iter()
             .map(|s| Span::raw(s.as_str()).width())
-            .sum::<usize>();
+            .sum::<usize>()
+            + active;
         while start < active && used > width {
-            used -= Span::raw(labels[start].as_str()).width();
+            used -= Span::raw(labels[start].as_str()).width() + 1;
             start += 1;
         }
-        let spans: Vec<_> = labels
-            .iter()
-            .enumerate()
-            .skip(start)
-            .map(|(i, label)| {
-                let style = if i == active {
+        let mut spans = Vec::new();
+        let mut remaining = width;
+        for (i, label) in labels.iter().enumerate().skip(start) {
+            let gap = usize::from(i > start);
+            if remaining <= gap {
+                break;
+            }
+            let available = remaining - gap;
+            let label_width = Span::raw(label.as_str()).width();
+            if label_width > available && i != active {
+                break;
+            }
+            if gap > 0 {
+                spans.push(Span::styled(" ", self.theme.base_style()));
+            }
+            let label = if label_width > available {
+                tail_label(label, available)
+            } else {
+                label.clone()
+            };
+            let cells = Span::raw(label.as_str()).width();
+            remaining -= gap + cells;
+            let style = buffer_tab_style(self.theme, i == active);
+            if i == start {
+                // A box-drawing vertical border is centered in its cell.
+                // Begin the first tab at that same half-cell position.
+                spans.push(Span::styled(
+                    "▐",
                     Style::default()
-                        .fg(self.theme.selected_fg)
-                        .bg(self.theme.selected_bg)
-                        .add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(self.theme.muted)
-                };
-                Span::styled(label.as_str(), style)
-            })
-            .collect();
+                        .fg(style.bg.unwrap_or(self.theme.background))
+                        .bg(self.theme.background),
+                ));
+            }
+            spans.push(Span::styled(label, style));
+        }
         frame.render_widget(Paragraph::new(Line::from(spans)), area);
     }
 
@@ -1496,5 +1555,31 @@ impl App {
             dialog.selected,
             "No matching files or folders.",
         );
+    }
+}
+
+#[cfg(test)]
+mod tab_style_tests {
+    use super::*;
+    use ratatui::style::Color;
+
+    #[test]
+    fn tabs_have_distinct_backgrounds_even_when_surface_matches_background() {
+        for (name, bg, fg) in [
+            ("dark", Color::Rgb(45, 53, 59), Color::Rgb(211, 198, 170)),
+            ("light", Color::Rgb(250, 248, 242), Color::Rgb(45, 53, 59)),
+        ] {
+            let mut theme = Theme::named(name).unwrap();
+            theme.background = bg;
+            theme.foreground = fg;
+            theme.accent = Color::Rgb(127, 187, 179);
+            theme.surface = theme.background;
+            let active = buffer_tab_style(theme, true);
+            let inactive = buffer_tab_style(theme, false);
+            assert_eq!(active.bg, Some(theme.accent));
+            assert_ne!(inactive.bg, Some(theme.background));
+            assert_ne!(active.bg, inactive.bg);
+            assert!(active.add_modifier.contains(Modifier::BOLD));
+        }
     }
 }

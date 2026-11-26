@@ -30,6 +30,15 @@ show_files = true # While editing; Files is always available in browser mode.
 show_preview = true # In browser mode only.
 show_outline = false # Interactive outline of the open note; hidden in Zen.
 
+[buffers]
+show_tab_bar = true # Startup default; restored sessions can override it.
+
+[session]
+enabled = true # Store workspace state on clean exit, never unsaved note text.
+restore_on_startup = true
+restore_cursor = true # Restore cursor and viewport positions.
+restore_layout = true # Restore panel widths/visibility and the tab bar.
+
 [editor]
 line_numbers = true
 word_wrap = true # Visual wrapping only; never inserts line breaks.

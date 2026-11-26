@@ -17,6 +17,7 @@ impl App {
         let editing = note.is_some();
         let selected = self.entries.get(self.selected);
         match command {
+            QuitAll | SaveQuitAll => true,
             SearchText | SearchTags | ToggleFiles | TogglePreview | ToggleOutline
             | NarrowBrowser | WidenBrowser | NarrowOutline | WidenOutline | CycleTheme => true,
             SearchHeadings => note.is_some_and(|note| markdown::is_markdown(&note.path)),
