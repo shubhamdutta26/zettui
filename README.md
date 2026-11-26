@@ -23,6 +23,7 @@ mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/zettui"
 cp -n config.example.toml "${XDG_CONFIG_HOME:-$HOME/.config}/zettui/config.toml"
 zettui --help
 zettui --version
+zettui --check-config
 ```
 
 Try a disposable copy of the [example vault](examples/notes/):

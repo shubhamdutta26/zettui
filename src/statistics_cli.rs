@@ -1,5 +1,6 @@
 //! Standalone snapshot commands, before configuration or terminal initialization.
 
+use crate::cli::required_value;
 use std::{env, io, path::PathBuf};
 use zettui::statistics::{Store, state_path};
 
@@ -18,12 +19,11 @@ pub(crate) fn run() -> io::Result<bool> {
     let path = if flag == "--stats-device-id" {
         None
     } else {
-        Some(PathBuf::from(args.next().ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!("{flag} requires a file path"),
-            )
-        })?))
+        Some(PathBuf::from(required_value(
+            &mut args,
+            flag,
+            "a file path",
+        )?))
     };
     let source = if flag == "--stats-import-zettlr" {
         Some(

@@ -12,6 +12,7 @@ zettui --help
 zettui -h
 zettui --version
 zettui -V
+zettui --check-config
 ```
 
 | Argument | Meaning |
@@ -21,21 +22,33 @@ zettui -V
 | `--theme NAME` | Override `[appearance].theme`. |
 | `--help`, `-h` | Print usage and theme names. |
 | `--version`, `-V` | Print the compiled package version. |
+| `--check-config` | Validate configuration without opening the TUI or writing state. Run alone. |
+| `--` | End options; treat the remaining argument as a literal notes directory. |
 
 Configuration is read from `$XDG_CONFIG_HOME/zettui/config.toml` when the
 variable is nonempty; otherwise from `~/.config/zettui/config.toml`.
 Relative configured workspace paths are resolved against the configuration
 directory; relative CLI paths are resolved from the working directory. Quote
-paths containing spaces. The current parser does not support `--flag=value`
-or a `--` end-of-options marker. Use `./` before a relative path beginning with
-`-`. The help path currently loads and validates configuration first, so invalid
-configuration can prevent help from printing. Version is checked earlier.
+paths containing spaces. The parser does not support `--flag=value`.
+Use `--` before a dash-leading notes directory, or `./` before a relative
+path beginning with `-` when passing an option value. Options requiring values
+reject an empty value or a dash-leading token. Help and version do not load
+configuration or initialize the terminal. The first help/version action
+encountered ends startup argument processing.
+
+`--check-config` checks TOML parsing, supported values, panel widths, theme
+names, fallback palettes and explicit colors. It uses defaults if no file
+exists. It does not check whether workspace files or directories exist, validate
+live desktop palettes, or open a terminal. It exits nonzero on validation errors.
 
 Supported themes: `system`, `terminal`, `auto`, `dark`, `light`, `nord`,
 `dracula`, `everforest`, `rose-pine`, `kanagawa`, `solarized-dark`,
-`catppuccin-latte`, `rose-pine-dawn`, `gruvbox`, `tokyo-night`, `midnight`.
+`catppuccin-latte`, `rose-pine-dawn`, `gruvbox`, `tokyo-night`, `midnight`. Legacy aliases:
+`catppuccin` (dark) and `paper` (light).
 
 ```sh
+zettui --check-config
+zettui --theme system -- -notes
 zettui "$HOME/Documents/Notes" --theme system
 zettui "$HOME/Documents/Notes" --bibliography "$HOME/Zotero/references.json"
 ```
@@ -43,7 +56,8 @@ zettui "$HOME/Documents/Notes" --bibliography "$HOME/Zotero/references.json"
 ## Writing statistics (v0.7.14 development)
 
 These standalone commands must be the first argument and do not open the TUI
-or load the note configuration. Extra arguments are rejected.
+or load the note configuration. Extra arguments are rejected. For a relative
+snapshot filename beginning with `-`, use `./filename`.
 
 | Command | Meaning |
 | --- | --- |

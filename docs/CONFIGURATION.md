@@ -7,7 +7,15 @@ Copy the documented [config.example.toml](../config.example.toml) to `~/.config/
 ```bash
 mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/zettui"
 cp -n config.example.toml "${XDG_CONFIG_HOME:-$HOME/.config}/zettui/config.toml"
+zettui --check-config
 ```
+
+`zettui --check-config` validates the configuration without starting the TUI or
+writing state. A missing configuration uses defaults; unreadable or malformed
+files report the path and error. Validation covers the TOML settings, panel
+widths, theme names, fallback palettes and explicit color values, but does not
+check whether note paths exist or whether desktop theme providers are available.
+`zettui --help` and `zettui --version` work even when the configuration is invalid.
 
 The canonical configuration uses TOML tables:
 

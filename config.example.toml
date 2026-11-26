@@ -1,6 +1,7 @@
 # Zettui configuration — copy to ~/.config/zettui/config.toml
 # (or $XDG_CONFIG_HOME/zettui/config.toml). Restart Zettui after edits.
 # Uncomment optional entries and adjust paths to your machine.
+# Run zettui --check-config to validate before starting the TUI.
 
 [workspace]
 # If omitted, the current working directory is used (or CLI NOTES_DIR).

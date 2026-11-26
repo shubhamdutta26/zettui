@@ -123,10 +123,20 @@ impl Config {
         let Some(config_file) = default_config_path() else {
             return Ok(Self::default());
         };
-        if !config_file.exists() {
-            return Ok(Self::default());
-        }
-        let raw = fs::read_to_string(&config_file)?;
+        Self::load_from(&config_file)
+    }
+
+    fn load_from(config_file: &Path) -> io::Result<Self> {
+        let raw = match fs::read_to_string(config_file) {
+            Ok(raw) => raw,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Self::default()),
+            Err(error) => {
+                return Err(io::Error::new(
+                    error.kind(),
+                    format!("Cannot read {}: {error}", config_file.display()),
+                ));
+            }
+        };
         let mut cfg: Self = toml::from_str(&raw).map_err(|error| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -173,6 +183,40 @@ fn expand_path(path: PathBuf, config_dir: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn missing_config_uses_defaults_but_read_errors_are_reported() {
+        let temp = tempfile::tempdir().unwrap();
+        assert!(Config::load_from(&temp.path().join("missing.toml")).is_ok());
+        let error = Config::load_from(temp.path()).unwrap_err();
+        assert!(error.to_string().contains("Cannot read"));
+        assert!(
+            error
+                .to_string()
+                .contains(temp.path().display().to_string().as_str())
+        );
+    }
+
+    #[test]
+    fn config_paths_are_relative_to_the_file() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("config.toml");
+        fs::write(
+            &path,
+            "[workspace]\nnotes_dir = 'notes'\nbibliography = 'refs.json'\nsnippets_dir = 'templates'",
+        )
+        .unwrap();
+        let config = Config::load_from(&path).unwrap();
+        assert_eq!(config.workspace.notes_dir, Some(temp.path().join("notes")));
+        assert_eq!(
+            config.workspace.bibliography,
+            Some(temp.path().join("refs.json"))
+        );
+        assert_eq!(
+            config.workspace.snippets_dir,
+            Some(temp.path().join("templates"))
+        );
+    }
 
     #[test]
     fn writing_goals_default_to_disabled_and_accept_independent_targets() {
