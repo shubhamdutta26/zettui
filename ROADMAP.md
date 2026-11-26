@@ -25,10 +25,7 @@ Versions identify development milestones; not all have a separate published rele
 | 0.7.9 | Markdown highlighting, Zen, Focus, Typewriter, structured configuration and heading overrides |
 | 0.7.10 | Native COSMIC v2, Omarchy and terminal themes, contrast adjustment, repository maintenance and caching |
 | 0.7.11 | Expanded Markdown, YAML, fenced-code and Quarto highlighting; syntax color overrides |
-
-## Release preparation
-
-0.7.12 — Intelligent Navigation: shared heading parser, independent panels, interactive outline, fuzzy heading search and global command palette. Final regression tests and release preparation pending.
+| 0.7.12 | Intelligent Navigation: independent panels, interactive document outline, fuzzy heading search and global command palette |
 
 ## Planned
 

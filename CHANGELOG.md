@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (0.7.12 — Intelligent Navigation)
+## 0.7.12 — Intelligent Navigation
 
 - Centralize application command dispatch across keyboard bindings, Ex commands and the new palette.
 - Add a shared H1–H6 ATX heading parser and section hierarchy for Outline, heading search and Focus mode.

@@ -49,7 +49,7 @@ Highlighting is source-preserving and lexical, not a full Markdown renderer, YAM
 
 ## Intelligent Navigation
 
-The upcoming v0.7.12 adds keyboard-driven navigation without changing the plain-text storage model.
+Zettui v0.7.12 adds keyboard-driven navigation without changing the plain-text storage model.
 
 | Shortcut | Action |
 | --- | --- |
