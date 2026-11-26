@@ -9,7 +9,8 @@ The inherited commands below were checked against the [edtui 0.11.7 reference](h
 
 Open a note, press Esc to enter Normal mode, type `:` followed by a command,
 and press Enter. Esc cancels and Backspace edits the command. Commands are
-case-sensitive, with surrounding whitespace trimmed. These are the fixed
+case-sensitive, with surrounding whitespace trimmed. This reference covers
+all 43 fixed application command spellings (including aliases). These are the fixed
 commands in `Command::from_ex` plus the parameterized width command in
 `Writing::command`. There is no arbitrary shell execution through Ex.
 

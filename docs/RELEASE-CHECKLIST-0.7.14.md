@@ -1,6 +1,6 @@
 # Zettui v0.7.14 release validation
 
-Run on `feature/writing-analytics` before the release version bump. The checks
+Run on the current maintenance/development branch before the release version bump. The checks
 below are instructions, not a record of completed tests. In particular, the
 maintainer has **not tested statistics exchange on multiple physical computers**.
 Single-host simulated device tests do not establish physical-device compatibility.
@@ -11,6 +11,9 @@ Single-host simulated device tests do not establish physical-device compatibilit
 cargo fmt --all
 cargo fmt --all -- --check
 cargo check --locked
+cargo test --locked --test cli_configuration
+cargo test --locked --test statistics_transfer
+cargo test --locked --test zettlr_migration
 cargo test --locked --test writing_analytics_integration
 cargo test --locked
 cargo clippy --all-targets --locked -- -D warnings
@@ -111,4 +114,4 @@ Do not copy a live state file or use shared live state. Keep original backups.
 - [ ] Physical multi-computer exchange completed, or explicitly documented as pending.
 - [ ] README, keybindings, user guide and configuration reference reviewed.
 - [ ] No user statistics, device snapshots or temporary test files committed.
-- [ ] Version bump, changelog, roadmap, tag and packaging deferred to Phase 8.
+- [ ] Review the Unreleased changelog and roadmap; bump the package version and create the release tag only after approval and validation.

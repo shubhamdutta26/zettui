@@ -1,5 +1,17 @@
 # Writing analytics (v0.7.14 development)
 
+## Quick reference
+
+- Open the dashboard: `F10`, `:analytics`, `:stats` or the command palette.
+- Exchange snapshots: `zettui --stats-export FILE` and `zettui --stats-import FILE`.
+- Migrate Zettlr: `zettui --stats-import-zettlr "$HOME/.config/Zettlr/stats.json" desktop`.
+- Inspect the local identity: `zettui --stats-device-id`.
+
+Keep independent live state on each installation. Physical multi-computer
+exchange remains untested by the maintainer. The implementation history and
+validation procedures below are organized by writing-analytics development phase,
+not by the later codebase-maintenance phases.
+
 ## Phase 1: statistics engine
 
 The standalone `zettui::statistics` library module provides local, installation-wide

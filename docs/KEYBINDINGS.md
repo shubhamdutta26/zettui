@@ -55,13 +55,13 @@ See [Vim-style commands](VIM-COMMANDS.md) for the Ex reference, inherited editor
 | Vault search | `Tab`, `↑` / `↓`, `Enter`, `Esc` | Switch text/tags, select, open, cancel |
 | Filename search | `↑` / `↓`, `Enter`, `Esc` | Select result; confirm selection in Files (Enter again opens); cancel |
 | Vault / filename / wiki-link / snippet / citation pickers | Type, `Backspace`, `↑` / `↓`, `Enter`, `Esc`, `Ctrl+U` | Filter, edit query, select, confirm, cancel, clear query |
-| Buffer picker | `↑` / `↓`, `Ctrl+P` / `Ctrl+N`, `Enter`, `Esc` / `F5`, `Ctrl+U` | Select, activate, cancel, clear query |
+| Buffer picker | Type, `Backspace`, `↑` / `↓`, `Ctrl+P` / `Ctrl+N`, `Enter`, `Esc` / `F5`, `Ctrl+U` | Filter, edit query, select, activate, cancel, clear query |
 | In-note search input | Type, `Backspace`, `Ctrl+U`, `Enter`, `Esc` | Edit query, clear, confirm or cancel |
 | Ex command bar | Type, `Backspace`, `Enter`, `Esc` | Edit command, execute or cancel |
 | Link dialog | `j` / `k`, `↓` / `↑`, `Enter`, `Esc` / `q` | Select, follow or cancel |
 | File-operation prompt | Type, `Backspace`, `Ctrl+U`, `Enter`, `Esc` | Edit path/name, clear, confirm or cancel |
 | Trash confirmation | `y`, `n` / `Esc` / `Enter` | Confirm Trash or cancel |
-| Snippet fields | `Tab` / `Enter`, `Shift+Tab`, `Ctrl+U`, `Esc` | Next/finish, previous, clear current field, cancel |
+| Snippet fields | Type, `Backspace`, `Tab` / `Enter`, `Shift+Tab`, `Ctrl+U`, `Esc` | Edit current field, next/finish, previous, clear current field, cancel |
 
 **Cursor:** Normal mode uses a blinking block; Insert mode uses a **blinking vertical bar** (subject to terminal support).
 

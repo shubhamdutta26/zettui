@@ -9,10 +9,17 @@ cargo check --locked
 cargo test --locked
 cargo clippy --all-targets --locked -- -D warnings
 cargo build --release --locked
-cargo doc --no-deps --document-private-items
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --locked
+git diff --check
 ```
 
 `Cargo.lock` is committed; `target/` and `dist/` are generated and ignored. `cargo clean` removes build artifacts, not source. Test interactive changes in a disposable vault, including unsaved changes, search, Unicode, themes and terminal resizing. Rust 1.88 is declared in the manifest; the current CI uses stable Rust and the exact minimum remains to be verified against the lockfile.
+
+For documentation changes, compare CLI flags against `src/cli.rs` and
+`src/statistics_cli.rs`, Ex commands and key scopes against `src/commands.rs`,
+modal behavior against `src/app/`, and configuration against `src/config.rs`
+and the settings types. Update the example configuration and relevant guides
+when behavior changes. Record actual test results separately from planned checks.
 
 Keep comments focused on invariants, edge cases and design decisions. Historical lessons are retained as historical records, not current setup instructions.
 

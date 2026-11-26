@@ -15,6 +15,9 @@ writing state. A missing configuration uses defaults; unreadable or malformed
 files report the path and error. Validation covers the TOML settings, panel
 widths, theme names, fallback palettes and explicit color values, but does not
 check whether note paths exist or whether desktop theme providers are available.
+It does not reject every unknown nested key: top-level keys and several
+sections are strict, while `[appearance]`, `[editor]`, `[zen]` and `[focus]`
+currently accept unrecognized fields. Check spelling against the table below.
 `zettui --help` and `zettui --version` work even when the configuration is invalid.
 
 The canonical configuration uses TOML tables:
@@ -51,7 +54,7 @@ dim_delimiters = true
 
 ### Configuration reference
 
-All keys are optional. Restart Zettui after changing the file. Session commands do not write it. The CLI notes path, `--bibliography` and `--theme` override the corresponding configured values. Relative configured paths resolve against the config directory; `~/` expands the home directory.
+All keys are optional. Restart Zettui after changing the file. Session commands do not write it (session metadata is stored separately). The CLI notes path, `--bibliography` and `--theme` override the corresponding configured values. Relative configured paths resolve against the config directory; `~/` expands the home directory.
 
 | Table | Key | Default / meaning |
 | --- | --- | --- |

@@ -39,9 +39,9 @@ Heading navigation recognizes top-level ATX headings (`#` through `######`), not
 ## Notes and snippets
 
 - `[[Note Name]]` links, outgoing links, and backlinks work across your notes; duplicate filenames may require folder-qualified links.
-- Place `.md` snippets in `~/.config/zettui/snippets/` (or `snippets_dir`). In an empty note, press `Ctrl+E`, pick a snippet, and fill its numbered fields. Date variables and `$ZKN_ID` expand automatically.
+- Place `.md`, `.txt`, `.snippet` or extensionless snippets (up to 32 KiB each) in `~/.config/zettui/snippets/` (or `snippets_dir`); only the top level is scanned. In an empty note, press `Ctrl+E`, pick a snippet, and fill its numbered fields. Date variables and `$ZKN_ID` expand automatically.
 - `Ctrl+P` searches your Zotero bibliography and inserts Pandoc-style citations such as `[@Jain2017]`.
-- `Ctrl+F` searches saved text in nested folders; `Alt+T` searches YAML frontmatter `tags:`. Search does not include unsaved edits or inline `#hashtags`. Files larger than 1 MiB are skipped. The editor separately limits opening files to 256,000 bytes (256 KB).
+- `Ctrl+F` searches saved text in nested folders; `Alt+T` searches YAML frontmatter `tags:`. Search does not include unsaved edits or inline `#hashtags`. Files larger than 1 MiB are skipped; indexing is capped at 20,000 files and 128 MiB of file contents. Hidden entries and symlinks are skipped. The editor separately limits opening files to 256,000 bytes (256 KB). See [Troubleshooting](TROUBLESHOOTING.md) for other limits.
 
 See [writing modes and shortcuts](KEYBINDINGS.md), [Vim-style commands](VIM-COMMANDS.md) and [CLI reference](CLI.md).
 

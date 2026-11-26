@@ -4,6 +4,10 @@ A local-first, Vim-style terminal notes manager written in Rust. Browse and edit
 
 ## Installation
 
+The manifest currently reports **0.7.13**; this development source also includes
+the planned 0.7.14 writing analytics and maintenance changes. A published release
+may not yet contain these features.
+
 Download Linux releases from [GitHub Releases](https://github.com/shubhamdutta26/zettui/releases) (portable x86-64 archive, `.deb` for Debian/Ubuntu, `.rpm` for Fedora, or `PKGBUILD` for Arch/Omarchy), or build from source with a compatible Rust toolchain:
 
 ```bash
@@ -11,6 +15,9 @@ git clone https://github.com/shubhamdutta26/zettui.git
 cd zettui
 cargo install --path . --locked
 ```
+
+Rust 1.88 is the declared minimum; the current lockfile has not been verified
+against that exact compiler. CI uses stable Rust. See [Development](docs/DEVELOPMENT.md).
 
 Run with `zettui ~/Documents/Notes`, or simply `zettui` when `notes_dir` is configured.
 
@@ -38,7 +45,7 @@ Use `j`/`k` to browse, Enter to open, `i` to edit, Escape for Normal mode, and `
 
 ## Syntax highlighting
 
-Zettui v0.7.11 expands theme-aware source highlighting in the editor and browser preview without changing note contents.
+Since v0.7.11, Zettui provides theme-aware source highlighting in the editor and browser preview without changing note contents.
 
 - Markdown: six heading levels, nested emphasis, strikethrough, inline code, links and images, wiki links, tags, citations, footnotes, math, task lists, tables and HTML comments.
 - YAML: keys, strings, numbers (including scientific notation), dates, booleans, nulls, comments, nested mappings, collections, anchors, aliases and multiline strings.
@@ -67,7 +74,7 @@ The outline and heading search use live, unsaved Markdown. Collapse outline bran
 Open the writing dashboard with `F10`, the command palette or `:analytics` / `:stats`.
 View writing goals, streaks, activity totals and a monthly calendar or yearly
 heatmap. `Tab` / `Shift+Tab` cycle views (`1` Overview, `2` Month, `3` Year),
-`h`/`l` and `j`/`k` navigate calendar dates,
+`h`/`l` move by day and `j`/`k` by week in calendar views (or scroll the Overview),
 `[`/`]` move periods, `t` returns to today, `r` refreshes and `Esc` closes.
 Exchange writing history between computers using duplicate-safe snapshot merging:
 
@@ -87,7 +94,7 @@ multiple physical computers. Keep backups of your original statistics and test
 with disposable state before relying on cross-computer exchange.
 
 Import legacy Zettlr history with `zettui --stats-import-zettlr FILE SOURCE`
-(e.g. `desktop`). Reuse the same source label for the same history; never import
+(e.g. `zettui --stats-import-zettlr "$HOME/.config/Zettlr/stats.json" desktop`). Reuse the same source label for the same history; never import
 a combined history alongside its original component files.
 See [Writing analytics](docs/WRITING-ANALYTICS.md) for configuration and details.
 
@@ -120,6 +127,7 @@ See [Buffers and Sessions](docs/BUFFERS-AND-SESSIONS.md) for the full command re
 - [Command-line reference](docs/CLI.md)
 - [Writing analytics](docs/WRITING-ANALYTICS.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Development](docs/DEVELOPMENT.md)
 - [Releasing](docs/RELEASING.md)
 - [Changelog](CHANGELOG.md) · [Roadmap](ROADMAP.md) · [Historical lessons](docs/lessons/)

@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased — Codebase Audit and Maintenance
+
+### Added
+
+- Standalone `--check-config` command.
+- Documented CLI, keyboard and Ex command references.
+
+### Improved
+
+- Reduce redundant allocations in editing and search; retain existing dependencies.
+- Separate popup rendering, YAML and fenced-code highlighting; share input handling across five search pickers.
+- Prevent modified browser keys from triggering plain-key file actions or quitting.
+- Parse help/version before configuration loading, reject missing flag values, report configuration read errors, and support `--` for literal workspace paths.
+- Synchronize documentation and record known Vim routing conflicts and validation requirements.
+
+### Validation and compatibility
+
+- No version bump or release tag for the maintenance changes.
+- Some inherited Vim multi-key sequences conflict with application-reserved keys. See [Vim commands](docs/VIM-COMMANDS.md).
+- See [release validation](docs/RELEASE-CHECKLIST-0.7.14.md) for pending checks; test definitions are not proof of successful execution.
+
 ## 0.7.14 — Writing Analytics & Goals
 
 ### Added
@@ -31,7 +52,7 @@
 - Multiple open note buffers with independent editing states.
 - Theme-aware buffer tabs with modified-note indicators.
 - Fuzzy buffer picker and Vim-style buffer navigation.
-- Independent cursor, viewport, undo/redo and search history.
+- Independent cursor, viewport and undo/redo; the last in-note search query and direction are shared across buffers.
 - Workspace-specific session persistence.
 - Automatic restoration of open buffers and active notes.
 - Restoration of panel visibility, dimensions and browser location.

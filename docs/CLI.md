@@ -34,12 +34,14 @@ Use `--` before a dash-leading notes directory, or `./` before a relative
 path beginning with `-` when passing an option value. Options requiring values
 reject an empty value or a dash-leading token. Help and version do not load
 configuration or initialize the terminal. The first help/version action
-encountered ends startup argument processing.
+encountered ends startup argument processing (invalid earlier arguments can
+still produce an error). `--check-config` must be the first and only argument.
 
 `--check-config` checks TOML parsing, supported values, panel widths, theme
 names, fallback palettes and explicit colors. It uses defaults if no file
 exists. It does not check whether workspace files or directories exist, validate
-live desktop palettes, or open a terminal. It exits nonzero on validation errors.
+live desktop palettes, or open a terminal. It exits nonzero on validation errors, but is not a strict
+unknown-key validator for every nested TOML section.
 
 Supported themes: `system`, `terminal`, `auto`, `dark`, `light`, `nord`,
 `dracula`, `everforest`, `rose-pine`, `kanagawa`, `solarized-dark`,

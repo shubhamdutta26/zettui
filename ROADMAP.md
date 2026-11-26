@@ -18,7 +18,7 @@ Versions identify development milestones; not all have a separate published rele
 | 0.7.2 | `[[` wiki-link autocomplete |
 | 0.7.3 | Configurable and keyboard-resizable panes |
 | 0.7.4 | Zettlr-style reusable note snippets |
-| 0.7.5 | Full-vault text search, YAML tag search, Insert-mode blinking underline cursor |
+| 0.7.5 | Full-vault text search, YAML tag search, Insert-mode blinking vertical bar cursor |
 | 0.7.6 | Theme addition, fixed editor cursor visibility, search within notes |
 | 0.7.7 | Refined header, active-panel borders, directory and selection indicators, panel padding, cleaner footer, Midnight theme, configurable automatic light/dark presets |
 | 0.7.8 | Mode indicators, word count, cursor position, breadcrumbs and redesigned pickers |
@@ -28,6 +28,14 @@ Versions identify development milestones; not all have a separate published rele
 | 0.7.12 | Intelligent Navigation: independent panels, interactive document outline, fuzzy heading search and global command palette |
 | 0.7.13 |        Buffers and Sessions: multiple open notes, theme-aware tabs, fuzzy buffer switching, independent editor state, workspace restoration and hidden-folder visibility       |
 | 0.7.14 | Writing Analytics & Goals: daily activity tracking, goals, dashboard, monthly calendar, yearly heatmap, manual multi-device snapshot exchange and Zettlr statistics migration (physical multi-computer validation pending) |
+
+## In development
+
+| Milestone | Features |
+| --- | --- |
+| Codebase Audit and Maintenance | Codebase refactoring, performance optimization, modular architecture, input handling improvements, CLI validation, and documentation synchronization |
+
+The release version for these maintenance changes has not yet been assigned. Final integration testing is pending.
 
 ## Planned
 
