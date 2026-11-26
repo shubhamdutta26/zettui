@@ -327,6 +327,7 @@ struct App {
     buffer_picker: Option<crate::buffer_switcher::BufferSwitcher>,
     buffer_prefix: Option<char>,
     show_tab_bar: bool,
+    show_hidden_folders: bool,
     session_settings: crate::session::Settings,
     quit_requested: bool,
     editor_keys: EditorEventHandler,
@@ -397,6 +398,7 @@ impl App {
             buffer_picker: None,
             buffer_prefix: None,
             show_tab_bar: true,
+            show_hidden_folders: false,
             session_settings: crate::session::Settings::default(),
             quit_requested: false,
             editor_keys: EditorEventHandler::default(),
@@ -470,6 +472,7 @@ pub(crate) fn start() -> io::Result<()> {
         markdown_settings,
         session_settings,
         show_tab_bar,
+        show_hidden_folders,
     } = arguments()?;
     let mut app = App::new(root, bibliography, choice, overrides, fallback, auto_themes)?;
     app.system_theme = system_theme;
@@ -484,6 +487,8 @@ pub(crate) fn start() -> io::Result<()> {
     app.markdown_settings = markdown_settings;
     app.session_settings = session_settings;
     app.show_tab_bar = show_tab_bar;
+    app.show_hidden_folders = show_hidden_folders;
+    app.refresh()?;
     app.restore_session();
     ratatui::run(|terminal| app.run(terminal))?;
     // Report failures after leaving the alternate screen. Note saves remain intact.

@@ -31,7 +31,7 @@ impl App {
             BufferPicker | NextBuffer | PreviousBuffer | AlternateBuffer | SaveAll => {
                 self.editor.len() > 0
             }
-            ToggleTabs => true,
+            ToggleTabs | ToggleHiddenFolders => true,
             CitationPicker => editing && self.bibliography_path.is_some(),
             SnippetPicker => note.is_some_and(|note| note.state.lines.to_string().is_empty()),
             OutgoingLinks | Backlinks => editing || selected.is_some_and(|entry| !entry.is_dir),

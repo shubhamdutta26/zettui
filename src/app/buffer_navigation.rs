@@ -163,11 +163,10 @@ impl App {
             && !key
                 .modifiers
                 .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+            && let KeyCode::Char(ch @ ('[' | ']')) = key.code
         {
-            if let KeyCode::Char(ch @ ('[' | ']')) = key.code {
-                self.buffer_prefix = Some(ch);
-                return true;
-            }
+            self.buffer_prefix = Some(ch);
+            return true;
         }
         false
     }

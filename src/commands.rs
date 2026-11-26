@@ -47,6 +47,7 @@ pub(crate) enum Command {
     CloseBuffer,
     CloseOtherBuffers,
     ToggleTabs,
+    ToggleHiddenFolders,
     SaveAll,
     Close,
     DiscardAndClose,
@@ -78,6 +79,7 @@ impl Command {
                 F(6) if key.modifiers.is_empty() => Some(FocusOutline),
                 F(7) if key.modifiers.is_empty() => Some(SearchHeadings),
                 F(8) if key.modifiers.is_empty() => Some(OpenPalette),
+                F(9) if key.modifiers.is_empty() => Some(ToggleHiddenFolders),
                 Up if key.modifiers == KeyModifiers::ALT => Some(WidenOutline),
                 Down if key.modifiers == KeyModifiers::ALT => Some(NarrowOutline),
                 Char('f') if ctrl => Some(SearchText),
@@ -150,6 +152,7 @@ impl Command {
             "bd" => Some(CloseBuffer),
             "bonly" => Some(CloseOtherBuffers),
             "toggle tabs" => Some(ToggleTabs),
+            "toggle hidden" | "toggle hidden folders" => Some(ToggleHiddenFolders),
             "wa" => Some(SaveAll),
             "qa" | "qall" => Some(QuitAll),
             "wqa" | "wqall" => Some(SaveQuitAll),
@@ -234,6 +237,12 @@ pub(crate) const CATALOG: &[CommandInfo] = &[
         title: "Toggle buffer tab bar",
         shortcut: "Space b t",
         aliases: ":toggle tabs",
+    },
+    CommandInfo {
+        command: Command::ToggleHiddenFolders,
+        title: "Toggle hidden folders",
+        shortcut: "F9",
+        aliases: ":toggle hidden dot directories show hide",
     },
     CommandInfo {
         command: Command::SaveAll,
@@ -510,6 +519,25 @@ pub(crate) const CATALOG: &[CommandInfo] = &[
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hidden_folder_shortcuts_share_command() {
+        assert_eq!(
+            Command::from_key(
+                KeyScope::Global,
+                KeyEvent::new(KeyCode::F(9), KeyModifiers::NONE)
+            ),
+            Some(Command::ToggleHiddenFolders)
+        );
+        assert_eq!(
+            Command::from_ex("toggle hidden"),
+            Some(Command::ToggleHiddenFolders)
+        );
+        assert_eq!(
+            Command::from_ex("toggle hidden folders"),
+            Some(Command::ToggleHiddenFolders)
+        );
+    }
 
     #[test]
     fn palette_shortcuts_preserve_zotero() {

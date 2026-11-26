@@ -57,6 +57,8 @@ pub(crate) struct Session {
     pub directory: PathBuf,
     pub selection: Option<PathBuf>,
     pub layout: LayoutState,
+    #[serde(default)]
+    pub show_hidden_folders: Option<bool>,
 }
 
 impl Session {
@@ -69,6 +71,7 @@ impl Session {
             directory: PathBuf::new(),
             selection: None,
             layout,
+            show_hidden_folders: None,
         }
     }
 
@@ -167,6 +170,23 @@ mod tests {
             show_outline: false,
             show_tab_bar: true,
         }
+    }
+
+    #[test]
+    fn hidden_folder_preference_round_trips_and_old_sessions_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let path = root.join("state.json");
+        let mut session = Session::new(root.clone(), layout());
+        session.show_hidden_folders = Some(true);
+        session.save(&path).unwrap();
+        let restored = Session::load(&path, &root).unwrap().unwrap();
+        assert_eq!(restored.show_hidden_folders, Some(true));
+        let mut old: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        old.as_object_mut().unwrap().remove("show_hidden_folders");
+        fs::write(&path, serde_json::to_vec(&old).unwrap()).unwrap();
+        let restored = Session::load(&path, &root).unwrap().unwrap();
+        assert_eq!(restored.show_hidden_folders, None);
     }
 
     #[test]

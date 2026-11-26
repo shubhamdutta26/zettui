@@ -37,7 +37,10 @@ show_tab_bar = true # Startup default; restored sessions can override it.
 enabled = true # Store workspace state on clean exit, never unsaved note text.
 restore_on_startup = true
 restore_cursor = true # Restore cursor and viewport positions.
-restore_layout = true # Restore panel widths/visibility and the tab bar.
+restore_layout = true # Restore panel widths/visibility, tabs and hidden-folder preference.
+
+[browser]
+show_hidden_folders = false # F9 toggles dot-prefixed folders; .git stays hidden.
 
 [editor]
 line_numbers = true

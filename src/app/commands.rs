@@ -112,6 +112,7 @@ impl App {
                     if self.show_tab_bar { "shown" } else { "hidden" }
                 );
             }
+            Command::ToggleHiddenFolders => self.toggle_hidden_folders(),
             Command::SaveAll => self.save_all_buffers(),
             Command::Close => self.close_editor(false),
             Command::DiscardAndClose => self.close_editor(true),

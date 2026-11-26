@@ -22,6 +22,7 @@ pub(crate) struct StartupOptions {
     pub(crate) markdown_settings: markdown::MarkdownSettings,
     pub(crate) session_settings: crate::session::Settings,
     pub(crate) show_tab_bar: bool,
+    pub(crate) show_hidden_folders: bool,
 }
 
 /// Command line syntax:
@@ -120,5 +121,6 @@ pub(crate) fn arguments() -> io::Result<StartupOptions> {
         markdown_settings: config.markdown,
         session_settings: config.session,
         show_tab_bar: config.buffers.show_tab_bar,
+        show_hidden_folders: config.browser.show_hidden_folders,
     })
 }

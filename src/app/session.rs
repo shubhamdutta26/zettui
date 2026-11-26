@@ -21,6 +21,7 @@ impl App {
                 show_tab_bar: self.show_tab_bar,
             },
         );
+        session.show_hidden_folders = Some(self.show_hidden_folders);
         session.directory = relative(&self.current_dir).unwrap_or_default();
         session.selection = self
             .entries
@@ -72,6 +73,9 @@ impl App {
             self.panels.show_preview = state.show_preview;
             self.panels.show_outline = state.show_outline;
             self.show_tab_bar = state.show_tab_bar;
+            if let Some(show) = session.show_hidden_folders {
+                self.show_hidden_folders = show;
+            }
         }
         if let Some(directory) =
             session::resolve(&self.root, &session.directory).filter(|p| p.is_dir())
@@ -79,8 +83,11 @@ impl App {
             let old = std::mem::replace(&mut self.current_dir, directory);
             if self.refresh().is_err() {
                 self.current_dir = old;
-                // The failed refresh leaves the previous entries intact.
+                // Reapply the restored filter to the previous directory if possible.
+                let _ = self.refresh();
             }
+        } else {
+            let _ = self.refresh();
         }
         if let Some(selection) = session
             .selection
@@ -247,6 +254,40 @@ mod tests {
             fourth.editor.as_ref().unwrap().state.viewport_offset(),
             (0, 0)
         );
+    }
+
+    #[test]
+    fn restores_hidden_folder_preference_before_browser_selection() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let hidden = root.join(".archive");
+        fs::create_dir(&hidden).unwrap();
+        let note = hidden.join("Note.md");
+        fs::write(&note, "archive").unwrap();
+        let mut first = app(root.clone());
+        first.toggle_hidden_folders();
+        first.select_path(&hidden);
+        first.enter().unwrap();
+        first.select_path(&note);
+        let mut second = app(root.clone());
+        second.apply_session(first.capture_session());
+        assert!(second.show_hidden_folders);
+        assert_eq!(second.current_dir, hidden);
+        assert_eq!(second.entries[second.selected].path, note);
+
+        let mut third = app(root.clone());
+        third.session_settings.restore_layout = false;
+        third.apply_session(first.capture_session());
+        assert!(!third.show_hidden_folders);
+        assert_eq!(third.current_dir, root);
+        assert!(!third.entries.iter().any(|entry| entry.path == hidden));
+
+        // Older sessions without this field respect the configured default.
+        let mut older = first.capture_session();
+        older.show_hidden_folders = None;
+        third.session_settings.restore_layout = true;
+        third.apply_session(older);
+        assert!(!third.show_hidden_folders);
     }
 
     #[test]

@@ -21,6 +21,7 @@ pub struct Config {
     pub editor: crate::focus::EditorSettings,
     pub markdown: crate::markdown::MarkdownSettings,
     pub buffers: BufferSettings,
+    pub browser: BrowserSettings,
     pub session: crate::session::Settings,
 }
 
@@ -57,6 +58,12 @@ pub struct LayoutSettings {
 #[serde(default, deny_unknown_fields)]
 pub(crate) struct BufferSettings {
     pub show_tab_bar: bool,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub(crate) struct BrowserSettings {
+    pub show_hidden_folders: bool,
 }
 
 impl Default for BufferSettings {
@@ -165,6 +172,15 @@ fn expand_path(path: PathBuf, config_dir: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hidden_folder_config_defaults_and_override() {
+        assert!(!Config::default().browser.show_hidden_folders);
+        let config: Config = toml::from_str("[browser]\nshow_hidden_folders = true").unwrap();
+        assert!(config.browser.show_hidden_folders);
+        let example: Config = toml::from_str(include_str!("../config.example.toml")).unwrap();
+        assert!(!example.browser.show_hidden_folders);
+    }
 
     #[test]
     fn session_and_tab_settings_are_backward_compatible() {

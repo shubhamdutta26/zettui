@@ -167,6 +167,58 @@ mod tests {
     }
 
     #[test]
+    fn hidden_folder_toggle_preserves_selection_and_dirty_buffers() {
+        let (dir, mut app) = fixture();
+        let root = dir.path().canonicalize().unwrap();
+        let visible = root.join("Navigation.md");
+        let folder = root.join(".archive");
+        let nested = folder.join("nested");
+        let hidden_note = nested.join("Note.md");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(&hidden_note, "unique secret phrase").unwrap();
+        fs::create_dir(root.join(".git")).unwrap();
+        fs::write(root.join(".settings"), "hidden file").unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&folder, root.join("shortcut")).unwrap();
+        app.refresh().unwrap();
+        app.select_path(&visible);
+        assert!(!app.show_hidden_folders);
+        assert!(!app.entries.iter().any(|entry| entry.path == folder));
+        assert!(app.entries.iter().any(|entry| entry.name == ".settings"));
+        press(&mut app, KeyCode::F(9));
+        assert!(app.show_hidden_folders);
+        assert!(app.entries.iter().any(|entry| entry.path == folder));
+        assert!(
+            !app.entries
+                .iter()
+                .any(|entry| entry.name == ".git" || entry.name == "shortcut")
+        );
+        assert_eq!(app.entries[app.selected].path, visible);
+        let index = crate::search::VaultIndex::load(&root).unwrap();
+        assert!(
+            index
+                .search(crate::search::SearchMode::Text, "unique secret phrase", 10)
+                .is_empty()
+        );
+        app.select_path(&folder);
+        press(&mut app, KeyCode::Enter);
+        app.select_path(&nested);
+        press(&mut app, KeyCode::Enter);
+        app.select_path(&hidden_note);
+        press(&mut app, KeyCode::Enter);
+        press(&mut app, KeyCode::Char('i'));
+        type_text(&mut app, "X");
+        press(&mut app, KeyCode::Esc);
+        press(&mut app, KeyCode::F(9));
+        assert!(!app.show_hidden_folders);
+        assert_eq!(app.current_dir, root);
+        assert!(!app.entries.iter().any(|entry| entry.path == folder));
+        assert_eq!(app.editor.as_ref().unwrap().path, hidden_note);
+        assert!(app.editor.as_ref().unwrap().is_dirty());
+        assert_eq!(app.editor.len(), 1);
+    }
+
+    #[test]
     fn quit_all_refuses_dirty_inactive_buffers_and_save_quit_preserves_open_set() {
         let (dir, mut app) = fixture();
         let a = dir.path().join("Alpha.md");
