@@ -2,6 +2,7 @@
 
 mod appearance;
 mod browser;
+mod commands;
 mod dialogs;
 mod editing;
 mod events;
@@ -591,11 +592,29 @@ mod lesson73_app_tests {
             AutoThemes::default(),
         )
         .unwrap();
-        assert!(app.resize_columns(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::ALT)));
+        let dispatch = |app: &mut App, key| {
+            let Some(command) =
+                crate::commands::Command::from_key(crate::commands::KeyScope::Global, key)
+            else {
+                return false;
+            };
+            assert!(!app.execute_command(command).unwrap());
+            true
+        };
+        assert!(dispatch(
+            &mut app,
+            KeyEvent::new(KeyCode::Char('l'), KeyModifiers::ALT)
+        ));
         assert_eq!(app.browser_width_percent, 40);
-        assert!(app.resize_columns(KeyEvent::new(KeyCode::Left, KeyModifiers::ALT)));
+        assert!(dispatch(
+            &mut app,
+            KeyEvent::new(KeyCode::Left, KeyModifiers::ALT)
+        ));
         assert_eq!(app.browser_width_percent, 35);
-        assert!(!app.resize_columns(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE)));
+        assert!(!dispatch(
+            &mut app,
+            KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE)
+        ));
         assert_eq!(fs::read_to_string(&path).unwrap(), "# Original\n");
     }
 }
@@ -775,5 +794,72 @@ mod breadcrumb_tests {
             assert!(Span::raw(fitted).width() <= width);
         }
         assert_eq!(display_component("a\nb"), "a�b");
+    }
+}
+
+#[cfg(test)]
+mod command_dispatch_tests {
+    use super::*;
+    use crate::commands::Command;
+
+    #[test]
+    fn folder_navigation_does_not_open_files_and_dirty_notes_stay_open() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Note.md");
+        fs::write(&path, "# Original\n").unwrap();
+        let mut app = App::new(
+            dir.path().to_path_buf(),
+            None,
+            ThemeChoice::Dark,
+            ColorOverrides::default(),
+            Appearance::Dark,
+            AutoThemes::default(),
+        )
+        .unwrap();
+        app.select_path(&path);
+        assert!(!app.execute_command(Command::EnterFolder).unwrap());
+        assert!(app.editor.is_none());
+        assert!(!app.execute_command(Command::OpenSelection).unwrap());
+        assert!(app.editor.is_some());
+        app.handle_editor_key(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE));
+        app.handle_editor_key(KeyEvent::new(KeyCode::Char('X'), KeyModifiers::NONE));
+        app.handle_editor_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(app.editor.as_ref().unwrap().is_dirty());
+        assert!(!app.execute_command(Command::Close).unwrap());
+        assert!(app.editor.as_ref().unwrap().is_dirty());
+        assert!(!app.execute_command(Command::Quit).unwrap());
+        assert!(app.editor.is_some());
+        assert_eq!(fs::read_to_string(&path).unwrap(), "# Original\n");
+        app.handle_editor_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL));
+        assert!(!app.editor.as_ref().unwrap().is_dirty());
+        assert!(fs::read_to_string(&path).unwrap().contains('X'));
+        assert!(!app.execute_command(Command::Close).unwrap());
+        assert!(app.editor.is_none());
+        assert!(app.execute_command(Command::Quit).unwrap());
+    }
+
+    #[test]
+    fn trash_dispatch_opens_confirmation_without_removing_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Note.md");
+        fs::write(&path, "# Keep me\n").unwrap();
+        let mut app = App::new(
+            dir.path().to_path_buf(),
+            None,
+            ThemeChoice::Dark,
+            ColorOverrides::default(),
+            Appearance::Dark,
+            AutoThemes::default(),
+        )
+        .unwrap();
+        app.select_path(&path);
+        assert!(!app.execute_command(Command::Trash).unwrap());
+        assert!(matches!(
+            app.prompt.as_ref().map(|prompt| &prompt.kind),
+            Some(PromptKind::Trash { .. })
+        ));
+        app.handle_prompt_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(app.prompt.is_none());
+        assert!(path.exists());
     }
 }

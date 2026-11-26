@@ -1,13 +1,14 @@
 //! Editor commands, saving and keyboard interception.
 
 use super::App;
+use crate::commands::{Command, KeyScope};
 use crate::editor_search::Direction;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use edtui::EditorMode;
 use ratatui::style::Style;
 
 impl App {
-    fn save_editor(&mut self) -> bool {
+    pub(super) fn save_editor(&mut self) -> bool {
         let Some(note) = &mut self.editor else {
             return false;
         };
@@ -27,7 +28,7 @@ impl App {
         }
     }
 
-    fn close_editor(&mut self, discard_changes: bool) {
+    pub(super) fn close_editor(&mut self, discard_changes: bool) {
         if self.editor.as_ref().is_some_and(|note| note.is_dirty()) && !discard_changes {
             self.message = "Unsaved changes! Use :w to save or :q! to discard.".to_owned();
             return;
@@ -44,22 +45,12 @@ impl App {
 
     /// Minimal Vim-style application commands (separate from edtui's text motions).
     fn run_command(&mut self, command: String) {
-        if self.writing.command(command.trim()) {
+        if let Some(action) = Command::from_ex(&command) {
+            self.execute_editor_command(action);
+        } else if self.writing.command(command.trim()) {
             self.message.clear();
-            return;
-        }
-        match command.trim() {
-            "w" => {
-                self.save_editor();
-            }
-            "q" => self.close_editor(false),
-            "q!" => self.close_editor(true),
-            "wq" => {
-                if self.save_editor() {
-                    self.close_editor(false);
-                }
-            }
-            other => self.message = format!("Unknown command :{other}"),
+        } else {
+            self.message = format!("Unknown command :{}", command.trim());
         }
     }
 
@@ -238,23 +229,8 @@ impl App {
 
         if self.writing.leader {
             self.writing.leader = false;
-            let cmd = if key.modifiers.is_empty() {
-                match key.code {
-                    KeyCode::Char('z') => Some("zen"),
-                    KeyCode::Char('f') => Some("focus"),
-                    KeyCode::Char('t') => Some("typewriter"),
-                    KeyCode::Char('1') => Some("focus line"),
-                    KeyCode::Char('2') => Some("focus paragraph"),
-                    KeyCode::Char('3') => Some("focus section"),
-                    KeyCode::Char('n') => Some("toggle number"),
-                    KeyCode::Char('s') => Some("toggle status"),
-                    _ => None,
-                }
-            } else {
-                None
-            };
-            if let Some(cmd) = cmd {
-                self.run_command(cmd.to_owned());
+            if let Some(command) = Command::from_key(KeyScope::Leader, key) {
+                self.execute_editor_command(command);
                 return;
             }
             if key.code == KeyCode::Esc {
@@ -279,38 +255,8 @@ impl App {
             note.state.clear_highlights();
         }
 
-        if key.modifiers.contains(KeyModifiers::CONTROL) {
-            match key.code {
-                KeyCode::Char('o') => {
-                    self.show_links(false);
-                    return;
-                }
-                KeyCode::Char('b') => {
-                    self.show_links(true);
-                    return;
-                }
-                KeyCode::Char('t') => {
-                    self.previous_note();
-                    return;
-                }
-                KeyCode::Char('p') => {
-                    self.open_citation_picker();
-                    return;
-                }
-                KeyCode::Char('e') => {
-                    self.open_snippet_picker();
-                    return;
-                }
-                KeyCode::Char('g') => {
-                    self.cycle_theme();
-                    return;
-                }
-                _ => {}
-            }
-        }
-
-        if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('s') {
-            self.save_editor();
+        if let Some(command) = Command::from_key(KeyScope::Editor, key) {
+            self.execute_editor_command(command);
             return;
         }
 

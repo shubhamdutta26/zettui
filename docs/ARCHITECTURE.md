@@ -7,7 +7,8 @@
 | `app/browser.rs` | Directory listing, selection, navigation and previews |
 | `app/appearance.rs` | Theme resolution, live refresh, cycling and pane resizing |
 | `app/dialogs.rs` | Picker actions, search, links, citations, snippets and file prompts |
-| `app/editing.rs` | Saving, editor commands and in-note search interception |
+| `app/editing.rs` | Saving, editor command input and in-note search interception |
+| `app/commands.rs` | Shared application-command execution |
 | `app/events.rs` | Terminal lifecycle, cursor shape and input routing |
 | `app/ui.rs` | Main interface and popup rendering |
 
@@ -15,6 +16,7 @@ These modules share `App` privately rather than passing large collections of sta
 
 | Module | Responsibility |
 | --- | --- |
+| `commands` | Application command identifiers and context-specific keyboard/Ex bindings |
 | `config` | Deserialize configuration, expand paths and validate options |
 | `theme`, `system_theme` | Built-in palettes, native/terminal providers, user overrides |
 | `editor` | Open note state and safe saving |

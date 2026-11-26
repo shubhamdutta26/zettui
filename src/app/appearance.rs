@@ -4,7 +4,6 @@ use super::App;
 use crate::layout::resize_browser_percent;
 use crate::theme::{Theme, ThemeChoice};
 use crate::{system_theme, theme};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::time::Duration;
 
 impl App {
@@ -57,21 +56,12 @@ impl App {
     }
 
     /// Resize panes for this session without changing the configuration file.
-    pub(super) fn resize_columns(&mut self, key: KeyEvent) -> bool {
-        if key.modifiers != KeyModifiers::ALT {
-            return false;
-        }
-        let grow = match key.code {
-            KeyCode::Char('h') | KeyCode::Left => false,
-            KeyCode::Char('l') | KeyCode::Right => true,
-            _ => return false,
-        };
+    pub(super) fn resize_browser(&mut self, grow: bool) {
         self.browser_width_percent = resize_browser_percent(self.browser_width_percent, grow);
         self.message = format!(
             "Files: {}% | Notes: {}% (session only; set layout.browser_width_percent in config.toml)",
             self.browser_width_percent,
             100 - self.browser_width_percent,
         );
-        true
     }
 }

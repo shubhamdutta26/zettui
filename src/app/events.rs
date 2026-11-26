@@ -1,9 +1,9 @@
 //! Terminal lifecycle, cursor shape and keyboard event routing.
 
-use super::{App, FindDialog, PromptKind};
-use crate::search::SearchMode;
+use super::App;
+use crate::commands::{Command, KeyScope};
 use crossterm::cursor::SetCursorStyle;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use crossterm::event::{self, Event, KeyEventKind};
 use edtui::EditorMode;
 use ratatui::DefaultTerminal;
 use std::{io, time::Duration};
@@ -84,74 +84,18 @@ impl App {
                 self.handle_note_search_key(key);
                 continue;
             }
-            if key.code == KeyCode::Char('f') && key.modifiers.contains(KeyModifiers::CONTROL) {
-                self.writing.leader = false;
-                self.open_vault_search(SearchMode::Text);
-                continue;
-            }
-            if key.code == KeyCode::Char('t') && key.modifiers.contains(KeyModifiers::ALT) {
-                self.writing.leader = false;
-                self.open_vault_search(SearchMode::Tags);
-                continue;
-            }
-            if self.resize_columns(key) {
+            if let Some(command) = Command::from_key(KeyScope::Global, key) {
+                self.execute_command(command)?;
                 continue;
             }
             if self.editor.is_some() {
                 self.handle_editor_key(key);
                 continue;
             }
-            if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('g') {
-                self.cycle_theme();
-                continue;
-            }
-            match key.code {
-                KeyCode::Char('q') => return Ok(()),
-                KeyCode::Char('o') => self.show_links(false),
-                KeyCode::Char('b') => self.show_links(true),
-                KeyCode::Char('/') => {
-                    self.find_dialog = Some(FindDialog::new(&self.entries));
-                }
-                KeyCode::Char('t') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                    self.previous_note()
-                }
-                KeyCode::Char('n') => self.begin_prompt(PromptKind::NewNote),
-                KeyCode::Char('N') => self.begin_prompt(PromptKind::NewFolder),
-                KeyCode::Char('r') => {
-                    if let Some(source) = self.selected_path() {
-                        self.begin_prompt(PromptKind::Rename { source });
-                    }
-                }
-                KeyCode::Char('m') => {
-                    if let Some(source) = self.selected_path() {
-                        self.begin_prompt(PromptKind::Move { source });
-                    }
-                }
-                KeyCode::Char('d') => {
-                    if let Some(source) = self.selected_path() {
-                        self.begin_prompt(PromptKind::Trash { source });
-                    }
-                }
-                KeyCode::Char('R') => {
-                    if let Err(e) = self.refresh() {
-                        self.message = format!("Refresh failed: {e}");
-                    }
-                }
-                KeyCode::Char('j') | KeyCode::Down => self.move_down(),
-                KeyCode::Char('k') | KeyCode::Up => self.move_up(),
-                KeyCode::Enter => self.enter()?,
-
-                KeyCode::Char('l') | KeyCode::Right => {
-                    if self
-                        .entries
-                        .get(self.selected)
-                        .is_some_and(|entry| entry.is_dir)
-                    {
-                        self.enter()?;
-                    }
-                }
-                KeyCode::Char('h') | KeyCode::Backspace | KeyCode::Left => self.go_back()?,
-                _ => {}
+            if let Some(command) = Command::from_key(KeyScope::Browser, key)
+                && self.execute_command(command)?
+            {
+                return Ok(());
             }
         }
     }
