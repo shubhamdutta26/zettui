@@ -7,6 +7,7 @@ mod dialogs;
 mod editing;
 mod events;
 mod navigation;
+mod palette;
 mod ui;
 
 use std::{
@@ -335,6 +336,7 @@ struct App {
     find_dialog: Option<FindDialog>,
     vault_search: Option<VaultSearchDialog>,
     heading_search: Option<crate::heading_search::HeadingSearch>,
+    command_palette: Option<crate::command_palette::CommandPalette>,
     bibliography_path: Option<PathBuf>,
     theme: Theme,
     theme_choice: ThemeChoice,
@@ -399,6 +401,7 @@ impl App {
             find_dialog: None,
             vault_search: None,
             heading_search: None,
+            command_palette: None,
             bibliography_path,
             theme,
             theme_choice,
@@ -433,6 +436,7 @@ impl App {
             || self.find_dialog.is_some()
             || self.vault_search.is_some()
             || self.heading_search.is_some()
+            || self.command_palette.is_some()
     }
 }
 

@@ -84,6 +84,12 @@ impl App {
                 self.handle_heading_search_key(key);
                 continue;
             }
+            if self.command_palette.is_some() {
+                if self.handle_command_palette_key(key)? {
+                    return Ok(());
+                }
+                continue;
+            }
             if self.note_search.input.is_some() {
                 self.handle_note_search_key(key);
                 continue;

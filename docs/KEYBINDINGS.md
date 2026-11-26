@@ -24,6 +24,10 @@
 | Editor (Normal) | `F6`, `Space l`, `:outline` | Show and focus Outline; F6 returns to editor |
 | Editor (Normal) / Outline | `F7` | Search headings in the open Markdown note |
 | Editor (Normal) | `Space h`, `:headings` | Search headings without showing the Outline |
+| Browser / Editor (Normal) / Outline | `F8` | Global command palette |
+| Editor (Normal) | `Space c`, `:commands` | Global command palette |
+| Command palette | `↑` / `↓`, `Ctrl+P` / `Ctrl+N`, `Home` / `End` | Select previous/next or first/last action |
+| Command palette | `Enter`, `Esc` / `F8`, `Ctrl+U` | Execute, cancel, clear query |
 | Heading search | `↑` / `↓`, `Ctrl+P` / `Ctrl+N`, `Home` / `End` | Select previous/next or first/last result |
 | Heading search | `Enter`, `Esc` / `F7`, `Ctrl+U` | Jump, cancel, clear query |
 | Outline | `j` / `k`, `↑` / `↓`, `Home` / `End` | Move through visible headings |
@@ -45,6 +49,12 @@ F2 toggles Files while editing; closing the note always restores the file browse
 ## Heading search
 
 F7, `Space h` or `:headings` opens a searchable list of the current Markdown note's headings in Normal mode. F7 also works with the Outline focused. Empty queries show source order; typing ranks case-insensitive exact, prefix, substring and ordered-subsequence matches, so `sec` can match `Size exclusion chromatography`. Results show heading level and one-based line number; duplicate titles are independent. Use arrows or Ctrl+N/Ctrl+P to move, Home/End for the first/last result, Ctrl+U to clear, Enter to jump or Esc/F7 to cancel. Ctrl+P still opens Zotero outside this picker. Search includes unsaved and collapsed headings, works in Zen and does not change panel visibility or save the note. It searches raw heading titles in the open note, not all files. Esc restores the previous focus; Enter returns to the editor. No new configuration is needed.
+
+## Global command palette
+
+F8 opens a searchable list of available application commands from the browser, Normal-mode editor or focused Outline. `Space c` and `:commands` also open it from the Normal-mode editor. Ctrl+P remains the Zotero shortcut in the editor. The palette cannot interrupt Insert/Visual mode or an active dialog or search. Search command titles, shortcut hints or aliases (e.g. `delete`, `zotero`, `f7`, `srchhdngs`). Empty queries retain catalog order; ranked matches use the same fuzzy matcher as heading search. Use arrows or Ctrl+N/Ctrl+P, Home/End, Backspace and Ctrl+U; Enter executes, Esc or F8 cancels. No match means no action. Canceling restores the prior focus; executing returns to the editor if the Outline was focused, except for the Outline focus toggle itself.
+
+Only context-appropriate actions are listed: file operations and Quit in browser mode, Save and writing modes in the editor, heading navigation in Markdown notes, citations with a configured bibliography, snippets in empty notes, and link navigation when unsaved edits permit it. File/Trash actions reuse existing prompts; closing and saving still enforce the existing safety checks. Explicit forced discard (`:q!`) is deliberately not offered. The palette does not execute arbitrary shell commands and does not modify the configuration file.
 
 ## Distraction-free writing
 

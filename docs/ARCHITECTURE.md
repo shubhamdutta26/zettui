@@ -10,6 +10,7 @@
 | `app/editing.rs` | Saving, editor command input and in-note search interception |
 | `app/commands.rs` | Shared application-command execution |
 | `app/events.rs` | Terminal lifecycle, cursor shape and input routing |
+| `app/palette.rs` | Context checks, command palette lifecycle and keyboard routing |
 | `app/navigation.rs` | Outline and heading-search input, focus and shared cursor jumps |
 | `app/ui.rs` | Main interface and popup rendering |
 
@@ -17,7 +18,8 @@ These modules share `App` privately rather than passing large collections of sta
 
 | Module | Responsibility |
 | --- | --- |
-| `commands` | Application command identifiers and context-specific keyboard/Ex bindings |
+| `commands` | Application command identifiers, discoverable command catalog and context-specific keyboard/Ex bindings |
+| `command_palette` | Context-filtered command snapshot, fuzzy ranking and selection |
 | `config` | Deserialize configuration, expand paths and validate options |
 | `theme`, `system_theme` | Built-in palettes, native/terminal providers, user overrides |
 | `editor` | Open note state and safe saving |
@@ -41,6 +43,10 @@ These modules share `App` privately rather than passing large collections of sta
 ## Heading navigation
 
 `outline::extract` works on an immutable source snapshot and returns headings in source order with zero-based logical rows, nearest shallower parent indices, exclusive section ends, and borrowed raw titles. Focus mode uses the same parser. Extraction does not depend on syntax highlighting or theme settings. The parser handles top-level H1–H6 ATX headings, BOM/CRLF, YAML frontmatter, fenced and indented code, multiline HTML comments and standalone `$$` math blocks. It is a lightweight block scanner, not a full Markdown parser: Setext and nested list/blockquote headings are not supported, and inline HTML/code handling is limited. The outline uses the same source snapshot as editor rendering. `OutlineView` tracks keyboard focus, selection and collapsed branches; a signature of heading rows, levels and titles invalidates stale indices. `app/navigation.rs` coordinates outline keys and cursor jumps without modifying text. `heading_search::HeadingSearch` owns a compact heading snapshot extracted from the unsaved editor buffer when the picker opens; it does not depend on outline visibility or collapse state. `fuzzy::score` ranks exact, prefix, substring and ordered-subsequence matches using Unicode lowercase characters and source-order tie-breaking. The event loop routes picker input before editor/global actions, so its snapshot remains stable. Outline and heading search use the same cursor jump helper.
+
+## Global command palette
+
+`commands::CATALOG` stores typed command identifiers, display titles, shortcut hints and aliases. `App::palette_available` filters this catalog by application context when opening the picker and checks availability again before dispatch. `command_palette::CommandPalette` ranks titles, hints and aliases via `fuzzy::score` and preserves catalog ordering for ties and empty queries. The popup owns keyboard input before global or editor routing; Enter removes it before invoking the existing `execute_command` dispatcher (including the browser quit signal). No simulated keystrokes or duplicated filesystem actions are involved. Existing prompts and dirty-buffer/external-change checks remain authoritative. Forced discard is not cataloged. Canceling leaves the editor cursor, text and prior Outline focus untouched.
 
 ## Panel layout
 

@@ -25,6 +25,7 @@ impl App {
             }
             Command::FocusOutline => self.toggle_outline_focus(),
             Command::SearchHeadings => self.open_heading_search(),
+            Command::OpenPalette => self.open_command_palette(),
             Command::CycleTheme => self.cycle_theme(),
             Command::Quit => {
                 // Browser-only binding. Do not permit a future caller to bypass dirty notes.

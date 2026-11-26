@@ -3,6 +3,7 @@
 mod app;
 mod bibliography;
 mod cli;
+mod command_palette;
 mod commands;
 mod config;
 mod editor;

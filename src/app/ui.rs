@@ -455,6 +455,7 @@ impl App {
                     if note.state.mode == EditorMode::Insert
                         || self.outline_view.focused
                         || self.heading_search.is_some()
+                        || self.command_palette.is_some()
                     {
                         // Use the hardware bar in Insert mode; hide the painted
                         // editor cursor while a navigation surface owns keyboard focus.
@@ -525,9 +526,9 @@ impl App {
                 note.state.mode.name().to_uppercase()
             };
             let help = if self.outline_view.focused {
-                "j/k Move | h/l Collapse/Expand | Enter Jump | F7 Search | Esc/F6 Editor".to_owned()
+                "j/k Move | h/l Collapse/Expand | Enter Jump | F7 Search | F8 Commands | Esc/F6 Editor".to_owned()
             } else if self.writing.leader {
-                "Space: z Zen | f Focus | t Typewriter | e Files | p Preview | o Outline | l Navigate outline | h Headings | 1/2/3 Focus level | n Numbers | s Status"
+                "Space: c Commands | z Zen | f Focus | t Typewriter | e Files | p Preview | o Outline | l Navigate outline | h Headings | 1/2/3 Focus level | n Numbers | s Status"
                     .to_owned()
             } else if let Some(input) = &self.note_search.input {
                 format!(
@@ -540,7 +541,7 @@ impl App {
             } else if let Some(command) = &self.command {
                 format!(":{command}▏   Enter run | Esc cancel")
             } else if mode == "NORMAL" {
-                "i Insert | v Visual | / Find | :w Save | :q Close | F2 Files | F4 Outline | F6 Navigate | F7 Headings | Ctrl+F Search | Alt+T Tags"
+                "i Insert | :w Save | :q Close | F8 Commands | F7 Headings | F4 Outline | / Find | Ctrl+F Search"
                     .to_owned()
             } else if mode == "INSERT" {
                 "Esc Normal | Ctrl+S Save | Ctrl+P Cite | Ctrl+E Snippet | Ctrl+F Search".to_owned()
@@ -593,7 +594,7 @@ impl App {
                         display_component(&relative.to_string_lossy())
                     }
                 },
-                "Enter Open | n New note | N New folder | / Find | Ctrl+F Search | F3 Preview | q Quit"
+                "Enter Open | n New note | F8 Commands | / Find | Ctrl+F Search | F3 Preview | q Quit"
                     .to_owned(),
                 String::new(),
                 None,
@@ -823,6 +824,9 @@ impl App {
         }
         if self.heading_search.is_some() {
             self.draw_heading_search(frame);
+        }
+        if self.command_palette.is_some() {
+            self.draw_command_palette(frame);
         }
     }
 
@@ -1104,6 +1108,60 @@ impl App {
                 ("Shift+Tab", "Previous"),
                 ("Ctrl+U", "Clear"),
             ],
+        );
+    }
+
+    fn draw_command_palette(&self, frame: &mut Frame) {
+        let Some(palette) = &self.command_palette else {
+            return;
+        };
+        let theme = self.theme;
+        let Some(inner) = popup_inner(frame, theme, "Command palette", 92, 25) else {
+            return;
+        };
+        let area = picker_body(
+            frame,
+            theme,
+            inner,
+            "Search commands",
+            &palette.query,
+            &format!(
+                "{} matches · {} available",
+                palette.matches.len(),
+                palette.items.len()
+            ),
+            &[
+                ("Esc/F8", "Cancel"),
+                ("↑↓", "Select"),
+                ("Enter", "Run"),
+                ("Ctrl+U", "Clear"),
+            ],
+        );
+        let items = palette
+            .matches
+            .iter()
+            .map(|&index| {
+                let item = palette.items[index];
+                // Reserve space for the label first; hints are secondary on small screens.
+                let title = Span::raw(item.title);
+                let hint = format!("  {}", item.shortcut);
+                let width = title.width() + Span::raw(hint.as_str()).width();
+                let mut spans = vec![title];
+                if width + 2 <= usize::from(area.width) {
+                    let gap = usize::from(area.width).saturating_sub(width + 2);
+                    spans.push(Span::raw(" ".repeat(gap)));
+                    spans.push(Span::styled(hint, Style::default().fg(theme.muted)));
+                }
+                ListItem::new(Line::from(spans))
+            })
+            .collect();
+        popup_list(
+            frame,
+            theme,
+            area,
+            items,
+            palette.selected,
+            "No matching available commands.",
         );
     }
 
