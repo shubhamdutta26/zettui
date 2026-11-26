@@ -92,6 +92,10 @@ impl App {
             self.handle_heading_search_key(key);
             return Ok(false);
         }
+        if self.buffer_picker.is_some() {
+            self.handle_buffer_picker_key(key);
+            return Ok(false);
+        }
         if self.command_palette.is_some() {
             return self.handle_command_palette_key(key);
         }
@@ -106,6 +110,7 @@ impl App {
         }
         if let Some(command) = Command::from_key(KeyScope::Global, key) {
             self.writing.leader = false;
+            self.buffer_prefix = None;
             self.pending_open_bracket = false;
             return self.execute_command(command);
         }
@@ -159,6 +164,38 @@ mod tests {
         for ch in text.chars() {
             press(app, KeyCode::Char(ch));
         }
+    }
+
+    #[test]
+    fn buffer_shortcuts_and_picker_preserve_dirty_notes() {
+        let (dir, mut app) = fixture();
+        let a = dir.path().join("Alpha.md");
+        let b = dir.path().join("Beta.md");
+        fs::write(&a, "Alpha").unwrap();
+        fs::write(&b, "Beta").unwrap();
+        app.editor.open(&a).unwrap();
+        app.editor.open(&b).unwrap();
+        press(&mut app, KeyCode::Char('i'));
+        type_text(&mut app, "]b");
+        press(&mut app, KeyCode::Esc);
+        assert!(app.editor.as_ref().unwrap().is_dirty());
+        assert_eq!(app.editor.as_ref().unwrap().path, b);
+        type_text(&mut app, "[b");
+        assert_eq!(app.editor.as_ref().unwrap().path, a);
+        type_text(&mut app, " bo");
+        assert_eq!(app.editor.len(), 2);
+        press(&mut app, KeyCode::F(5));
+        type_text(&mut app, "beta");
+        press(&mut app, KeyCode::Enter);
+        assert_eq!(app.editor.as_ref().unwrap().path, b);
+        assert!(app.editor.as_ref().unwrap().is_dirty());
+        type_text(&mut app, " bp");
+        assert_eq!(app.editor.as_ref().unwrap().path, a);
+        type_text(&mut app, " bs");
+        assert!(!app.editor.any_dirty());
+        type_text(&mut app, " bd");
+        assert_eq!(app.editor.len(), 1);
+        assert_eq!(app.editor.as_ref().unwrap().path, b);
     }
 
     #[test]

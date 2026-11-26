@@ -2,6 +2,7 @@
 
 mod appearance;
 mod browser;
+mod buffer_navigation;
 mod commands;
 mod dialogs;
 mod editing;
@@ -322,6 +323,9 @@ struct App {
     selected: usize,
     preview: String,
     editor: Buffers,
+    buffer_picker: Option<crate::buffer_switcher::BufferSwitcher>,
+    buffer_prefix: Option<char>,
+    show_tab_bar: bool,
     editor_keys: EditorEventHandler,
     command: Option<String>,
     note_search: NoteSearch,
@@ -387,6 +391,9 @@ impl App {
             selected: 0,
             preview: String::new(),
             editor: Buffers::default(),
+            buffer_picker: None,
+            buffer_prefix: None,
+            show_tab_bar: true,
             editor_keys: EditorEventHandler::default(),
             command: None,
             note_search: NoteSearch::default(),
@@ -437,6 +444,7 @@ impl App {
             || self.vault_search.is_some()
             || self.heading_search.is_some()
             || self.command_palette.is_some()
+            || self.buffer_picker.is_some()
     }
 }
 

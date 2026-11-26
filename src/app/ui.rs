@@ -245,8 +245,10 @@ impl App {
         let theme = self.theme;
         frame.render_widget(Block::default().style(theme.base_style()), frame.area());
         let zen = self.editor.is_some() && self.writing.zen.enabled;
-        let interactive =
-            self.command.is_some() || self.note_search.input.is_some() || self.writing.leader;
+        let interactive = self.command.is_some()
+            || self.note_search.input.is_some()
+            || self.writing.leader
+            || self.buffer_prefix.is_some();
         let footer_height = if !zen {
             3
         } else if interactive {
@@ -384,6 +386,17 @@ impl App {
             frame.render_stateful_widget(list, panes[0], &mut state);
         }
 
+        if !zen
+            && self.show_tab_bar
+            && self.editor.is_some()
+            && panes[1].height >= 4
+            && panes[1].width > 0
+        {
+            let area = Rect::new(panes[1].x, panes[1].y, panes[1].width, 1);
+            self.draw_buffer_tabs(frame, area);
+            panes[1].y += 1;
+            panes[1].height -= 1;
+        }
         let popup_active = self.has_active_popup();
         let (mode, location, help, stats, dirty_state) = if let Some(note) = self.editor.as_mut() {
             let filename = note
@@ -456,6 +469,7 @@ impl App {
                         || self.outline_view.focused
                         || self.heading_search.is_some()
                         || self.command_palette.is_some()
+                        || self.buffer_picker.is_some()
                     {
                         // Use the hardware bar in Insert mode; hide the painted
                         // editor cursor while a navigation surface owns keyboard focus.
@@ -527,8 +541,13 @@ impl App {
             };
             let help = if self.outline_view.focused {
                 "j/k Move | h/l Collapse/Expand | Enter Jump | F7 Search | F8 Commands | Esc/F6 Editor".to_owned()
+            } else if self.buffer_prefix == Some('b') {
+                "Space b: b Switch | d Close | o Close others | p Alternate | t Tabs | s Save all"
+                    .to_owned()
+            } else if self.buffer_prefix.is_some() {
+                "b Switch buffer | Esc Cancel".to_owned()
             } else if self.writing.leader {
-                "Space: c Commands | z Zen | f Focus | t Typewriter | e Files | p Preview | o Outline | l Navigate outline | h Headings | 1/2/3 Focus level | n Numbers | s Status"
+                "Space: b Buffers | c Commands | z Zen | f Focus | t Typewriter | e Files | p Preview | o Outline | l Navigate outline | h Headings | 1/2/3 Focus level | n Numbers | s Status"
                     .to_owned()
             } else if let Some(input) = &self.note_search.input {
                 format!(
@@ -690,7 +709,10 @@ impl App {
                 "See dialog for controls",
                 Style::default().fg(theme.muted),
             ));
-        } else if self.command.is_some() || self.note_search.input.is_some() || self.writing.leader
+        } else if self.command.is_some()
+            || self.note_search.input.is_some()
+            || self.writing.leader
+            || self.buffer_prefix.is_some()
         {
             shortcuts.push(Span::styled(
                 help.as_str(),
@@ -827,6 +849,9 @@ impl App {
         }
         if self.command_palette.is_some() {
             self.draw_command_palette(frame);
+        }
+        if self.buffer_picker.is_some() {
+            self.draw_buffer_picker(frame);
         }
     }
 
@@ -1108,6 +1133,128 @@ impl App {
                 ("Shift+Tab", "Previous"),
                 ("Ctrl+U", "Clear"),
             ],
+        );
+    }
+
+    fn draw_buffer_tabs(&self, frame: &mut Frame, area: Rect) {
+        let Some(active) = self.editor.active_index() else {
+            return;
+        };
+        let labels: Vec<_> = self
+            .editor
+            .notes()
+            .iter()
+            .enumerate()
+            .map(|(i, note)| {
+                let name = note.path.file_name().unwrap_or_default();
+                let duplicate = self
+                    .editor
+                    .notes()
+                    .iter()
+                    .filter(|n| n.path.file_name() == Some(name))
+                    .count()
+                    > 1;
+                let label = if duplicate {
+                    note.path
+                        .strip_prefix(&self.root)
+                        .unwrap_or(&note.path)
+                        .to_string_lossy()
+                } else {
+                    name.to_string_lossy()
+                };
+                format!(
+                    " {} {}{} ",
+                    i + 1,
+                    display_component(&label),
+                    if note.is_dirty() { " [+]" } else { "" }
+                )
+            })
+            .collect();
+        let width = usize::from(area.width);
+        let mut start = 0;
+        let mut used = labels[..=active]
+            .iter()
+            .map(|s| Span::raw(s.as_str()).width())
+            .sum::<usize>();
+        while start < active && used > width {
+            used -= Span::raw(labels[start].as_str()).width();
+            start += 1;
+        }
+        let spans: Vec<_> = labels
+            .iter()
+            .enumerate()
+            .skip(start)
+            .map(|(i, label)| {
+                let style = if i == active {
+                    Style::default()
+                        .fg(self.theme.selected_fg)
+                        .bg(self.theme.selected_bg)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(self.theme.muted)
+                };
+                Span::styled(label.as_str(), style)
+            })
+            .collect();
+        frame.render_widget(Paragraph::new(Line::from(spans)), area);
+    }
+
+    fn draw_buffer_picker(&self, frame: &mut Frame) {
+        let Some(picker) = &self.buffer_picker else {
+            return;
+        };
+        let theme = self.theme;
+        let Some(inner) = popup_inner(frame, theme, "Open buffers", 92, 25) else {
+            return;
+        };
+        let area = picker_body(
+            frame,
+            theme,
+            inner,
+            "Search buffers",
+            &picker.query,
+            &format!(
+                "{} matches · {} open",
+                picker.matches.len(),
+                self.editor.len()
+            ),
+            &[
+                ("Esc/F5", "Cancel"),
+                ("↑↓", "Select"),
+                ("Enter", "Switch"),
+                ("Ctrl+U", "Clear"),
+            ],
+        );
+        let items = picker
+            .matches
+            .iter()
+            .map(|&i| {
+                let note = &self.editor.notes()[i];
+                let path = note
+                    .path
+                    .strip_prefix(&self.root)
+                    .unwrap_or(&note.path)
+                    .to_string_lossy();
+                ListItem::new(format!(
+                    "{} {}{} {}",
+                    if self.editor.active_index() == Some(i) {
+                        "•"
+                    } else {
+                        " "
+                    },
+                    i + 1,
+                    if note.is_dirty() { " [+]" } else { "" },
+                    display_component(&path)
+                ))
+            })
+            .collect();
+        popup_list(
+            frame,
+            theme,
+            area,
+            items,
+            picker.selected,
+            "No matching buffers.",
         );
     }
 

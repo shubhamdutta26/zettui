@@ -2,6 +2,7 @@
 
 mod app;
 mod bibliography;
+mod buffer_switcher;
 mod buffers;
 mod cli;
 mod command_palette;

@@ -24,7 +24,13 @@ impl App {
                 note.is_some_and(|note| markdown::is_markdown(&note.path))
                     && !self.writing.zen.enabled
             }
-            Save | Hide | Close | SaveAndClose | Writing(_) => editing,
+            Save | Hide | Close | SaveAndClose | Writing(_) | CloseBuffer | CloseOtherBuffers => {
+                editing
+            }
+            BufferPicker | NextBuffer | PreviousBuffer | AlternateBuffer | SaveAll => {
+                self.editor.len() > 0
+            }
+            ToggleTabs => true,
             CitationPicker => editing && self.bibliography_path.is_some(),
             SnippetPicker => note.is_some_and(|note| note.state.lines.to_string().is_empty()),
             OutgoingLinks | Backlinks => editing || selected.is_some_and(|entry| !entry.is_dir),

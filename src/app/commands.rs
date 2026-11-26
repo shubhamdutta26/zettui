@@ -86,6 +86,20 @@ impl App {
                 self.save_editor();
             }
             Command::Hide => self.hide_editor(),
+            Command::BufferPicker => self.open_buffer_picker(),
+            Command::NextBuffer => self.cycle_buffer(true),
+            Command::PreviousBuffer => self.cycle_buffer(false),
+            Command::AlternateBuffer => self.alternate_buffer(),
+            Command::CloseBuffer => self.close_buffer(),
+            Command::CloseOtherBuffers => self.close_other_buffers(),
+            Command::ToggleTabs => {
+                self.show_tab_bar = !self.show_tab_bar;
+                self.message = format!(
+                    "Buffer tabs {}.",
+                    if self.show_tab_bar { "shown" } else { "hidden" }
+                );
+            }
+            Command::SaveAll => self.save_all_buffers(),
             Command::Close => self.close_editor(false),
             Command::DiscardAndClose => self.close_editor(true),
             Command::SaveAndClose => {

@@ -2,7 +2,10 @@
 
 use crate::editor::OpenNote;
 use edtui::EditorMode;
-use std::{fs, io, path::Path};
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
 
 /// Stable opening order, with an optional active editor. Browser mode does not
 /// imply that all notes have been closed.
@@ -10,6 +13,8 @@ use std::{fs, io, path::Path};
 pub(crate) struct Buffers {
     notes: Vec<OpenNote>,
     active: Option<usize>,
+    last: Option<PathBuf>,
+    previous: Option<PathBuf>,
 }
 
 impl Buffers {
@@ -52,12 +57,91 @@ impl Buffers {
                 self.notes.len() - 1
             }
         };
-        if self.active == Some(index) {
-            return Ok(false);
+        Ok(self.activate(index))
+    }
+
+    pub fn notes(&self) -> &[OpenNote] {
+        &self.notes
+    }
+
+    pub fn active_index(&self) -> Option<usize> {
+        self.active
+    }
+
+    pub fn activate(&mut self, index: usize) -> bool {
+        if index >= self.notes.len() || self.active == Some(index) {
+            return false;
+        }
+        let path = self.notes[index].path.clone();
+        if self.last.as_ref() != Some(&path) {
+            self.previous = self.last.take();
+            self.last = Some(path);
         }
         self.hide();
         self.active = Some(index);
-        Ok(true)
+        true
+    }
+
+    pub fn cycle(&mut self, forward: bool) -> bool {
+        let len = self.notes.len();
+        if len == 0 {
+            return false;
+        }
+        let index = match self.active {
+            Some(i) if forward => (i + 1) % len,
+            Some(i) => (i + len - 1) % len,
+            None if forward => 0,
+            None => len - 1,
+        };
+        self.activate(index)
+    }
+
+    pub fn activate_previous(&mut self) -> bool {
+        let target = if self.active.is_none() {
+            &self.last
+        } else {
+            &self.previous
+        };
+        let index = target
+            .as_ref()
+            .and_then(|path| self.notes.iter().position(|note| &note.path == path));
+        index.is_some_and(|i| self.activate(i))
+    }
+
+    /// Refuse the entire operation if any other buffer has unsaved edits.
+    pub fn close_others(&mut self) -> bool {
+        let Some(active) = self.active else {
+            return false;
+        };
+        if self
+            .notes
+            .iter()
+            .enumerate()
+            .any(|(i, note)| i != active && note.is_dirty())
+        {
+            return false;
+        }
+        let note = self.notes.remove(active);
+        self.notes.clear();
+        self.last = Some(note.path.clone());
+        self.previous = None;
+        self.notes.push(note);
+        self.active = Some(0);
+        true
+    }
+
+    /// Attempt each save independently; failed buffers remain open and dirty.
+    pub fn save_all(&mut self) -> (usize, Vec<String>) {
+        let mut saved = 0;
+        let mut failures = Vec::new();
+        for note in &mut self.notes {
+            match note.save() {
+                Ok(true) => saved += 1,
+                Ok(false) => {}
+                Err(error) => failures.push(format!("{}: {error}", note.path.display())),
+            }
+        }
+        (saved, failures)
     }
 
     /// Park the active note without touching its content, undo or viewport.
@@ -77,7 +161,13 @@ impl Buffers {
         if self.notes[index].is_dirty() && !discard_changes {
             return false;
         }
-        self.notes.remove(index);
+        let removed = self.notes.remove(index);
+        if self.last.as_ref() == Some(&removed.path) {
+            self.last = self.previous.take();
+        }
+        if self.previous.as_ref() == Some(&removed.path) {
+            self.previous = None;
+        }
         self.active = None;
         true
     }
@@ -133,6 +223,28 @@ mod tests {
         assert_eq!(buffers.len(), 1);
         assert!(buffers.is_none());
         assert!(!buffers.any_dirty());
+    }
+
+    #[test]
+    fn save_all_keeps_conflicting_buffer_dirty() {
+        let dir = tempfile::tempdir().unwrap();
+        let a = dir.path().join("a.md");
+        let b = dir.path().join("b.md");
+        fs::write(&a, "Alpha").unwrap();
+        fs::write(&b, "Beta").unwrap();
+        let mut buffers = Buffers::default();
+        buffers.open(&a).unwrap();
+        buffers.as_mut().unwrap().state.lines = Lines::new(vec![vec!['A']]);
+        buffers.open(&b).unwrap();
+        buffers.as_mut().unwrap().state.lines = Lines::new(vec![vec!['B']]);
+        fs::write(&a, "External").unwrap();
+        assert!(!buffers.close_others());
+        let (saved, errors) = buffers.save_all();
+        assert_eq!(saved, 1);
+        assert_eq!(errors.len(), 1);
+        assert!(buffers.any_dirty());
+        assert_eq!(fs::read_to_string(a).unwrap(), "External");
+        assert_eq!(fs::read_to_string(b).unwrap(), "B");
     }
 
     #[test]

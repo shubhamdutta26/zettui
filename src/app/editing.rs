@@ -31,6 +31,7 @@ impl App {
     /// Reset transient input and view state, but never recreate an open note.
     pub(super) fn reset_buffer_context(&mut self) {
         self.editor_keys = EditorEventHandler::default();
+        self.buffer_prefix = None;
         self.note_search.reset_matches();
         self.outline_view.reset();
         self.heading_search = None;
@@ -248,6 +249,9 @@ impl App {
             return;
         }
 
+        if self.handle_buffer_prefix(key) {
+            return;
+        }
         if self.writing.leader {
             self.writing.leader = false;
             if let Some(command) = Command::from_key(KeyScope::Leader, key) {
