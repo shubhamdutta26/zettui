@@ -64,6 +64,16 @@ impl Tracker {
         analytics::report(&self.daily_totals()?, today, self.goals)
     }
 
+    /// Read history once so the calendar and report describe the same snapshot.
+    pub fn snapshot(
+        &self,
+        today: NaiveDate,
+    ) -> io::Result<(BTreeMap<NaiveDate, Activity>, Report)> {
+        let daily = self.daily_totals()?;
+        let report = analytics::report(&daily, today, self.goals)?;
+        Ok((daily, report))
+    }
+
     pub fn warning(&self) -> Option<&str> {
         self.warning.as_deref()
     }

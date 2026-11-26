@@ -61,6 +61,14 @@ Zettui v0.7.12 adds keyboard-driven navigation without changing the plain-text s
 
 The outline and heading search use live, unsaved Markdown. Collapse outline branches with `h`/`l`, select with `j`/`k`, and jump with Enter. The outline is hidden by default. The palette reuses existing commands and safety checks; `Ctrl+P` remains Zotero. See the [user guide](docs/USER-GUIDE.md), [keybindings](docs/KEYBINDINGS.md) and [configuration](docs/CONFIGURATION.md).
 
+## Writing Analytics (v0.7.14 development)
+
+Open the writing dashboard with `F10`, the command palette or `:analytics`.
+View writing goals, streaks, activity totals and a monthly calendar or yearly
+heatmap. `Tab` switches views, `h`/`l` and `j`/`k` navigate calendar dates,
+`[`/`]` move periods, `t` returns to today, `r` refreshes and `Esc` closes.
+See [Writing analytics](docs/WRITING-ANALYTICS.md) for configuration and details.
+
 ## Buffers and Sessions
 
 Zettui v0.7.13 keeps multiple notes open in memory, with independent editing state, theme-aware tabs and a fuzzy buffer switcher. Use `:hide` to return to the Files browser without closing a note, then Enter to open another note or `F5` to switch back to an existing buffer.

@@ -17,7 +17,7 @@ impl App {
         let editing = note.is_some();
         let selected = self.entries.get(self.selected);
         match command {
-            QuitAll | SaveQuitAll => true,
+            QuitAll | SaveQuitAll | WritingAnalytics => true,
             SearchText | SearchTags | ToggleFiles | TogglePreview | ToggleOutline
             | NarrowBrowser | WidenBrowser | NarrowOutline | WidenOutline | CycleTheme => true,
             SearchHeadings => note.is_some_and(|note| markdown::is_markdown(&note.path)),
@@ -83,7 +83,7 @@ impl App {
                     }
                     // A canceled palette preserves Outline focus. Executing a
                     // command uses editor context, except for the focus toggle itself.
-                    if command != Command::FocusOutline {
+                    if !matches!(command, Command::FocusOutline | Command::WritingAnalytics) {
                         self.outline_view.focused = false;
                     }
                     return self.execute_command(command);

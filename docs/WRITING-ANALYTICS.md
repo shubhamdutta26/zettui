@@ -158,3 +158,110 @@ cargo test --locked writing_goals_default_to_disabled_and_accept_independent_tar
 cargo test --locked
 cargo clippy --all-targets --locked -- -D warnings
 ```
+
+## Phase 4: interactive dashboard and calendar
+
+Open the full-screen, read-only dashboard with `F10`, the `F8` command palette
+(search for writing analytics), or `:analytics` / `:stats` from a note. Closing
+returns to the current buffer or browser without saving/discarding edits.
+
+- Overview: daily/weekly goal bars, current and longest streaks, period totals,
+  calendar-day averages and a last-seven-days bar chart. Scroll with `j`/`k`
+  or PageUp/PageDown.
+- Month: Monday-start date grid, with daily word-addition intensity and selected
+  date details (all four counters). Navigate by day (`h`/`l` or Left/Right),
+  week (`j`/`k` or Up/Down), month (`[`/`]` or PageUp/PageDown).
+- Year: Monday-start contribution heatmap, month labels and selected-day details.
+  Same day/week navigation; `[`/`]` or PageUp/PageDown move by year. The heatmap
+  shows a window around the selected week when the terminal is narrow.
+- `Tab` / Shift+Tab cycle views, `1`–`3` select a view, `t` / Home returns to
+  today, `r` refreshes, `Esc` / `q` / `F10` closes. Future dates cannot be selected.
+
+Fixed intensity bands: `·` zero, `+` character additions without word additions,
+`-` deletion-only, `░` 1–249, `▒` 250–499, `▓` 500–999, `█` 1000+ words added.
+Future dates have no mark. The active theme supplies colors; the symbols retain
+meaning without color. Short terminals show selected-date details instead of
+clipping the calendar grid; terminals smaller than 30x8 request resizing.
+
+The dashboard reads one consistent snapshot (persisted devices plus pending local
+edits) when opened, when refreshed with `r`, and at a local date change. It does
+not force a write or read the state file on every redraw. External writes require
+refresh or reopening. Corrupt or unreadable history is shown as an error, not
+zero totals. Pending persistence warnings remain visible. Goal values are still
+configured in `config.toml`; no interactive goal editor is added in this phase.
+
+### Phase 4 verification
+
+```sh
+cargo test --locked analytics_dashboard::tests
+cargo test --locked
+cargo clippy --all-targets --locked -- -D warnings
+```
+
+Check the dashboard from the browser and an unsaved note, switch views and dates,
+resize the terminal, refresh and close. Check goal bars with configured goals and
+verify that dashboard navigation does not change the note or writing counters.
+
+### Phase 4A: overview visual refinement
+
+The Overview now uses bordered metric cards, full-width themed goal bars,
+vertical seven-day activity bars, lifetime statistics and detailed period
+summaries. Wide terminals arrange goals and the chart side by side; narrow
+terminals stack the panels. A scrollbar and `j`/`k` or PageUp/PageDown expose
+all content without clipping the header or footer. Terminals 30–31 columns
+wide retain the compact original overview. Month and Year are unchanged.
+No counters, goal calculations, storage or shortcuts change in this phase.
+
+### Phase 4B: monthly calendar redesign
+
+The Month tab now shows a Monday-start grid of bordered day cells, using only
+as many weeks as the selected month requires. Past and current days show word
+additions; activity colors are derived from the theme with contrast-adjusted
+text. The selected day has a double border, today is underlined, and future
+days display a dash (not a zero). Character-only and deletion-only activity
+remain marked `0+` and `0-`. Full selected-day counters and an activity legend
+appear below the grid. Counts may be abbreviated in small cells, but the
+selected-day counters are exact in the bordered layout.
+
+At 58 or more terminal columns, with enough rows for the month, the calendar
+adapts its cell height to the viewport. Smaller terminals use the original
+compact calendar or selected-day details if necessary. Existing navigation,
+statistics storage, goal calculations, Overview and Year behavior are unchanged.
+
+```sh
+cargo test --locked analytics_dashboard::month_ui::tests
+```
+
+### Phase 4C: yearly heatmap redesign
+
+The Year tab uses a bordered contribution graph with separate filled day tiles,
+Monday-first rows, aligned month labels and a legend shared in meaning and color
+with the Month tab. Fixed word-count bands allow comparison across years.
+Character-only and deletion-only tiles have `+` and `-` markers. The selected
+cell shows `*` without changing its activity color; today shows `o` when not
+selected. Future and out-of-year dates remain blank. All four counters appear
+in the selected-date panel below the graph.
+
+Wide terminals show two-character tiles separated by gaps; smaller terminals
+show single-character tiles, or a week window that follows the selected date.
+Very short terminals show selected-date details instead of clipping the grid.
+Existing day/week/year shortcuts, the Overview, and the Month grid are unchanged.
+
+```sh
+cargo test --locked analytics_dashboard::year_ui::tests
+```
+
+### Phase 4D: final visual polish
+
+The Overview uses wider, dynamically spaced activity columns and a horizontal
+lifetime summary when space permits, with stacked fallbacks for narrow terminals.
+Goal labels show fractional progress (or `<0.1%`), and the bar uses partial
+terminal-cell blocks for small nonzero values. Percentages remain capped at 100%
+and never round up to completion. Panel borders use a slightly stronger
+theme-derived contrast. Singular day labels and compact footer text are corrected.
+The Month fill stays inside its borders, and the Year markers retain their
+symmetric half-cell rendering. No storage, tracking, navigation or goal semantics
+change.
+
+Run `cargo test --locked analytics_dashboard` and check the three views in both
+light and dark themes, at wide and narrow terminal sizes.

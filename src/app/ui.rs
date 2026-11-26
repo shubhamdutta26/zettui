@@ -274,6 +274,10 @@ fn draw_outline(
 
 impl App {
     pub(super) fn draw(&mut self, frame: &mut Frame) {
+        if self.analytics_dashboard.is_some() {
+            self.draw_analytics_dashboard(frame);
+            return;
+        }
         let theme = self.theme;
         let statistics_warning = self
             .statistics

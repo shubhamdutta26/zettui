@@ -17,6 +17,7 @@ pub(crate) enum Command {
     FocusOutline,
     SearchHeadings,
     OpenPalette,
+    WritingAnalytics,
     CycleTheme,
     Quit,
     QuitAll,
@@ -80,6 +81,7 @@ impl Command {
                 F(7) if key.modifiers.is_empty() => Some(SearchHeadings),
                 F(8) if key.modifiers.is_empty() => Some(OpenPalette),
                 F(9) if key.modifiers.is_empty() => Some(ToggleHiddenFolders),
+                F(10) if key.modifiers.is_empty() => Some(WritingAnalytics),
                 Up if key.modifiers == KeyModifiers::ALT => Some(WidenOutline),
                 Down if key.modifiers == KeyModifiers::ALT => Some(NarrowOutline),
                 Char('f') if ctrl => Some(SearchText),
@@ -165,6 +167,7 @@ impl Command {
             "outline" => Some(FocusOutline),
             "headings" => Some(SearchHeadings),
             "commands" => Some(OpenPalette),
+            "analytics" | "stats" => Some(WritingAnalytics),
             "zen" => Some(Writing("zen")),
             "focus" => Some(Writing("focus")),
             "focus off" => Some(Writing("focus off")),
@@ -196,6 +199,12 @@ pub(crate) struct CommandInfo {
 }
 
 pub(crate) const CATALOG: &[CommandInfo] = &[
+    CommandInfo {
+        command: Command::WritingAnalytics,
+        title: "Writing analytics and calendar",
+        shortcut: "F10",
+        aliases: ":analytics :stats writing goals statistics streak heatmap",
+    },
     CommandInfo {
         command: Command::BufferPicker,
         title: "Switch open buffers",

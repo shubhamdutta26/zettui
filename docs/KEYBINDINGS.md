@@ -98,3 +98,17 @@ typewriter = false
 ```
 
 Missing settings use these defaults. Command changes are session-only. Heading colors use contrast-aware light/dark palettes unless explicitly overridden in `[markdown.heading_colors]`.
+
+
+## Writing analytics
+
+| Key | Action |
+| --- | --- |
+| `F10`, `:analytics`, `:stats` | Open writing analytics (`F8` palette also available) |
+| `Tab` / `Shift+Tab`, `1`–`3` | Cycle / choose dashboard view |
+| `j` / `k`, Up / Down | Scroll overview or move calendar by week |
+| `h` / `l`, Left / Right | Move calendar by day |
+| `[` / `]`, PageUp / PageDown | Previous / next month or year (Page keys scroll overview) |
+| `t` / Home | Return to today / top of overview |
+| `r` | Refresh statistics |
+| `Esc` / `q` / `F10` | Close dashboard |

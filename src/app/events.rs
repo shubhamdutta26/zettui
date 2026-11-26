@@ -57,7 +57,10 @@ impl App {
     /// Observe the result of a routed key, including modal insertions and Vim
     /// commands. Never compare the contents of two different buffers.
     fn route_key(&mut self, key: KeyEvent) -> io::Result<bool> {
-        let before = if key.kind == KeyEventKind::Press && self.statistics.is_some() {
+        let before = if key.kind == KeyEventKind::Press
+            && self.statistics.is_some()
+            && self.analytics_dashboard.is_none()
+        {
             self.editor
                 .as_ref()
                 .map(|note| (note.path.clone(), note.state.lines.to_string()))
@@ -82,6 +85,10 @@ impl App {
     /// Route one terminal key; true requests application exit.
     fn dispatch_key(&mut self, key: KeyEvent) -> io::Result<bool> {
         if key.kind != KeyEventKind::Press {
+            return Ok(false);
+        }
+        if self.analytics_dashboard.is_some() {
+            self.handle_analytics_key(key);
             return Ok(false);
         }
         if self.snippet_form.is_some() {
@@ -232,6 +239,28 @@ mod tests {
             1
         );
         assert_eq!(totals.values().map(|a| a.words_deleted).sum::<u64>(), 0);
+    }
+
+    #[test]
+    fn analytics_keys_are_modal_and_do_not_count_as_edits() {
+        let (dir, mut app) = fixture();
+        let state = dir.path().join("statistics.json");
+        app.statistics = Some(zettui::writing_activity::Tracker::new(Some(state.clone())));
+        press(&mut app, KeyCode::F(10));
+        assert!(app.analytics_dashboard.is_some());
+        press(&mut app, KeyCode::Char('q'));
+        assert!(app.analytics_dashboard.is_none());
+        press(&mut app, KeyCode::Enter);
+        let before = app.editor.as_ref().unwrap().state.lines.to_string();
+        type_text(&mut app, ":analytics");
+        press(&mut app, KeyCode::Enter);
+        assert!(app.analytics_dashboard.is_some());
+        type_text(&mut app, "2hjkl3r");
+        press(&mut app, KeyCode::Esc);
+        assert!(app.analytics_dashboard.is_none());
+        assert_eq!(app.editor.as_ref().unwrap().state.lines.to_string(), before);
+        app.statistics.as_mut().unwrap().flush().unwrap();
+        assert!(!state.exists());
     }
 
     #[test]

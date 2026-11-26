@@ -1,5 +1,6 @@
 //! Application state and coordination. Child modules share private state through App.
 
+mod analytics_dashboard;
 mod appearance;
 mod browser;
 mod buffer_navigation;
@@ -325,6 +326,7 @@ struct App {
     preview: String,
     editor: Buffers,
     statistics: Option<zettui::writing_activity::Tracker>,
+    analytics_dashboard: Option<analytics_dashboard::Dashboard>,
     buffer_picker: Option<crate::buffer_switcher::BufferSwitcher>,
     buffer_prefix: Option<char>,
     show_tab_bar: bool,
@@ -397,6 +399,7 @@ impl App {
             preview: String::new(),
             editor: Buffers::default(),
             statistics: None,
+            analytics_dashboard: None,
             buffer_picker: None,
             buffer_prefix: None,
             show_tab_bar: true,
@@ -443,7 +446,8 @@ impl App {
 
     /// Check whether a modal window currently has input focus.
     fn has_active_popup(&self) -> bool {
-        self.prompt.is_some()
+        self.analytics_dashboard.is_some()
+            || self.prompt.is_some()
             || self.links.is_some()
             || self.citation_picker.is_some()
             || self.snippet_picker.is_some()
