@@ -31,6 +31,7 @@ Versions identify development milestones; not all have a separate published rele
 
 | Milestone | Possible work |
 | --- | --- |
+| 0.7.13 | Buffers and Sessions: multiple open notes, theme-aware tabs, fuzzy buffer switching, independent editor state, workspace restoration and hidden-folder visibility (release validation) |
 | 0.8.0 | Optional note metadata panel and further configurable UI elements |
 | 0.8.x | Search highlighting, ranked results, faster indexing, optional inline hashtag index |
 | 0.9.x | Link-aware rename/move and broken-link reports |

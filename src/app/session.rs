@@ -172,6 +172,100 @@ mod tests {
     use crate::theme::{Appearance, AutoThemes, ColorOverrides, ThemeChoice};
     use std::{fs, path::PathBuf};
 
+    #[test]
+    fn buffer_save_quit_and_hidden_folder_session_round_trip() {
+        use crate::commands::Command;
+        use crate::search::{SearchMode, VaultIndex};
+        use edtui::Lines;
+
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let a = root.join("Visible.md");
+        let hidden = root.join(".archive");
+        let b = hidden.join("Archived.md");
+        fs::create_dir(&hidden).unwrap();
+        fs::write(&a, "first\nsecond\nthird").unwrap();
+        fs::write(&b, "archive-only-token").unwrap();
+
+        let mut first = app(root.clone());
+        assert!(!first.show_hidden_folders);
+        first.select_path(&a);
+        first.enter().unwrap();
+        let note = first.editor.as_mut().unwrap();
+        note.state.lines = Lines::new(vec![
+            "first".chars().collect(),
+            "edited-visible-token".chars().collect(),
+            "third".chars().collect(),
+        ]);
+        note.state.cursor = Index2::new(1, 3);
+        note.state.set_viewport_offset(1, 1);
+        assert!(note.is_dirty());
+
+        assert!(!first.execute_command(Command::Hide).unwrap());
+        assert!(!first.execute_command(Command::ToggleHiddenFolders).unwrap());
+        first.select_path(&hidden);
+        first.enter().unwrap();
+        first.select_path(&b);
+        first.enter().unwrap();
+        assert_eq!(first.editor.len(), 2);
+        assert!(!first.execute_command(Command::ToggleHiddenFolders).unwrap());
+        assert_eq!(first.current_dir, root);
+        assert_eq!(first.editor.as_ref().unwrap().path, b);
+
+        // A dirty inactive note must block application exit.
+        assert!(!first.execute_command(Command::QuitAll).unwrap());
+        assert!(!first.execute_command(Command::CloseOtherBuffers).unwrap());
+        assert_eq!(first.editor.len(), 2);
+        assert!(first.editor.any_dirty());
+        assert_eq!(fs::read_to_string(&a).unwrap(), "first\nsecond\nthird");
+
+        // Save-all-and-quit leaves the open set intact for session capture.
+        assert!(first.execute_command(Command::SaveQuitAll).unwrap());
+        assert!(!first.editor.any_dirty());
+        assert_eq!(first.editor.len(), 2);
+        let state_dir = tempfile::tempdir().unwrap();
+        let state_file = state_dir.path().join("session.json");
+        first.capture_session().save(&state_file).unwrap();
+        let json = fs::read_to_string(&state_file).unwrap();
+        assert!(!json.contains("edited-visible-token"));
+        assert!(!json.contains("archive-only-token"));
+
+        let mut second = app(root.clone());
+        second.apply_session(Session::load(&state_file, &root).unwrap().unwrap());
+        assert_eq!(second.editor.len(), 2);
+        assert_eq!(second.editor.notes()[0].path, a);
+        assert_eq!(second.editor.as_ref().unwrap().path, b);
+        assert!(!second.show_hidden_folders);
+        assert!(!second.entries.iter().any(|entry| entry.path == hidden));
+        assert!(!second.execute_command(Command::PreviousBuffer).unwrap());
+        let restored = second.editor.as_ref().unwrap();
+        assert_eq!(
+            restored.state.lines.to_string(),
+            "first\nedited-visible-token\nthird"
+        );
+        assert_eq!(restored.state.cursor, Index2::new(1, 3));
+        assert_eq!(restored.state.viewport_offset(), (1, 1));
+        assert!(!restored.is_dirty());
+
+        assert!(
+            !second
+                .execute_command(Command::ToggleHiddenFolders)
+                .unwrap()
+        );
+        let index = VaultIndex::load(&root).unwrap();
+        assert_eq!(
+            index
+                .search(SearchMode::Text, "edited-visible-token", 10)
+                .len(),
+            1
+        );
+        assert!(
+            index
+                .search(SearchMode::Text, "archive-only-token", 10)
+                .is_empty()
+        );
+    }
+
     fn app(root: PathBuf) -> App {
         App::new(
             root,

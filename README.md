@@ -61,9 +61,29 @@ Zettui v0.7.12 adds keyboard-driven navigation without changing the plain-text s
 
 The outline and heading search use live, unsaved Markdown. Collapse outline branches with `h`/`l`, select with `j`/`k`, and jump with Enter. The outline is hidden by default. The palette reuses existing commands and safety checks; `Ctrl+P` remains Zotero. See the [user guide](docs/USER-GUIDE.md), [keybindings](docs/KEYBINDINGS.md) and [configuration](docs/CONFIGURATION.md).
 
+## Buffers and Sessions
+
+Zettui v0.7.13 keeps multiple notes open in memory, with independent editing state, theme-aware tabs and a fuzzy buffer switcher. Use `:hide` to return to the Files browser without closing a note, then Enter to open another note or `F5` to switch back to an existing buffer.
+
+| Shortcut | Action |
+| --- | --- |
+| `F5` / `Space b b` | Fuzzy-switch open buffers |
+| `]b` / `[b` | Next / previous buffer |
+| `Space b p` | Previously active buffer |
+| `Space b d` / `Space b o` | Close current / other buffers, subject to unsaved-change checks |
+| `Space b t` | Toggle buffer tabs |
+| `Space b s` / `:wa` | Save all modified buffers |
+| `:qa` / `:wqa` | Quit all / save all and quit, keeping the open-buffer set for the next session |
+| `F9` | Show or hide dot-prefixed folders (`.git` remains excluded) |
+
+Sessions restore open notes, their order, the active note, cursor and viewport positions, and browser/panel preferences on restart. They are stored locally under `$XDG_STATE_HOME/zettui/sessions/` (default `~/.local/state/zettui/sessions/`) and contain metadata, not unsaved note contents. `:qa` refuses to quit when any buffer is dirty; `:wqa` refuses to quit if any changes cannot be saved. `:q` still closes the active note rather than quitting the application.
+
+See [Buffers and Sessions](docs/BUFFERS-AND-SESSIONS.md) for the full command reference, configuration, recovery limitations and testing procedure.
+
 ## Documentation
 
 - [User guide](docs/USER-GUIDE.md)
+- [Buffers and Sessions](docs/BUFFERS-AND-SESSIONS.md)
 - [Configuration](docs/CONFIGURATION.md)
 - [Keyboard shortcuts and writing modes](docs/KEYBINDINGS.md)
 - [Architecture](docs/ARCHITECTURE.md)
