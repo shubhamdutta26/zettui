@@ -61,6 +61,12 @@ All keys are optional. Restart Zettui after changing the file. Session commands 
 | `layout` | `show_files` | `true`; while editing; always visible in browser |
 | `layout` | `show_preview` | `true`; browser mode only |
 | `layout` | `show_outline` | `false`; editor mode only; interactive Markdown outline |
+| `buffers` | `show_tab_bar` | `true`; show tabs by default |
+| `browser` | `show_hidden_folders` | `false`; dot-prefixed folders; `.git` remains excluded |
+| `session` | `enabled` | `true`; read and save workspace session metadata |
+| `session` | `restore_on_startup` | `true`; reopen the saved session |
+| `session` | `restore_cursor` | `true`; restore cursor and viewport positions |
+| `session` | `restore_layout` | `true`; restore saved pane, tab and hidden-folder preferences |
 | `writing_goals` | `daily_words` | `0` (disabled); positive gross word-addition target per local day |
 | `writing_goals` | `weekly_words` | `0` (disabled); positive gross word-addition target per Monday-start week |
 | `editor` | `line_numbers` | `true` |
@@ -83,6 +89,8 @@ All keys are optional. Restart Zettui after changing the file. Session commands 
 | `focus` | `dim_strength` | `0.65`; clamped to 0–0.85 |
 | `focus` | `typewriter` | `false`; independent of focus |
 | `colors` | `background`, `surface`, `foreground`, `muted`, `border`, `accent`, `directory`, `selected_bg`, `selected_fg`, `warning`, `success` | Unset; optional quoted `#RRGGBB` global theme overrides |
+
+Restored session preferences can override startup layout, tab and hidden-folder defaults. See [Buffers and Sessions](BUFFERS-AND-SESSIONS.md) for precedence and how to start fresh.
 
 Heading overrides apply across themes and to both preview and editor. Choose colors readable on your background. Missing heading overrides use native theme heading colors where available, otherwise adaptive light/dark colors. Duplicate automatic heading colors are replaced with unused fallback colors; explicit overrides are preserved. Disabling fenced code or YAML highlighting leaves those blocks plain, without interpreting their contents as Markdown. Inline code remains highlighted unless the master switch is off. Search and focus highlighting are independent of the master switch. Invalid heading or syntax colors and unknown keys in these color tables are configuration errors.
 

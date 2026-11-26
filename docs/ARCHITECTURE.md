@@ -1,6 +1,6 @@
 # Architecture
 
-`main.rs` declares modules and delegates startup to `app::start`. `cli.rs` resolves startup options before Ratatui initializes the terminal. `app.rs` owns the private application state, picker state, and startup coordination. Its child modules extend `App` with focused implementations; the event loop remains the single owner of application-state mutation.
+`main.rs` declares binary modules, handles standalone statistics CLI commands via `statistics_cli::run`, and otherwise delegates startup to `app::start`. `lib.rs` exposes the analytics, statistics and writing-activity engines used by the binary and integration tests. `cli.rs` resolves startup options before Ratatui initializes the terminal. `app.rs` owns the private application state, picker state, and startup coordination. Its child modules extend `App` with focused implementations; the event loop remains the single owner of application-state mutation.
 
 | Application module | Responsibility |
 | --- | --- |
@@ -13,6 +13,9 @@
 | `app/palette.rs` | Context checks, command palette lifecycle and keyboard routing |
 | `app/navigation.rs` | Outline and heading-search input, focus and shared cursor jumps |
 | `app/ui.rs` | Main interface and popup rendering |
+| `app/buffer_navigation.rs` | Buffer switching, prefix keys, picker and bulk-save actions |
+| `app/session.rs` | Capture and restore workspace session metadata |
+| `app/analytics_dashboard.rs` and child modules | Dashboard lifecycle, key handling, Overview, Month and Year rendering |
 
 These modules share `App` privately rather than passing large collections of state between unrelated public interfaces. Methods used by sibling modules have `pub(super)` visibility; implementation helpers remain private.
 
@@ -31,6 +34,11 @@ These modules share `App` privately rather than passing large collections of sta
 | `search`, `links` | Vault search and note relationships |
 | `bibliography`, `snippets` | Read-only reference and template loading |
 | `file_ops` | Filesystem operations |
+| `buffers`, `buffer_switcher` | Open-note lifecycle, active/alternate buffer and fuzzy buffer picker |
+| `session` | Session metadata schema, path resolution and persistence |
+| `statistics`, `statistics/transfer`, `statistics/zettlr` | Local statistics, snapshot exchange and legacy import |
+| `writing_activity`, `analytics` | Edit tracking, pending deltas, summaries, streaks and goals |
+| `statistics_cli` | Standalone export/import/device ID/Zettlr migration commands |
 
 ## Invariants
 
@@ -51,6 +59,15 @@ These modules share `App` privately rather than passing large collections of sta
 ## Panel layout
 
 `layout::Panels` holds session visibility preferences and preferred outline width. Its geometry method returns `[Files, Editor/Preview, Outline]`, reserving the active pane and suppressing the outline on small terminals. Browser mode always retains Files; editor mode always retains the editor. Zen temporarily suppresses sidebars without changing preferences. The event loop routes modal keys first, then the in-note search and Ex command bar, then global commands, then focused Outline keys before editor/browser input. `App::route_key` provides a testable single-key path used by the real terminal loop. Global shortcuts clear pending leader and wiki-link prefix state. Preview remains read-only; the Outline does not forward editing motions to edtui. Panel commands flow through the shared command dispatcher and do not mutate the note buffer or configuration file.
+
+## Writing activity
+
+`App::route_key` snapshots active-note text before routing a pressed key when
+tracking is enabled and the dashboard is closed. If the same path remains active
+after dispatch, it records the before/after difference. The tracker batches
+activity and flushes periodically and on exit. The dashboard reads a combined
+saved/pending snapshot. Statistics state is installation-wide, not per workspace.
+See [Writing analytics](WRITING-ANALYTICS.md) for data semantics and limitations.
 
 ## Rendering and theme caches
 

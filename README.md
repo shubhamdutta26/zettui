@@ -63,9 +63,10 @@ The outline and heading search use live, unsaved Markdown. Collapse outline bran
 
 ## Writing Analytics (v0.7.14 development)
 
-Open the writing dashboard with `F10`, the command palette or `:analytics`.
+Open the writing dashboard with `F10`, the command palette or `:analytics` / `:stats`.
 View writing goals, streaks, activity totals and a monthly calendar or yearly
-heatmap. `Tab` switches views, `h`/`l` and `j`/`k` navigate calendar dates,
+heatmap. `Tab` / `Shift+Tab` cycle views (`1` Overview, `2` Month, `3` Year),
+`h`/`l` and `j`/`k` navigate calendar dates,
 `[`/`]` move periods, `t` returns to today, `r` refreshes and `Esc` closes.
 Exchange writing history between computers using duplicate-safe snapshot merging:
 
@@ -114,6 +115,9 @@ See [Buffers and Sessions](docs/BUFFERS-AND-SESSIONS.md) for the full command re
 - [Buffers and Sessions](docs/BUFFERS-AND-SESSIONS.md)
 - [Configuration](docs/CONFIGURATION.md)
 - [Keyboard shortcuts and writing modes](docs/KEYBINDINGS.md)
+- [Vim-style application commands](docs/VIM-COMMANDS.md)
+- [Command-line reference](docs/CLI.md)
+- [Writing analytics](docs/WRITING-ANALYTICS.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Development](docs/DEVELOPMENT.md)
 - [Releasing](docs/RELEASING.md)

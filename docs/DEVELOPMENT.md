@@ -16,4 +16,4 @@ cargo doc --no-deps --document-private-items
 
 Keep comments focused on invariants, edge cases and design decisions. Historical lessons are retained as historical records, not current setup instructions.
 
-For the Intelligent Navigation integration and terminal smoke tests, see [Navigation regression checklist](NAVIGATION-TESTS.md). Run it before tagging v0.7.12.
+For the Intelligent Navigation integration and terminal smoke tests, see [Navigation regression checklist](NAVIGATION-TESTS.md). Use it for navigation regressions in subsequent releases as well. See also the [v0.7.13](RELEASE-CHECKLIST-0.7.13.md) and [v0.7.14 development](RELEASE-CHECKLIST-0.7.14.md) checklists. Multi-computer statistics exchange remains manually unverified on separate physical computers.

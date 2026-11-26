@@ -45,12 +45,13 @@ Use buffer prefix/leader shortcuts in Normal mode. The F5 picker and F8 palette 
 | --- | --- | --- |
 | Note contents | Saved and unsaved | Saved file contents only |
 | Cursor and viewport | Yes | Yes, if enabled |
-| Undo/redo and repeat-search history | Yes | No |
+| Undo/redo | Yes (per buffer) | No |
+| Last in-note search query and direction | Yes (shared across buffers) | No |
 | Open set, order and active buffer | Yes | Yes, if enabled |
 | Browser directory/selection, panel and tab preferences | Workspace-wide | Yes (layout preferences are optional) |
 | Insert/Visual mode, pending keys and modal dialogs | Reset on switching | No |
 
-Viewport offsets can adjust with terminal resizing, word wrapping and Typewriter mode. Search and outline displays are rebuilt for the active buffer. The outline and heading picker use the live editor text; vault text/tag search and link indexing use files on disk, not unsaved contents.
+Viewport offsets can adjust with terminal resizing, word wrapping and Typewriter mode. Search and outline displays are rebuilt for the active buffer. The last in-note search query and direction are application-wide, not independent per buffer. The outline and heading picker use the live editor text; vault text/tag search and link indexing use files on disk, not unsaved contents.
 
 Existing safe-save rules apply to every buffer, including checks for external modifications. `:wa` attempts each save independently; a failure can leave some notes saved and others modified. `:wqa` does not exit if dirty buffers remain. File-browser rename, move and Trash operations are refused for open files and folders containing open files; close affected buffers before changing their paths.
 

@@ -2,25 +2,42 @@
 
 ## Keyboard shortcuts
 
+Shortcuts are context-sensitive. Active dialogs, pickers, in-note search input and
+the Ex command bar take precedence over global shortcuts. Editor text motions
+not intercepted by Zettui are delegated to the pinned `edtui` editing engine.
+See [Vim-style commands](VIM-COMMANDS.md) for the application-level Ex reference.
+
 | Context | Keys | Action |
 | --- | --- | --- |
 | Browser | `j` / `k`, `↑` / `↓` | Move through files |
-| Browser | `Enter`, `l`, `h` | Open file/folder; enter folder only; go to parent folder |
+| Browser | `Enter` | Open selected file or folder |
+| Browser | `l` / `→` | Enter folder only; never focus Preview |
+| Browser | `h` / `←` / `Backspace` | Go to parent folder |
 | Browser | `n` / `N` | Create note / folder |
 | Browser | `r`, `m`, `d` | Rename, move, send to Trash (confirmation) |
 | Browser | `R`, `/`, `q` | Refresh; search filenames in current folder; quit |
 | Browser | `o` / `b` | Outgoing links / backlinks for selected note |
+| Browser | `Ctrl+T` | Return to previously linked note |
 | Editor (Normal) | `/`, `?`, `n`, `N` | In-note search forward/backward and repeat matches |
 | Editor | `i`, `Esc` | Enter Insert mode / return to Normal mode |
 | Editor | `h` / `j` / `k` / `l`, `w` / `b`, `gg` / `G` | Vim cursor navigation |
 | Editor | `u`, `Ctrl+R`, `v` | Undo, redo, Visual mode |
-| Editor | `Ctrl+S`, `:w`, `:wq`, `:q`, `:q!` | Save; save; save and close; close; discard and close |
-| Editor (Insert) | `[[` | Search and insert a wiki link to an existing note |
+| Editor / Outline | `Ctrl+S` | Save active note |
+| Editor (Normal) | `:w`, `:wq`, `:q`, `:q!` | Save; save and close; close; discard and close |
+| Editor (Insert, Markdown) | `[[` | Search and insert a wiki link to an existing note |
 | Editor | `Ctrl+O`, `Ctrl+B`, `Ctrl+T` | Outgoing links, backlinks, return to previously linked note |
 | Editor | `Ctrl+P`, `Ctrl+E` | Zotero citation picker; snippet picker (empty note only) |
-| Anywhere | `Ctrl+F`, `Alt+T` | Full-text search; search YAML tags |
-| Anywhere | `Alt+h` / `Alt+l` (or `Alt+←` / `Alt+→`) | Narrow / widen file-browser pane |
-| Browser / Editor | `F2` / `F3` / `F4` | Toggle Files / Preview / Outline preferences |
+| Global (outside modal input) | `Ctrl+F`, `Alt+T` | Full-text search; search YAML tags |
+| Global (outside modal input) | `Alt+h` / `Alt+l` (or `Alt+←` / `Alt+→`) | Narrow / widen file-browser pane |
+| Global (outside modal input) | `F2` / `F3` / `F4` | Toggle Files / Preview / Outline preferences |
+| Browser / Editor (Normal) / Outline | `F5` | Fuzzy-switch open buffers |
+| Editor (Normal) | `Space b b` | Fuzzy-switch open buffers |
+| Editor (Normal) | `]b` / `[b` | Next / previous buffer |
+| Editor (Normal) | `Space b p` | Activate previously active buffer |
+| Editor (Normal) | `Space b d` / `Space b o` | Close current / other buffers subject to dirty-buffer checks |
+| Editor (Normal) | `Space b t` / `Space b s` | Toggle tabs / save all buffers |
+| Global (outside modal input) | `F9` | Toggle dot-prefixed folders |
+| Global (outside modal input) | `F10` | Open writing analytics |
 | Editor (Normal) | `F6`, `Space l`, `:outline` | Show and focus Outline; F6 returns to editor |
 | Editor (Normal) / Outline | `F7` | Search headings in the open Markdown note |
 | Editor (Normal) | `Space h`, `:headings` | Search headings without showing the Outline |
@@ -33,11 +50,17 @@
 | Outline | `j` / `k`, `↑` / `↓`, `Home` / `End` | Move through visible headings |
 | Outline | `h` / `←`, `l` / `→` | Collapse or select parent; expand or select first child |
 | Outline | `Enter`, `Esc` | Jump to heading and return to editor; return without moving cursor |
-| Browser / Editor | `Alt+↑` / `Alt+↓` | Widen / narrow outline preference |
-| Anywhere | `Ctrl+G` | Cycle native, terminal and built-in themes |
+| Global (outside modal input) | `Alt+↑` / `Alt+↓` | Widen / narrow outline preference |
+| Browser / Editor / Outline | `Ctrl+G` | Cycle native, terminal and built-in themes |
 | Search popup | `Tab`, `↑` / `↓`, `Enter`, `Esc` | Toggle text/tags, select result, open, cancel |
 | Pickers | `↑` / `↓`, `Enter`, `Esc`, `Ctrl+U` | Select, confirm, cancel, clear search (where supported) |
-| Snippet fields | `Tab` / `Enter`, `Shift+Tab` | Next / previous field |
+| Buffer picker | `↑` / `↓`, `Ctrl+P` / `Ctrl+N`, `Enter`, `Esc` / `F5`, `Ctrl+U` | Select, activate, cancel, clear query |
+| In-note search input | Type, `Backspace`, `Ctrl+U`, `Enter`, `Esc` | Edit query, clear, confirm or cancel |
+| Ex command bar | Type, `Backspace`, `Enter`, `Esc` | Edit command, execute or cancel |
+| Link dialog | `j` / `k`, `↓` / `↑`, `Enter`, `Esc` / `q` | Select, follow or cancel |
+| File-operation prompt | Type, `Backspace`, `Ctrl+U`, `Enter`, `Esc` | Edit path/name, clear, confirm or cancel |
+| Trash confirmation | `y`, `n` / `Esc` / `Enter` | Confirm Trash or cancel |
+| Snippet fields | `Tab` / `Enter`, `Shift+Tab`, `Ctrl+U`, `Esc` | Next/finish, previous, clear current field, cancel |
 
 **Cursor:** Normal mode uses a blinking block; Insert mode uses a **blinking vertical bar** (subject to terminal support).
 
@@ -69,8 +92,8 @@ Open a note with Enter, then use the following commands in Normal mode. Zen, Foc
 | `:focus section` | `Space 3` | Focus current Markdown section |
 | `:focus off` | | Disable focus |
 | `:typewriter` | `Space t` | Toggle experimental logical-line centering |
-| `:set number` / `:set nonumber` | `Space n` (toggle) | Show/hide line numbers in current layout |
-| `:set status` / `:set nostatus` | `Space s` (toggle) | Show/hide Zen status bar |
+| `:set number` / `:set nonumber` / `:toggle number` | `Space n` (toggle) | Show/hide line numbers in current layout |
+| `:set status` / `:set nostatus` / `:toggle status` | `Space s` (toggle) | Show/hide Zen status bar |
 | `:set wrap` / `:set nowrap` | | Toggle visual wrapping |
 | `:set textwidth=80` | | Set Zen pane width (20–240 columns, including gutter if enabled) |
 
@@ -105,7 +128,7 @@ Missing settings use these defaults. Command changes are session-only. Heading c
 | Key | Action |
 | --- | --- |
 | `F10`, `:analytics`, `:stats` | Open writing analytics (`F8` palette also available) |
-| `Tab` / `Shift+Tab`, `1`–`3` | Cycle / choose dashboard view |
+| `Tab` / `Shift+Tab`, `1`–`3` | Cycle views / choose Overview, Month, Year |
 | `j` / `k`, Up / Down | Scroll overview or move calendar by week |
 | `h` / `l`, Left / Right | Move calendar by day |
 | `[` / `]`, PageUp / PageDown | Previous / next month or year (Page keys scroll overview) |
