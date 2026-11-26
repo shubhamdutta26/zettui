@@ -4,6 +4,7 @@
 //! installations separate allows snapshot imports to be idempotent.
 
 mod transfer;
+mod zettlr;
 pub use transfer::MergeSummary;
 
 use chrono::NaiveDate;
@@ -121,16 +122,22 @@ impl Statistics {
         if self.version != VERSION {
             return Err(invalid("Unsupported writing statistics version"));
         }
-        if !self.devices.contains_key(&self.local_device_id) {
+        if !native_device_id(&self.local_device_id)
+            || !self.devices.contains_key(&self.local_device_id)
+        {
             return Err(invalid("Missing local writing statistics device"));
         }
         for (id, days) in &self.devices {
-            if id.len() != 32
-                || !id
-                    .bytes()
-                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-            {
+            let legacy = id.strip_prefix("zettlr:").is_some_and(zettlr::valid_source);
+            if !native_device_id(id) && !legacy {
                 return Err(invalid("Invalid writing statistics device ID"));
+            }
+            if legacy
+                && days
+                    .values()
+                    .any(|a| a.words_deleted != 0 || a.characters_deleted != 0)
+            {
+                return Err(invalid("Zettlr history cannot contain deletion counters"));
             }
             for date in days.keys() {
                 parse_date(date)?;
@@ -283,6 +290,13 @@ impl Store {
         temp.persist(&self.path).map_err(|error| error.error)?;
         Ok(())
     }
+}
+
+fn native_device_id(id: &str) -> bool {
+    id.len() == 32
+        && id
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
 fn invalid(message: &str) -> io::Error {

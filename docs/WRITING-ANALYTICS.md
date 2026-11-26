@@ -45,8 +45,7 @@ Illustrative state (not written until the engine is called):
 Export/import preserves device identities and merges cumulative counters
 by source and date rather than adding the same snapshot twice. Do not use a shared
 or copied live statistics file as the state of multiple active installations:
-that would reuse one device identity. See Phase 5 below. Legacy Zettlr handling
-is deferred to Phase 6.
+that would reuse one device identity. See Phase 5 below. Legacy Zettlr history uses separate, named sources; see Phase 6 below.
 
 ## Phase 1 verification
 
@@ -317,7 +316,7 @@ only persisted activity: edits still buffered in another process may be missing.
 Always exit the editor cleanly before exporting. Importing while an editor is
 open is safe for persisted and subsequent local edits (the same lock is used),
 but refresh the dashboard afterward. No changes to the UI or goal settings.
-Zettlr JSON has a different schema and is not accepted until Phase 6.
+Zettlr JSON has a different schema; use the dedicated migration command below.
 
 ### Phase 5 verification
 
@@ -332,3 +331,59 @@ The tests exercise same-day aggregation, idempotency, old and new snapshots,
 three-device round trips, conflict/overflow/corrupt input protection, source
 preservation, no-clobber exports, concurrent local writes, and the standalone
 CLI using isolated state directories.
+
+## Phase 6: import historical Zettlr statistics
+
+Import the `stats.json` file from each independent Zettlr installation using
+an explicit, stable source label:
+
+```sh
+zettui --stats-import-zettlr ~/Downloads/stats-desktop.json desktop
+zettui --stats-import-zettlr ~/Downloads/stats-laptop.json laptop
+zettui --stats-import-zettlr ~/Downloads/stats-macbook.json macbook
+```
+
+During development use `cargo run --locked --` before the flags instead of
+`zettui`. The label is required, case-sensitive, and must consist of 1–48
+lowercase ASCII letters, digits, hyphens or underscores. Use the **same** label
+for all copies or later exports of one history, even on different computers.
+Use different labels only for genuinely independent histories. If a file was
+already combined from several computers, import it once with a single label
+instead of also importing the individual histories. Do not import overlapping
+or already-synchronized Zettlr histories as independent sources: their original
+provenance is not encoded in Zettlr's JSON and cannot be inferred reliably.
+Labels are included in exported snapshots; avoid personal or identifying names.
+
+The importer reads `wordCount` and `charCount` maps, checks canonical dates and
+nonnegative integer counters, and preserves the union of both date sets,
+including zero-count and character-only days. A missing count for a date is
+zero. Legacy values are mapped to added words and characters as reported by
+Zettlr; deletion counts are set to zero because they are unknown. These metrics
+are not necessarily identical to Zettui's native edit counters. `pomodoros`,
+targets, tags and dictionary data are not migrated. Historical dates are not
+shifted, and future dates, if present, are retained (the analytics layer filters
+future activity as before). Existing writing goals are not modified.
+
+Each source is stored as a distinct `zettlr:<label>` entry in the existing
+version-1 `devices` map, never as the local installation ID. This extends the
+allowed identifier format; Phase 5 development builds cannot read migrated
+snapshots, so upgrade all computers before exchanging them. Normal Zettui
+snapshots carry these sources and retain their identities. Reimporting an
+identical or older snapshot with the same label is a no-op; a later snapshot
+updates cumulative counts, and conflicting increases/decreases are rejected.
+A legacy correction that reduces counters is not applied automatically. Keep
+original files and do not try to bypass a conflict by changing the source label.
+The same transactional validation and locking as native imports apply. Source
+files are never modified. No changes to native device IDs, dependencies or UI.
+
+### Phase 6 verification
+
+```sh
+cargo test --locked --lib statistics::zettlr::tests
+cargo test --locked --test zettlr_migration
+cargo test --locked
+cargo clippy --all-targets --locked -- -D warnings
+```
+
+To test without touching existing writing data, set `XDG_STATE_HOME` to an
+absolute temporary directory before running the migration or dashboard.

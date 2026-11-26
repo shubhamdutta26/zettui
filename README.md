@@ -78,6 +78,9 @@ zettui --stats-device-id
 Exit the editor before exporting to include all pending edits. Keep each computer's
 live statistics file separate; exchange snapshots instead. Exports require a new
 filename and never replace an existing file.
+Import legacy Zettlr history with `zettui --stats-import-zettlr FILE SOURCE`
+(e.g. `desktop`). Reuse the same source label for the same history; never import
+a combined history alongside its original component files.
 See [Writing analytics](docs/WRITING-ANALYTICS.md) for configuration and details.
 
 ## Buffers and Sessions

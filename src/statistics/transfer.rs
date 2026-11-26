@@ -1,7 +1,7 @@
 //! Explicit, duplicate-safe exchange of installation snapshots.
 
 use super::{Activity, MAX_BYTES, Statistics, Store, invalid};
-use std::{io, io::Write, path::Path};
+use std::{collections::BTreeMap, io, io::Write, path::Path};
 
 /// Number of new device identities and changed device/date records.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -21,9 +21,12 @@ impl Activity {
 }
 
 impl Statistics {
-    fn merge(&mut self, incoming: Statistics) -> io::Result<MergeSummary> {
+    fn merge(
+        &mut self,
+        incoming: BTreeMap<String, BTreeMap<String, Activity>>,
+    ) -> io::Result<MergeSummary> {
         let mut summary = MergeSummary::default();
-        for (id, days) in incoming.devices {
+        for (id, days) in incoming {
             if !self.devices.contains_key(&id) {
                 summary.new_devices += 1;
             }
@@ -87,6 +90,13 @@ impl Store {
         let incoming = Store::new(source.to_path_buf()).read()?.ok_or_else(|| {
             io::Error::new(io::ErrorKind::NotFound, "Statistics snapshot not found")
         })?;
+        self.merge_devices(incoming.devices)
+    }
+
+    pub(super) fn merge_devices(
+        &self,
+        incoming: BTreeMap<String, BTreeMap<String, Activity>>,
+    ) -> io::Result<MergeSummary> {
         let _lock = self.lock()?;
         let existing = self.read()?;
         let was_missing = existing.is_none();

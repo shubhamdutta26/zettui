@@ -70,7 +70,7 @@ pub(crate) fn arguments() -> io::Result<StartupOptions> {
             }
             "-h" | "--help" => {
                 println!(
-                    "zettui [NOTES_DIR] [--bibliography FILE] [--theme NAME]\nzettui --stats-export FILE\nzettui --stats-import FILE\nzettui --stats-device-id\n\nModes: {}\nConfig: ~/.config/zettui/config.toml",
+                    "zettui [NOTES_DIR] [--bibliography FILE] [--theme NAME]\nzettui --stats-export FILE\nzettui --stats-import FILE\nzettui --stats-import-zettlr FILE SOURCE\nzettui --stats-device-id\n\nModes: {}\nConfig: ~/.config/zettui/config.toml",
                     THEME_CHOICES.join(", "),
                 );
                 std::process::exit(0);
