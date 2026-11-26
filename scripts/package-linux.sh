@@ -11,10 +11,16 @@ version="${2#v}"
 [[ -f "$binary" && -x "$binary" ]] || { echo "Executable not found: $binary" >&2; exit 1; }
 [[ "$(uname -m)" == "x86_64" ]] || { echo 'This recipe currently supports x86_64 only' >&2; exit 1; }
 command -v readelf >/dev/null || { echo 'Install binutils (readelf) first' >&2; exit 1; }
-if ! readelf -h "$binary" >/dev/null 2>&1; then
+if ! header="$(LC_ALL=C readelf -h "$binary" 2>/dev/null)"; then
   echo "Not a Linux ELF binary: $binary" >&2; exit 1
 fi
-if readelf -l "$binary" | grep -q INTERP; then
+if ! grep -Eq 'Class:[[:space:]]+ELF64' <<< "$header" ||
+   ! grep -Eq 'Machine:[[:space:]]+Advanced Micro Devices X86-64' <<< "$header"; then
+  echo 'Binary must be an x86-64 ELF executable.' >&2; exit 1
+fi
+program_headers="$(LC_ALL=C readelf -l "$binary")"
+dynamic_section="$(LC_ALL=C readelf -d "$binary")"
+if grep -q INTERP <<< "$program_headers" || grep -q '(NEEDED)' <<< "$dynamic_section"; then
   echo 'Binary is dynamically linked. Build with --target x86_64-unknown-linux-musl first.' >&2
   exit 1
 fi

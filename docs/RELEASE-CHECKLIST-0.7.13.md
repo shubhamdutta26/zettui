@@ -39,7 +39,7 @@ Run the exported variables and subsequent launch commands in the same shell, or 
 | Check | Action and expected behavior |
 | --- | --- |
 | Open and switch | Open Alpha, edit, `:hide`, open Beta. F5 / `]b` / `[b` switch without losing edits; reopening Alpha does not duplicate it. |
-| Independent state | Edit both notes; undo (`u`) and redo (Ctrl+R) affect only the active note. Repeat `/` searches with `n` independently. Move cursors to different positions and switch back. |
+| Independent state | Edit both notes; undo (`u`) and redo (Ctrl+R) affect only the active note. Verify `/` search history and direction are shared across buffers; matches use the active note. Move cursors to different positions and switch back. |
 | Tab appearance | Verify active/inactive backgrounds, `[+]`, duplicate names, narrow terminal clipping, `Space b t`, and Zen (`Space z`). Compare Foot and COSMIC Terminal if available. |
 | Save and close | `:bd` refuses to close a dirty buffer; `:bonly` refuses if any other buffer is dirty. `:wa` saves all. `:q` returns to the browser; `:q!` discards only the current note. |
 | External edits | Modify an inactive note in Zettui and externally on disk. `:wqa` must refuse exit, preserve the disk version and retain unsaved edits. Use disposable data to resolve the conflict. |
@@ -65,5 +65,5 @@ Session files should contain metadata only, no note text. Do not publish them: p
 
 - Run the automated and manual gates; resolve any failures.
 - Review README, configuration, keyboard shortcuts, architecture and changelog against the implemented commands and the feature guide.
-- Verify Cargo.toml/Cargo.lock still report 0.7.12 during Phase 7.
+- Historical release step only: verify Cargo.toml/Cargo.lock still report 0.7.12 during the original v0.7.13 development Phase 7.
 - Commit the documentation and integration test on the feature branch. Perform the official version bump and release tag only in Phase 8.

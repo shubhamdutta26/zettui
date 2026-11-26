@@ -14,6 +14,7 @@
 - Prevent modified browser keys from triggering plain-key file actions or quitting.
 - Parse help/version before configuration loading, reject missing flag values, report configuration read errors, and support `--` for literal workspace paths.
 - Synchronize documentation and record known Vim routing conflicts and validation requirements.
+- Verify extracted Linux package binaries and checksums in CI before tagging and again before publishing; add a CLI regression for failed statistics imports and exports.
 
 ### Validation and compatibility
 

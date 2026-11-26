@@ -24,7 +24,7 @@ jobs:
       - name: Install Linux packaging tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y musl-tools binutils file rpm
+          sudo apt-get install -y musl-tools binutils file rpm cpio
 
       - name: Verify tag matches Cargo package version
         shell: bash
@@ -49,22 +49,13 @@ jobs:
         run: |
           cargo build --locked --release --target x86_64-unknown-linux-musl
           file target/x86_64-unknown-linux-musl/release/zettui
-          if readelf -l target/x86_64-unknown-linux-musl/release/zettui | grep -q INTERP; then
-            echo 'Binary uses a dynamic interpreter; refusing to label it portable'
-            exit 1
-          fi
 
       - name: Create tarball, Debian and Fedora packages, Arch recipe, checksums
         shell: bash
         run: |
           bash scripts/package-linux.sh \
             target/x86_64-unknown-linux-musl/release/zettui "${VERSION}"
-          for suffix in tar.gz deb rpm; do
-            test -s "dist/zettui_${VERSION}_linux_x86_64.${suffix}"
-          done
-          test -s dist/PKGBUILD
-          test -s dist/SHA256SUMS
-          (cd dist && sha256sum -c SHA256SUMS)
+          bash scripts/verify-linux-packages.sh "${VERSION}"
           ls -lh dist/
 
       - name: Prepare release notes from changelog
@@ -85,6 +76,7 @@ jobs:
         with:
           body_path: dist/RELEASE-NOTES.md
           generate_release_notes: true
+          fail_on_unmatched_files: true
           files: |
             dist/zettui_${{ env.VERSION }}_linux_x86_64.tar.gz
             dist/zettui_${{ env.VERSION }}_linux_x86_64.deb

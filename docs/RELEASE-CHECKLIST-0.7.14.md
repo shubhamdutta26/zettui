@@ -17,16 +17,49 @@ cargo test --locked --test zettlr_migration
 cargo test --locked --test writing_analytics_integration
 cargo test --locked
 cargo clippy --all-targets --locked -- -D warnings
-RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --locked
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --locked
 cargo build --release --locked
 git diff --check
 ```
 
-The new integration test runs the CLI and library in temporary directories;
+The integration tests run the CLI and library in temporary directories;
 it does not modify real notes or statistics. A successful run is required before
 release. Record the actual test count and outcomes; do not infer success from
 patch application. Also rerun the existing [buffer/session checks](RELEASE-CHECKLIST-0.7.13.md)
 where relevant to guard against editor and navigation regressions.
+
+## Package and minimum Rust version checks
+
+CI now builds and checks the Linux packages on pull requests, main and manual
+workflow runs, without publishing assets. The tagged release repeats packaging
+and smoke tests before publishing. To run the same checks locally with the
+musl target and required packaging tools installed:
+
+```bash
+rustup target add x86_64-unknown-linux-musl
+cargo build --locked --release --target x86_64-unknown-linux-musl
+version=$(sed -n '/^\[package\]/,/^\[/{s/^version = "\([^"]*\)"/\1/p;}' Cargo.toml | head -n 1)
+bash scripts/package-linux.sh target/x86_64-unknown-linux-musl/release/zettui "$version"
+bash scripts/verify-linux-packages.sh "$version"
+```
+
+The verifier checks the hashes, package metadata and extracted binaries using
+isolated HOME/XDG directories. It does not install the packages or exercise the
+interactive TUI. Arch PKGBUILD is syntax- and checksum-checked only; native
+Arch package building/installing is a separate manual test. The optional
+`--available` flag skips absent Debian/RPM packages for local testing only.
+
+The declared Rust 1.88 minimum remains unverified. To check it with the locked
+dependencies on Linux:
+
+```bash
+rustup toolchain install 1.88.0
+cargo +1.88.0 check --locked --all-targets
+```
+
+If this fails due to dependency minimum versions, resolve the declared minimum
+or lockfile compatibility before claiming support. Do not silently update the
+lockfile as part of this test.
 
 ## Isolated manual dashboard and migration checks
 
@@ -110,7 +143,10 @@ Do not copy a live state file or use shared live state. Keep original backups.
 ## Release handoff
 
 - [ ] Automated checks passed (record actual results).
+- [ ] Linux package verification passed in CI before tagging.
+- [ ] Declared Rust minimum verified or corrected based on actual results.
 - [ ] Manual isolated dashboard/migration checks completed.
+- [ ] Buffer/session/navigation, terminal and native theme smoke checks completed as applicable.
 - [ ] Physical multi-computer exchange completed, or explicitly documented as pending.
 - [ ] README, keybindings, user guide and configuration reference reviewed.
 - [ ] No user statistics, device snapshots or temporary test files committed.

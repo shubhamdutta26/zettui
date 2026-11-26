@@ -63,3 +63,39 @@ fn command_line_round_trip_uses_independent_state_directories() {
     assert!(!cli(&b, "--stats-import", None).status.success());
     assert_eq!(fs::read(b.join("zettui/statistics.json")).unwrap(), before);
 }
+
+#[test]
+fn invalid_snapshot_and_existing_export_leave_files_unchanged() {
+    let temp = tempfile::tempdir().unwrap();
+    let state = temp.path().join("state");
+    let live = state.join("zettui/statistics.json");
+    let store = Store::new(live.clone());
+    let date = NaiveDate::from_ymd_opt(2026, 11, 26).unwrap();
+    store
+        .record(
+            date,
+            Activity {
+                words_added: 3,
+                ..Activity::default()
+            },
+        )
+        .unwrap();
+    let before = fs::read(&live).unwrap();
+    let invalid = temp.path().join("invalid.json");
+    fs::write(&invalid, b"{invalid json").unwrap();
+    assert!(
+        !cli(&state, "--stats-import", Some(&invalid))
+            .status
+            .success()
+    );
+    assert_eq!(fs::read(&live).unwrap(), before);
+    assert_eq!(fs::read(&invalid).unwrap(), b"{invalid json");
+    assert!(
+        !cli(&state, "--stats-export", Some(&invalid))
+            .status
+            .success()
+    );
+    assert_eq!(fs::read(&invalid).unwrap(), b"{invalid json");
+    assert_eq!(fs::read(&live).unwrap(), before);
+    assert_eq!(store.daily_totals().unwrap()[&date].words_added, 3);
+}

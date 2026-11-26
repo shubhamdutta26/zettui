@@ -13,7 +13,7 @@ RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --locked
 git diff --check
 ```
 
-`Cargo.lock` is committed; `target/` and `dist/` are generated and ignored. `cargo clean` removes build artifacts, not source. Test interactive changes in a disposable vault, including unsaved changes, search, Unicode, themes and terminal resizing. Rust 1.88 is declared in the manifest; the current CI uses stable Rust and the exact minimum remains to be verified against the lockfile.
+`Cargo.lock` is committed; `target/` and `dist/` are generated and ignored. `cargo clean` removes build artifacts, not source. Test interactive changes in a disposable vault, including unsaved changes, search, Unicode, themes and terminal resizing. Rust 1.88 is declared in the manifest; the current CI uses stable Rust and the exact minimum remains to be verified against the lockfile. CI also tests static Linux packages and their CLI on pull requests, main and manual runs; see the [release checklist](RELEASE-CHECKLIST-0.7.14.md).
 
 For documentation changes, compare CLI flags against `src/cli.rs` and
 `src/statistics_cli.rs`, Ex commands and key scopes against `src/commands.rs`,
