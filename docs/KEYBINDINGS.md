@@ -52,7 +52,7 @@ See [Vim-style commands](VIM-COMMANDS.md) for the Ex reference, inherited editor
 | Outline | `h` / `←`, `l` / `→` | Collapse or select parent; expand or select first child |
 | Outline | `Enter`, `Esc` | Jump to heading and return to editor; return without moving cursor |
 | Global (outside modal input) | `Alt+↑` / `Alt+↓` | Widen / narrow outline preference |
-| Browser / Editor / Outline | `Ctrl+G` | Cycle native, terminal and built-in themes |
+| Browser / Editor / Outline / Writing Analytics | `Ctrl+G` | Cycle native, terminal and built-in themes |
 | Vault search | `Tab`, `↑` / `↓`, `Enter`, `Esc` | Switch text/tags, select, open, cancel |
 | Filename search | `↑` / `↓`, `Enter`, `Esc` | Select result; confirm selection in Files (Enter again opens); cancel |
 | Vault / filename / wiki-link / snippet / citation pickers | Type, `Backspace`, `↑` / `↓`, `Enter`, `Esc`, `Ctrl+U` | Filter, edit query, select, confirm, cancel, clear query |
@@ -139,6 +139,7 @@ Missing settings use these defaults. Command changes are session-only. Heading c
 | `[` / `]`, PageUp / PageDown | Previous / next month or year (Page keys scroll overview) |
 | `t` / Home | Return to today / top of overview |
 | `r` | Refresh statistics |
+| `Ctrl+G` | Cycle themes without leaving the dashboard |
 | `Esc` / `q` / `F10` | Close dashboard |
 
 ### Research metadata (Phase III)

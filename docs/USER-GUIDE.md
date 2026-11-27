@@ -24,7 +24,7 @@ The active Files panel or opened-note editor uses heavy Unicode border character
 
 ## Panel layout
 
-Use F2 to hide/show Files while editing, F3 to hide/show Preview in browser mode, and F4 to show/hide the Outline of the open note. The outline shows current unsaved Markdown headings and follows the cursor. Press F6 in Normal mode to focus it, use j/k to select headings, h/l to collapse or expand branches (or move to parent/child), and Enter to jump to the heading. Esc or F6 returns without moving the cursor. Alt+Up/Down adjusts its preferred width. The editor stays visible; closing a note restores Files so browsing remains possible. Zen and narrow terminals temporarily hide sidebars without forgetting their preferences. See [keyboard shortcuts](KEYBINDINGS.md) for Normal-mode alternatives.
+Use F2 to hide/show Files while editing, F3 to hide/show Preview in browser mode, and F4 to show/hide the Outline of the open note. The outline shows current unsaved Markdown headings and follows the cursor. Heading colors match the editor when syntax highlighting is enabled, including custom H1–H6 overrides; the selected entry retains its selection style. Press F6 in Normal mode to focus it, use j/k to select headings, h/l to collapse or expand branches (or move to parent/child), and Enter to jump to the heading. Esc or F6 returns without moving the cursor. Alt+Up/Down adjusts its preferred width. The editor stays visible; closing a note restores Files so browsing remains possible. Zen and narrow terminals temporarily hide sidebars without forgetting their preferences. See [keyboard shortcuts](KEYBINDINGS.md) for Normal-mode alternatives.
 
 Press F7 (or `Space h` / `:headings` in Normal mode) to fuzzy-search headings in the current note, even with the Outline hidden or in Zen. Type a partial title or abbreviation, select a result with arrows, and press Enter to jump. Search uses the live unsaved buffer, includes collapsed branches and distinguishes repeated titles by line number. Esc cancels without moving the cursor.
 
@@ -59,7 +59,8 @@ launch when session restoration is enabled, not unsaved note contents. See
 Press F10 outside modal input (`:analytics`, `:stats` or
 F8 command palette also work). Select `1` Overview, `2` Month or `3` Year;
 Tab cycles the views. Use `h`/`l` by day, `j`/`k` by week, `[`/`]` by period,
-`t` for today, `r` to refresh and Esc to close. Overview scrolls with `j`/`k`
+`t` for today, `r` to refresh, `Ctrl+G` to cycle themes and Esc to close. Month
+and Year activity shading follows the current theme accent. Overview scrolls with `j`/`k`
 or PageUp/PageDown. Closing the dashboard preserves the current note and edits.
 
 To enable word goals, add to your Zettui configuration and restart:

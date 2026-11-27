@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.8.1 — UI and Theme Refinements
+
+### Improved
+
+- Outline heading text uses the Markdown editor’s H1–H6 colors, including custom heading overrides and the syntax-highlighting toggle. The selected entry retains its selection style.
+- Month and Year writing-activity heatmaps, legends and compact calendars follow the active theme accent instead of a fixed success-color tint. Activity bands, counts and special markers are unchanged.
+- `Ctrl+G` cycles themes directly in Writing Analytics without resetting the active view or selected date; the dashboard footer advertises the shortcut.
+- Regression coverage for heading colors, activity palettes, dashboard theme cycling and footer width.
+
+### Compatibility and validation
+
+- No dependency, configuration, note, statistics or session format changes. The buffer tab layout is unchanged.
+- See the [v0.8.1 release checklist](docs/RELEASE-CHECKLIST-0.8.1.md) for validation requirements.
+
 ## 0.8.0 — Research Toolkit
 
 ### Added

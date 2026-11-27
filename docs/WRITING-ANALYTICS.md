@@ -3,6 +3,7 @@
 ## Quick reference
 
 - Open the dashboard: `F10`, `:analytics`, `:stats` or the command palette.
+- Cycle themes inside any dashboard view: `Ctrl+G` (session only).
 - Exchange snapshots: `zettui --stats-export FILE` and `zettui --stats-import FILE`.
 - Migrate Zettlr: `zettui --stats-import-zettlr "$HOME/.config/Zettlr/stats.json" desktop`.
 - Inspect the local identity: `zettui --stats-device-id`.
@@ -278,6 +279,15 @@ change.
 
 Run `cargo test --locked analytics_dashboard` and check the three views in both
 light and dark themes, at wide and narrow terminal sizes.
+
+### v0.8.1: theme consistency
+
+Month and Year activity bands and their legends use the active theme accent.
+The compact calendar uses the same accent for positive activity; deletion-only
+activity retains the warning color. Fixed activity thresholds, markers, contrast
+adjustment and all counters are unchanged. Press `Ctrl+G` in any dashboard view
+to cycle themes without leaving the dashboard or resetting the selected date or
+view. The theme change is session-only, just as in the editor.
 
 ## Phase 5: multi-computer statistics exchange
 

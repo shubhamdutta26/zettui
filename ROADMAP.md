@@ -29,16 +29,17 @@ Versions identify development milestones; not all have a separate published rele
 | 0.7.13 |        Buffers and Sessions: multiple open notes, theme-aware tabs, fuzzy buffer switching, independent editor state, workspace restoration and hidden-folder visibility       |
 | 0.7.14 | Writing Analytics & Goals: daily activity tracking, goals, dashboard, monthly calendar, yearly heatmap, manual multi-device snapshot exchange and Zettlr statistics migration (physical multi-computer validation pending) |
 | 0.7.15 | Codebase Maintenance and Stability: allocation cleanup, module refactoring, keyboard routing, CLI/configuration validation, documentation and release checks |
+| 0.8.0 | Research Toolkit: Zotero search and PDF previews, metadata editor, Pandoc export and export UI refinement |
 
-Release validation for v0.7.15 is tracked in the [release checklist](docs/RELEASE-CHECKLIST-0.7.15.md). COSMIC and physical multi-computer statistics exchange remain manually unverified.
+Historical release validation is tracked in the [v0.7.15](docs/RELEASE-CHECKLIST-0.7.15.md) and [v0.8.0](docs/RELEASE-CHECKLIST-0.8.0.md) checklists. COSMIC and physical multi-computer statistics exchange remain manually unverified.
 
 ## Release candidate
 
 | Version | Features |
 | --- | --- |
-| 0.8.0 | Research Toolkit: Zotero search and PDF previews, metadata editor, Pandoc export and export UI refinement |
+| 0.8.1 | UI and Theme Refinements: matching Outline heading colors, accent-based activity heatmaps and theme cycling in Writing Analytics |
 
-See [release checklist](docs/RELEASE-CHECKLIST-0.8.0.md) before tagging.
+See [release checklist](docs/RELEASE-CHECKLIST-0.8.1.md) before tagging.
 
 ## Planned
 

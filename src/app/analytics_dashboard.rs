@@ -579,6 +579,16 @@ fn draw(frame: &mut Frame, theme: Theme, dashboard: &mut Dashboard, warning: Opt
     footer(frame, theme, areas[2], dashboard.view);
 }
 
+fn footer_actions(width: u16) -> &'static str {
+    if width >= 51 {
+        "Tab View · t Today · r Refresh · Ctrl+G Theme · Esc"
+    } else if width >= 43 {
+        "Tab View t Today r Refresh Ctrl+G Theme Esc"
+    } else {
+        "Tab t Today r Ctrl+G Theme Esc"
+    }
+}
+
 fn footer(frame: &mut Frame, theme: Theme, area: Rect, view: View) {
     let navigation = if view == View::Overview {
         "j/k Scroll · PgUp/PgDn"
@@ -588,7 +598,7 @@ fn footer(frame: &mut Frame, theme: Theme, area: Rect, view: View) {
     frame.render_widget(
         Paragraph::new(vec![
             Line::from(navigation),
-            Line::from("Tab View t Today r Refresh Esc"),
+            Line::from(footer_actions(area.width)),
         ])
         .style(Style::default().fg(theme.muted)),
         area,
@@ -604,6 +614,28 @@ mod tests {
 
     fn date(year: i32, month: u32, day: u32) -> NaiveDate {
         NaiveDate::from_ymd_opt(year, month, day).unwrap()
+    }
+
+    #[test]
+    fn theme_shortcut_fits_dashboard_footer() {
+        for width in [30, 31, 42, 43, 50, 51, 80] {
+            let text = footer_actions(width);
+            assert!(Line::from(text).width() <= usize::from(width));
+            assert!(text.contains("Ctrl+G"));
+            assert!(text.contains("Esc"));
+        }
+    }
+
+    #[test]
+    fn compact_activity_bands_use_accent() {
+        for name in ["dark", "light", "tokyo-night"] {
+            let theme = Theme::named(name).unwrap();
+            for mark in ['░', '▒', '▓', '█', '+'] {
+                assert_eq!(mark_style(mark, false, theme).fg, Some(theme.accent));
+            }
+            assert_eq!(mark_style('-', false, theme).fg, Some(theme.warning));
+            assert_eq!(mark_style('·', false, theme).fg, Some(theme.muted));
+        }
     }
 
     #[test]
@@ -745,6 +777,24 @@ mod tests {
         let cursor = app.editor.as_ref().unwrap().state.cursor;
         app.open_analytics_dashboard();
         assert!(app.has_active_popup());
+        // Theme cycling must not reset dashboard navigation or edit the note.
+        for view in [View::Overview, View::Month, View::Year] {
+            let dashboard = app.analytics_dashboard.as_mut().unwrap();
+            dashboard.set_view(view);
+            dashboard.move_days(false, 1);
+            dashboard.scroll = 2;
+            let selected = dashboard.selected;
+            let expected = app.theme_choice.next();
+            app.handle_analytics_key(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::CONTROL));
+            assert_eq!(app.theme_choice, expected);
+            let dashboard = app.analytics_dashboard.as_ref().unwrap();
+            assert_eq!(dashboard.view, view);
+            assert_eq!(dashboard.selected, selected);
+            assert_eq!(dashboard.scroll, 2);
+            // Other modified keys must still be ignored.
+            app.handle_analytics_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::CONTROL));
+            assert!(app.analytics_dashboard.is_some());
+        }
         for size in [(90, 30), (35, 20), (30, 8), (12, 4)] {
             let backend = ratatui::backend::TestBackend::new(size.0, size.1);
             let mut terminal = ratatui::Terminal::new(backend).unwrap();

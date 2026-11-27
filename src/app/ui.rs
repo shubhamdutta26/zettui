@@ -877,6 +877,50 @@ mod tab_style_tests {
     use ratatui::style::Color;
 
     #[test]
+    fn outline_headings_follow_markdown_colors() {
+        let headings = outline::extract("# H1\n## H2\n### H3\n#### H4\n##### H5\n###### H6");
+        let view = outline::OutlineView::default();
+        for name in ["dark", "light"] {
+            let theme = Theme::named(name).unwrap();
+            let mut settings: markdown::MarkdownSettings =
+                toml::from_str("[heading_colors]\nh2 = '#123456'").unwrap();
+            let mut terminal =
+                ratatui::Terminal::new(ratatui::backend::TestBackend::new(40, 10)).unwrap();
+            for enabled in [true, false] {
+                settings.syntax_highlighting = enabled;
+                terminal
+                    .draw(|frame| {
+                        let area = frame.area();
+                        draw_outline(
+                            frame,
+                            (theme, &settings),
+                            area,
+                            Some(&headings),
+                            &view,
+                            0,
+                            false,
+                        );
+                    })
+                    .unwrap();
+                let buffer = terminal.backend().buffer();
+                for level in 1..=6 {
+                    let row = level as u16;
+                    let cell = (0..40)
+                        .map(|x| &buffer[(x, row)])
+                        .find(|cell| cell.symbol() == "H")
+                        .expect("heading title rendered");
+                    let expected = if enabled {
+                        markdown::heading_color(level, theme, &settings)
+                    } else {
+                        theme.foreground
+                    };
+                    assert_eq!(cell.fg, expected);
+                }
+            }
+        }
+    }
+
+    #[test]
     fn tabs_have_distinct_backgrounds_even_when_surface_matches_background() {
         for (name, bg, fg) in [
             ("dark", Color::Rgb(45, 53, 59), Color::Rgb(211, 198, 170)),

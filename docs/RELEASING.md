@@ -1,6 +1,6 @@
 # Releasing
 
-Use the [v0.8.0 release checklist](RELEASE-CHECKLIST-0.8.0.md). Keep the package version in Cargo.toml and the local zettui entry in Cargo.lock in sync; verify with `cargo check --locked`. Run the required checks, commit, rebase onto main, merge and push. Confirm CI on the exact release commit before creating and pushing the matching annotated tag. The tag triggers Linux packaging; verify published assets and checksums before announcing the release. Record any deferred manual tests rather than claiming they passed.
+Use the [v0.8.1 release checklist](RELEASE-CHECKLIST-0.8.1.md). Keep the package version in Cargo.toml and the local zettui entry in Cargo.lock in sync; verify with `cargo check --locked`. Run the required checks, commit, rebase onto main, merge and push. Confirm CI on the exact release commit before creating and pushing the matching annotated tag. The tag triggers Linux packaging; verify published assets and checksums before announcing the release. Record any deferred manual tests rather than claiming they passed.
 
 Local packaging requires a static musl binary, binutils and optional dpkg-deb/rpmbuild. Run `bash scripts/package-linux.sh target/x86_64-unknown-linux-musl/release/zettui X.Y.Z`. Outputs are in `dist/`; verify with `(cd dist && sha256sum -c SHA256SUMS)`. The config example is installed as documentation, never as a user's live configuration. Packages include README, license and the example configuration, not the full `docs/` tree; consult the repository at the corresponding release tag for the complete guides.
 

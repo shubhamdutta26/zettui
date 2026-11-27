@@ -697,11 +697,7 @@ pub(super) fn draw(
     frame.render_widget(
         Paragraph::new(vec![
             Line::from(format!("j/k Scroll · PgUp/PgDn{scroll}")),
-            Line::from(if areas[2].width < 36 {
-                "Tab View t Today r Refresh Esc"
-            } else {
-                "Tab View · t Today · r Refresh · Esc"
-            }),
+            Line::from(super::footer_actions(areas[2].width)),
         ])
         .style(muted(theme)),
         areas[2],

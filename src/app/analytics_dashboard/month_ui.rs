@@ -49,7 +49,7 @@ fn cell_rect(grid: Rect, index: usize, height: u16) -> Rect {
 }
 
 // Fixed bands match the existing calendar. The tint uses the active theme's
-// success color; text is contrast-adjusted for light and dark palettes.
+// accent color; text is contrast-adjusted for light and dark palettes.
 pub(super) fn activity_background(mark: char, theme: Theme) -> Color {
     match mark {
         '░' => blend(theme.surface, theme.accent, 0.18),

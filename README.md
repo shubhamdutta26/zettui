@@ -4,12 +4,14 @@ A local-first, Vim-style terminal notes manager written in Rust. Browse and edit
 
 ## Installation
 
-Zettui **v0.8.0 — Research Toolkit** adds richer Zotero citation search,
-reference previews and local PDF attachments, a standalone YAML metadata editor,
-and optional Pandoc-powered document export. See the [changelog](CHANGELOG.md).
-The release candidate requires final validation before tagging; the previous
-COSMIC and physical multi-computer statistics checks remain unverified unless
-retested. See the [release checklist](docs/RELEASE-CHECKLIST-0.8.0.md).
+Zettui **v0.8.1 — UI and Theme Refinements** aligns Outline heading colors with
+Markdown syntax highlighting, uses the active theme accent in the writing
+calendar and yearly heatmap, and enables `Ctrl+G` theme cycling inside Writing
+Analytics. The v0.8.0 Research Toolkit includes richer Zotero citation search,
+reference previews, local PDF attachments, a standalone YAML metadata editor,
+and optional Pandoc-powered document export. See the [changelog](CHANGELOG.md)
+and [release checklist](docs/RELEASE-CHECKLIST-0.8.1.md). COSMIC and physical
+multi-computer statistics checks remain unverified unless retested.
 
 Download Linux releases from [GitHub Releases](https://github.com/shubhamdutta26/zettui/releases) (portable x86-64 archive, `.deb` for Debian/Ubuntu, `.rpm` for Fedora, or `PKGBUILD` for Arch/Omarchy), or build from source with a compatible Rust toolchain:
 
@@ -74,7 +76,7 @@ Zettui v0.7.12 adds keyboard-driven navigation without changing the plain-text s
 | `F8` | Search and execute available application commands |
 | `Alt+↑` / `Alt+↓` | Resize Outline |
 
-The outline and heading search use live, unsaved Markdown. Collapse outline branches with `h`/`l`, select with `j`/`k`, and jump with Enter. The outline is hidden by default. The palette reuses existing commands and safety checks; `Ctrl+P` remains Zotero. See the [user guide](docs/USER-GUIDE.md), [keybindings](docs/KEYBINDINGS.md) and [configuration](docs/CONFIGURATION.md).
+The outline and heading search use live, unsaved Markdown. Outline headings share the editor’s H1–H6 colors, including custom overrides when syntax highlighting is enabled; the selected entry retains its selection style. Collapse outline branches with `h`/`l`, select with `j`/`k`, and jump with Enter. The outline is hidden by default. The palette reuses existing commands and safety checks; `Ctrl+P` remains Zotero. See the [user guide](docs/USER-GUIDE.md), [keybindings](docs/KEYBINDINGS.md) and [configuration](docs/CONFIGURATION.md).
 
 ## Writing Analytics (since v0.7.14)
 
@@ -82,7 +84,8 @@ Open the writing dashboard with `F10`, the command palette or `:analytics` / `:s
 View writing goals, streaks, activity totals and a monthly calendar or yearly
 heatmap. `Tab` / `Shift+Tab` cycle views (`1` Overview, `2` Month, `3` Year),
 `h`/`l` move by day and `j`/`k` by week in calendar views (or scroll the Overview),
-`[`/`]` move periods, `t` returns to today, `r` refreshes and `Esc` closes.
+`[`/`]` move periods, `t` returns to today, `r` refreshes, `Ctrl+G` cycles themes
+and `Esc` closes. Month and Year activity colors follow the active theme accent.
 Exchange writing history between computers using duplicate-safe snapshot merging:
 
 ```bash
