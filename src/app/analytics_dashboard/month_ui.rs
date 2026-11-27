@@ -52,10 +52,10 @@ fn cell_rect(grid: Rect, index: usize, height: u16) -> Rect {
 // success color; text is contrast-adjusted for light and dark palettes.
 pub(super) fn activity_background(mark: char, theme: Theme) -> Color {
     match mark {
-        '░' => blend(theme.surface, theme.success, 0.18),
-        '▒' => blend(theme.surface, theme.success, 0.35),
-        '▓' => blend(theme.surface, theme.success, 0.55),
-        '█' => blend(theme.surface, theme.success, 0.78),
+        '░' => blend(theme.surface, theme.accent, 0.18),
+        '▒' => blend(theme.surface, theme.accent, 0.35),
+        '▓' => blend(theme.surface, theme.accent, 0.55),
+        '█' => blend(theme.surface, theme.accent, 0.78),
         '+' => blend(theme.surface, theme.accent, 0.22),
         '-' => blend(theme.surface, theme.warning, 0.22),
         ' ' => theme.background,
@@ -484,6 +484,20 @@ mod tests {
                     assert!(text.contains('╔'));
                     assert!(text.contains("4500"));
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn activity_bands_follow_theme_accent() {
+        for name in ["dark", "light", "tokyo-night"] {
+            let theme = Theme::named(name).unwrap();
+
+            for (mark, intensity) in [('░', 0.18), ('▒', 0.35), ('▓', 0.55), ('█', 0.78)] {
+                assert_eq!(
+                    activity_background(mark, theme),
+                    blend(theme.surface, theme.accent, intensity)
+                );
             }
         }
     }

@@ -148,6 +148,13 @@ impl App {
 
     pub(super) fn handle_analytics_key(&mut self, key: KeyEvent) {
         use crossterm::event::KeyModifiers;
+
+        // Allow theme cycling within Writing Analytics.
+        if key.code == KeyCode::Char('g') && key.modifiers == KeyModifiers::CONTROL {
+            self.cycle_theme();
+            return;
+        }
+
         if key
             .modifiers
             .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
@@ -342,8 +349,7 @@ fn mark_style(mark: char, selected: bool, theme: Theme) -> Style {
     Style::default().fg(match mark {
         '·' | ' ' => theme.muted,
         '-' => theme.warning,
-        '+' | '░' | '▒' => theme.accent,
-        _ => theme.success,
+        _ => theme.accent,
     })
 }
 
