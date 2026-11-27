@@ -49,7 +49,7 @@ fn buffer_tab_style(theme: Theme, active: bool) -> Style {
 /// Render live headings; selection is independent of the cursor while focused.
 fn draw_outline(
     frame: &mut Frame,
-    theme: Theme,
+    (theme, settings): (Theme, &markdown::MarkdownSettings),
     area: Rect,
     headings: Option<&[outline::Heading<'_>]>,
     view: &outline::OutlineView,
@@ -110,8 +110,8 @@ fn draw_outline(
                 "{marker}{}{branch}{title}",
                 "  ".repeat(h.level - 1)
             ))
-            .style(Style::default().fg(if active == Some(i) {
-                theme.accent
+            .style(Style::default().fg(if settings.syntax_highlighting {
+                markdown::heading_color(h.level, theme, settings)
             } else {
                 theme.foreground
             }))
@@ -317,7 +317,7 @@ impl App {
                 self.outline_view.sync(&headings, note.state.cursor.row);
                 draw_outline(
                     frame,
-                    theme,
+                    (theme, &self.markdown_settings),
                     panes[2],
                     is_markdown.then_some(headings.as_slice()),
                     &self.outline_view,

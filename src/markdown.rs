@@ -247,7 +247,11 @@ struct Context {
 }
 
 // Distinct hue families with light/dark contrast, independent of duplicate theme accents.
-fn heading_color(level: usize, t: Theme, settings: &MarkdownSettings) -> ratatui::style::Color {
+pub(crate) fn heading_color(
+    level: usize,
+    t: Theme,
+    settings: &MarkdownSettings,
+) -> ratatui::style::Color {
     let light = matches!(t.background, Color::Rgb(r,g,b) if (u32::from(r)*299+u32::from(g)*587+u32::from(b)*114)>150_000);
     let colors = if light {
         [
