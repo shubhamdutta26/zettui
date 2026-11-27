@@ -34,6 +34,7 @@ impl App {
         self.buffer_prefix = None;
         self.note_search.reset_matches();
         self.outline_view.reset();
+        self.metadata = None;
         self.heading_search = None;
         self.writing.leader = false;
         self.wiki_completion = None;

@@ -25,10 +25,14 @@ impl App {
             if let Some(tracker) = &mut self.statistics {
                 tracker.flush_if_due();
             }
-            let in_insert = self
-                .editor
-                .as_ref()
-                .is_some_and(|note| note.state.mode == EditorMode::Insert);
+            let in_insert = self.metadata.as_ref().map_or_else(
+                || {
+                    self.editor
+                        .as_ref()
+                        .is_some_and(|note| note.state.mode == EditorMode::Insert)
+                },
+                |metadata| metadata.state.mode == EditorMode::Insert,
+            );
             if previous_insert_mode != Some(in_insert) {
                 let shape = if in_insert {
                     SetCursorStyle::BlinkingBar
@@ -38,6 +42,8 @@ impl App {
                 crossterm::execute!(io::stdout(), shape)?;
                 previous_insert_mode = Some(in_insert);
             }
+            self.poll_research_attachments();
+            self.poll_export();
             self.sync_system_theme();
             terminal.draw(|frame| self.draw(frame))?;
             // Poll instead of waiting forever: The desktop may change its theme
@@ -87,6 +93,14 @@ impl App {
         if key.kind != KeyEventKind::Press {
             return Ok(false);
         }
+        if self.export_dialog.is_some() {
+            self.handle_export_key(key);
+            return Ok(false);
+        }
+        if self.metadata.is_some() {
+            self.handle_metadata_key(key);
+            return Ok(false);
+        }
         if self.analytics_dashboard.is_some() {
             self.handle_analytics_key(key);
             return Ok(false);
@@ -101,6 +115,10 @@ impl App {
         }
         if self.links.is_some() {
             self.handle_link_key(key);
+            return Ok(false);
+        }
+        if self.research_dialog.is_some() {
+            self.handle_research_key(key);
             return Ok(false);
         }
         if self.citation_picker.is_some() {
@@ -202,6 +220,97 @@ mod tests {
     }
 
     #[test]
+    fn citation_preview_preserves_picker_and_audit_jumps_without_editing() {
+        use crate::app::research::ResearchDialog;
+        let (dir, mut app) = fixture();
+        let path = dir.path().join("Citations.md");
+        let original = "α [@Known; @Missing]";
+        fs::write(&path, original).unwrap();
+        let bibliography = dir.path().join("references.json");
+        fs::write(
+            &bibliography,
+            r#"[{"id":"Known","abstract":"Research summary"}]"#,
+        )
+        .unwrap();
+        app.bibliography_path = Some(bibliography);
+        app.editor.open(&path).unwrap();
+        app.open_citation_picker();
+        app.route_key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL))
+            .unwrap();
+        app.route_key(KeyEvent::new(KeyCode::Char('v'), KeyModifiers::CONTROL))
+            .unwrap();
+        assert!(matches!(
+            app.research_dialog,
+            Some(ResearchDialog::Preview { .. })
+        ));
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(45, 15)).unwrap();
+        terminal.draw(|frame| app.draw(frame)).unwrap();
+        press(&mut app, KeyCode::Esc);
+        assert_eq!(app.citation_picker.as_ref().unwrap().marked, vec!["Known"]);
+        press(&mut app, KeyCode::Esc);
+        app.editor.as_mut().unwrap().state.cursor = edtui::Index2::new(0, 3);
+        app.preview_citation_at_cursor();
+        assert!(matches!(
+            app.research_dialog,
+            Some(ResearchDialog::Preview { .. })
+        ));
+        press(&mut app, KeyCode::Esc);
+        app.check_citations();
+        assert!(
+            matches!(&app.research_dialog, Some(ResearchDialog::Audit { hits, total: 2, .. }) if hits.len() == 1)
+        );
+        press(&mut app, KeyCode::Enter);
+        let note = app.editor.as_ref().unwrap();
+        assert_eq!(note.state.cursor, edtui::Index2::new(0, 11));
+        assert_eq!(note.state.lines.to_string(), original);
+        assert!(!note.is_dirty());
+    }
+
+    #[test]
+    fn citation_pdf_lookup_result_supports_navigation() {
+        use crate::app::research::ResearchDialog;
+        let (_dir, mut app) = fixture();
+        let (tx, rx) = std::sync::mpsc::channel();
+        tx.send(Ok(vec![
+            std::path::PathBuf::from("/tmp/one.pdf"),
+            std::path::PathBuf::from("/tmp/two.pdf"),
+        ]))
+        .unwrap();
+        app.research_dialog = Some(ResearchDialog::Preview {
+            text: "Citation".into(),
+            key: "Example".into(),
+            pdfs: Vec::new(),
+            selected: 0,
+            scroll: 0,
+            status: String::new(),
+            lookup_status: String::new(),
+            lookup: Some(rx),
+        });
+        app.poll_research_attachments();
+        assert!(
+            matches!(&app.research_dialog, Some(ResearchDialog::Preview { pdfs, lookup: None, .. }) if pdfs.len() == 2)
+        );
+        press(&mut app, KeyCode::Char('l'));
+        assert!(matches!(
+            &app.research_dialog,
+            Some(ResearchDialog::Preview { selected: 1, .. })
+        ));
+        press(&mut app, KeyCode::Char('l'));
+        assert!(matches!(
+            &app.research_dialog,
+            Some(ResearchDialog::Preview { selected: 1, .. })
+        ));
+        press(&mut app, KeyCode::Char('h'));
+        assert!(matches!(
+            &app.research_dialog,
+            Some(ResearchDialog::Preview { selected: 0, .. })
+        ));
+        press(&mut app, KeyCode::Esc);
+        assert!(app.research_dialog.is_none());
+    }
+
+    #[test]
     fn modified_browser_keys_do_not_open_prompts_or_quit() {
         let (dir, mut app) = fixture();
         for (code, modifiers) in [
@@ -224,6 +333,58 @@ mod tests {
         press(&mut app, KeyCode::Esc);
         assert!(!app.has_active_popup());
         assert!(dir.path().join("Navigation.md").exists());
+    }
+
+    #[test]
+    fn metadata_popup_isolated_apply_and_discard() {
+        let (dir, mut app) = fixture();
+        let path = dir.path().join("Metadata.md");
+        let original = "---\ntitle: Test\n---\nBody\n";
+        fs::write(&path, original).unwrap();
+        app.editor.open(&path).unwrap();
+        press(&mut app, KeyCode::Char(' '));
+        press(&mut app, KeyCode::Char('m'));
+        assert!(app.metadata.is_some());
+        press(&mut app, KeyCode::Char('j'));
+        assert!(
+            !app.route_key(KeyEvent::new(KeyCode::Char('A'), KeyModifiers::SHIFT))
+                .unwrap()
+        );
+        assert_eq!(
+            app.metadata.as_ref().unwrap().state.mode,
+            EditorMode::Insert
+        );
+        type_text(&mut app, " changed");
+        press(&mut app, KeyCode::Esc);
+        assert_eq!(
+            app.editor.as_ref().unwrap().state.lines.to_string(),
+            original
+        );
+        type_text(&mut app, ":q");
+        press(&mut app, KeyCode::Enter);
+        assert!(app.metadata.is_some());
+        type_text(&mut app, ":wq");
+        press(&mut app, KeyCode::Enter);
+        assert!(app.metadata.is_none());
+        let edited = "---\ntitle: Test changed\n---\nBody\n";
+        assert_eq!(app.editor.as_ref().unwrap().state.lines.to_string(), edited);
+        assert_eq!(fs::read_to_string(&path).unwrap(), original);
+        press(&mut app, KeyCode::F(11));
+        press(&mut app, KeyCode::Char('j'));
+        assert!(
+            !app.route_key(KeyEvent::new(KeyCode::Char('A'), KeyModifiers::SHIFT))
+                .unwrap()
+        );
+        assert_eq!(
+            app.metadata.as_ref().unwrap().state.mode,
+            EditorMode::Insert
+        );
+        type_text(&mut app, " discard");
+        press(&mut app, KeyCode::Esc);
+        type_text(&mut app, ":q!");
+        press(&mut app, KeyCode::Enter);
+        assert!(app.metadata.is_none());
+        assert_eq!(app.editor.as_ref().unwrap().state.lines.to_string(), edited);
     }
 
     #[test]
@@ -525,6 +686,26 @@ mod tests {
         type_text(&mut app, ":commands");
         press(&mut app, KeyCode::Enter);
         assert!(app.command_palette.is_some());
+    }
+
+    #[test]
+    fn export_leader_opens_dialog_without_editing() {
+        let (_dir, mut app) = fixture();
+        press(&mut app, KeyCode::Enter);
+        let before = app.editor.as_ref().unwrap().state.lines.to_string();
+        press(&mut app, KeyCode::Char(' '));
+        press(&mut app, KeyCode::Char('x'));
+        assert!(app.export_dialog.is_some());
+        assert!(!app.writing.leader);
+        press(&mut app, KeyCode::Esc);
+        assert!(app.export_dialog.is_none());
+        assert_eq!(app.editor.as_ref().unwrap().state.lines.to_string(), before);
+        press(&mut app, KeyCode::Char('i'));
+        press(&mut app, KeyCode::Char(' '));
+        press(&mut app, KeyCode::Char('x'));
+        assert!(app.export_dialog.is_none());
+        assert_eq!(app.editor.as_ref().unwrap().state.mode, EditorMode::Insert);
+        assert_ne!(app.editor.as_ref().unwrap().state.lines.to_string(), before);
     }
 
     #[test]

@@ -24,6 +24,7 @@ impl App {
                 self.toggle_panel(command);
             }
             Command::FocusOutline => self.toggle_outline_focus(),
+            Command::ToggleMetadata | Command::FocusMetadata => self.open_metadata(),
             Command::SearchHeadings => self.open_heading_search(),
             Command::OpenPalette => self.open_command_palette(),
             Command::WritingAnalytics => self.open_analytics_dashboard(),
@@ -95,6 +96,9 @@ impl App {
             }
             Command::ParentFolder => self.go_back()?,
             Command::CitationPicker => self.open_citation_picker(),
+            Command::CitationPreview => self.preview_citation_at_cursor(),
+            Command::CitationCheck => self.check_citations(),
+            Command::ExportDocument => self.open_export(),
             Command::SnippetPicker => self.open_snippet_picker(),
             Command::Save => {
                 self.save_editor();

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.8.0 — Research Toolkit
+
+### Added
+
+- Ranked Zotero citation search, multi-citation marking/insertion and in-picker bibliography refresh.
+- Citation previews, unresolved bracketed-citation audit, and local PDF attachment lookup through Better BibTeX (personal library; optional curl and running Zotero for live lookup).
+- Standalone Vim-style YAML metadata editor with independent undo/redo, apply/discard protection and adjustable dimensions. Applying updates the live note; saving to disk is separate.
+- Optional Pandoc export to PDF, DOCX, standalone HTML, EPUB and LaTeX, including live buffers, batch folder export, citations and local images. PDF is the default; installed engines can be detected or selected explicitly.
+- Compact export dialog with adaptive diagnostics, no-overwrite protection and direct output opening. `Space x` opens export in Normal mode; `:export` and the F8 palette remain available. `Space e` still toggles Files.
+
+### Compatibility and validation
+
+- No new Rust dependencies; Pandoc and a compatible PDF engine are optional external dependencies. Live attachment lookup requires curl. Export does not execute Quarto code cells; LaTeX source references external images.
+- Metadata validation checks delimiters, not full YAML semantics. Citation audit does not cover all Pandoc citation syntax.
+- Final release checks, exact minimum Rust version, COSMIC and physical multi-computer statistics exchange must be recorded according to the [release checklist](docs/RELEASE-CHECKLIST-0.8.0.md).
+
 ## 0.7.15 — Codebase Maintenance and Stability
 
 ### Added

@@ -8,8 +8,11 @@ mod commands;
 mod dialogs;
 mod editing;
 mod events;
+mod export;
+mod metadata;
 mod navigation;
 mod palette;
+mod research;
 mod session;
 mod ui;
 
@@ -64,6 +67,7 @@ struct LinkDialog {
 /// A searchable, read-only view of the JSON export loaded when the picker opens.
 struct CitationDialog {
     bibliography: Bibliography,
+    marked: Vec<String>,
     query: String,
     matches: Vec<usize>,
     selected: usize,
@@ -152,6 +156,7 @@ impl CitationDialog {
     fn new(bibliography: Bibliography) -> Self {
         let mut picker = Self {
             bibliography,
+            marked: Vec::new(),
             query: String::new(),
             matches: Vec::new(),
             selected: 0,
@@ -163,6 +168,76 @@ impl CitationDialog {
     fn filter(&mut self) {
         self.matches = self.bibliography.search(&self.query, 200);
         self.selected = 0;
+    }
+
+    fn toggle_mark(&mut self) {
+        if let Some(&index) = self.matches.get(self.selected) {
+            let key = &self.bibliography.references[index].key;
+            if let Some(position) = self.marked.iter().position(|marked| marked == key) {
+                self.marked.remove(position);
+            } else {
+                self.marked.push(key.clone());
+            }
+        }
+    }
+
+    fn citation_keys(&self) -> Vec<String> {
+        if self.marked.is_empty() {
+            self.matches
+                .get(self.selected)
+                .map(|&index| vec![self.bibliography.references[index].key.clone()])
+                .unwrap_or_default()
+        } else {
+            self.marked.clone()
+        }
+    }
+
+    fn reload(&mut self, bibliography: Bibliography) -> usize {
+        let before = self.marked.len();
+        self.marked.retain(|key| {
+            bibliography
+                .references
+                .iter()
+                .any(|reference| &reference.key == key)
+        });
+        self.bibliography = bibliography;
+        self.filter();
+        before - self.marked.len()
+    }
+}
+
+#[cfg(test)]
+mod citation_dialog_tests {
+    use super::*;
+
+    fn picker() -> CitationDialog {
+        CitationDialog::new(Bibliography::parse(r#"[{"id":"Alpha"},{"id":"Beta"}]"#).unwrap())
+    }
+
+    #[test]
+    fn marks_survive_filtering_and_keep_selection_order() {
+        let mut dialog = picker();
+        dialog.selected = 1;
+        dialog.toggle_mark();
+        dialog.query = "Alpha".to_owned();
+        dialog.filter();
+        dialog.toggle_mark();
+        assert_eq!(dialog.citation_keys(), vec!["Beta", "Alpha"]);
+        dialog.toggle_mark();
+        assert_eq!(dialog.citation_keys(), vec!["Beta"]);
+    }
+
+    #[test]
+    fn reload_retains_existing_marks_and_reports_removed_keys() {
+        let mut dialog = picker();
+        dialog.toggle_mark();
+        dialog.selected = 1;
+        dialog.toggle_mark();
+        dialog.query = "Beta".to_owned();
+        let refreshed = Bibliography::parse(r#"[{"id":"Beta"},{"id":"Gamma"}]"#).unwrap();
+        assert_eq!(dialog.reload(refreshed), 1);
+        assert_eq!(dialog.query, "Beta");
+        assert_eq!(dialog.citation_keys(), vec!["Beta"]);
     }
 }
 
@@ -339,6 +414,7 @@ struct App {
     prompt: Option<Prompt>,
     links: Option<LinkDialog>,
     citation_picker: Option<CitationDialog>,
+    research_dialog: Option<research::ResearchDialog>,
     snippet_picker: Option<SnippetPicker>,
     snippet_form: Option<SnippetForm>,
     snippets_dir: PathBuf,
@@ -361,6 +437,9 @@ struct App {
     browser_width_percent: u16,
     panels: crate::layout::Panels,
     outline_view: crate::outline::OutlineView,
+    metadata: Option<metadata::MetadataEditor>,
+    export_dialog: Option<export::ExportDialog>,
+    export_settings: crate::document_export::Settings,
     writing: focus::Writing,
     markdown_settings: markdown::MarkdownSettings,
     highlight_cache: markdown::HighlightCache,
@@ -412,6 +491,7 @@ impl App {
             prompt: None,
             links: None,
             citation_picker: None,
+            research_dialog: None,
             snippet_picker: None,
             snippet_form: None,
             snippets_dir: snippets::default_snippets_dir(),
@@ -434,6 +514,9 @@ impl App {
             browser_width_percent: DEFAULT_BROWSER_PERCENT,
             panels: crate::layout::Panels::default(),
             outline_view: crate::outline::OutlineView::default(),
+            metadata: None,
+            export_dialog: None,
+            export_settings: crate::document_export::Settings::default(),
             writing: focus::Writing::default(),
             markdown_settings: markdown::MarkdownSettings::default(),
             highlight_cache: markdown::HighlightCache::default(),
@@ -447,9 +530,12 @@ impl App {
     /// Check whether a modal window currently has input focus.
     fn has_active_popup(&self) -> bool {
         self.analytics_dashboard.is_some()
+            || self.metadata.is_some()
+            || self.export_dialog.is_some()
             || self.prompt.is_some()
             || self.links.is_some()
             || self.citation_picker.is_some()
+            || self.research_dialog.is_some()
             || self.snippet_picker.is_some()
             || self.snippet_form.is_some()
             || self.wiki_completion.is_some()
@@ -477,6 +563,7 @@ pub(crate) fn start() -> io::Result<()> {
         writing,
         writing_goals,
         markdown_settings,
+        export_settings,
         session_settings,
         show_tab_bar,
         show_hidden_folders,
@@ -492,6 +579,7 @@ pub(crate) fn start() -> io::Result<()> {
     app.snippets_dir = snippets_dir;
     app.writing = writing;
     app.markdown_settings = markdown_settings;
+    app.export_settings = export_settings;
     app.session_settings = session_settings;
     app.show_tab_bar = show_tab_bar;
     app.show_hidden_folders = show_hidden_folders;

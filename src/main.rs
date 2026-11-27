@@ -8,6 +8,7 @@ mod cli;
 mod command_palette;
 mod commands;
 mod config;
+mod document_export;
 mod editor;
 mod editor_search;
 mod file_ops;

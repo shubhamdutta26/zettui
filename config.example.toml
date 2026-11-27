@@ -140,3 +140,11 @@ typewriter = false # Independent of focus; approximate logical-line centering.
 # selected_fg = "#CDD6F4"
 # warning = "#F9E2AF"
 # success = "#A6E3A1"
+
+# Optional Pandoc document export (:export or F8 → Export document or folder).
+[export]
+format = "pdf" # pdf, docx, html, epub, latex
+# output_dir = "~/Documents/Exports" # existing directory; default is beside source
+# csl = "~/Zotero/styles/american-medical-association.csl"
+# resource_dirs = ["~/Documents/Notes/assets"]
+# pdf_engine = "auto" # auto prefers Typst; or select an installed engine

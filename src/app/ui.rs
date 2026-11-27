@@ -372,6 +372,8 @@ impl App {
                 .cursor_style(
                     if note.state.mode == EditorMode::Insert
                         || self.outline_view.focused
+                        || self.metadata.is_some()
+                        || self.export_dialog.is_some()
                         || self.heading_search.is_some()
                         || self.command_palette.is_some()
                         || self.buffer_picker.is_some()
@@ -452,7 +454,7 @@ impl App {
             } else if self.buffer_prefix.is_some() {
                 "b Switch buffer | Esc Cancel".to_owned()
             } else if self.writing.leader {
-                "Space: b Buffers | c Commands | z Zen | f Focus | t Typewriter | e Files | p Preview | o Outline | l Navigate outline | h Headings | 1/2/3 Focus level | n Numbers | s Status"
+                "Space: b Buffers | c Commands | z Zen | f Focus | t Typewriter | e Files | p Preview | o Outline | l Navigate outline | m Metadata | x Export | h Headings | 1/2/3 Focus level | n Numbers | s Status"
                     .to_owned()
             } else if let Some(input) = &self.note_search.input {
                 format!(
@@ -746,6 +748,9 @@ impl App {
         if self.citation_picker.is_some() {
             self.draw_citation_picker(frame);
         }
+        if self.research_dialog.is_some() {
+            self.draw_research_dialog(frame);
+        }
         if self.find_dialog.is_some() {
             self.draw_find_dialog(frame);
         }
@@ -769,6 +774,12 @@ impl App {
         }
         if self.buffer_picker.is_some() {
             self.draw_buffer_picker(frame);
+        }
+        if self.metadata.is_some() {
+            self.draw_metadata_editor(frame);
+        }
+        if self.export_dialog.is_some() {
+            self.draw_export(frame);
         }
     }
 

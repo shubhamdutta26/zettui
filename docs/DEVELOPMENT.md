@@ -24,3 +24,5 @@ when behavior changes. Record actual test results separately from planned checks
 Keep comments focused on invariants, edge cases and design decisions. Historical lessons are retained as historical records, not current setup instructions.
 
 For the Intelligent Navigation integration and terminal smoke tests, see [Navigation regression checklist](NAVIGATION-TESTS.md). Use it for navigation regressions in subsequent releases as well. See also the [v0.7.13](RELEASE-CHECKLIST-0.7.13.md) and [v0.7.14](RELEASE-CHECKLIST-0.7.14.md) checklists for historical and reusable test procedures. Multi-computer statistics exchange remains manually unverified on separate physical computers.
+
+For the Research Toolkit release candidate, run the [v0.8.0 release checklist](RELEASE-CHECKLIST-0.8.0.md).

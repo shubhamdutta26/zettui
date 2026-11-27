@@ -43,6 +43,7 @@ See [Vim-style commands](VIM-COMMANDS.md) for the Ex reference, inherited editor
 | Editor (Normal) | `Space h`, `:headings` | Search headings without showing the Outline |
 | Browser / Editor (Normal) / Outline | `F8` | Global command palette |
 | Editor (Normal) | `Space c`, `:commands` | Global command palette |
+| Editor (Normal, Markdown) | `Space x`, `:export` | Export document |
 | Command palette | `↑` / `↓`, `Ctrl+P` / `Ctrl+N`, `Home` / `End` | Select previous/next or first/last action |
 | Command palette | `Enter`, `Esc` / `F8`, `Ctrl+U` | Execute, cancel, clear query |
 | Heading search | `↑` / `↓`, `Ctrl+P` / `Ctrl+N`, `Home` / `End` | Select previous/next or first/last result |
@@ -55,6 +56,9 @@ See [Vim-style commands](VIM-COMMANDS.md) for the Ex reference, inherited editor
 | Vault search | `Tab`, `↑` / `↓`, `Enter`, `Esc` | Switch text/tags, select, open, cancel |
 | Filename search | `↑` / `↓`, `Enter`, `Esc` | Select result; confirm selection in Files (Enter again opens); cancel |
 | Vault / filename / wiki-link / snippet / citation pickers | Type, `Backspace`, `↑` / `↓`, `Enter`, `Esc`, `Ctrl+U` | Filter, edit query, select, confirm, cancel, clear query |
+| Citation picker | `Ctrl+T`, `Ctrl+R`, `Ctrl+V` | Toggle selected citation mark; reload bibliography; preview highlighted reference |
+| Citation preview | `↑` / `↓`, `PgUp` / `PgDn`, `←` / `→` or `h` / `l`, `o`, `r`, `Esc` | Scroll, select PDF, launch PDF, retry Zotero lookup, close preview |
+| Citation audit | `↑` / `↓`, `j` / `k`, `Enter`, `Esc` | Select unresolved occurrence, jump, close |
 | Buffer picker | Type, `Backspace`, `↑` / `↓`, `Ctrl+P` / `Ctrl+N`, `Enter`, `Esc` / `F5`, `Ctrl+U` | Filter, edit query, select, activate, cancel, clear query |
 | In-note search input | Type, `Backspace`, `Ctrl+U`, `Enter`, `Esc` | Edit query, clear, confirm or cancel |
 | Ex command bar | Type, `Backspace`, `Enter`, `Esc` | Edit command, execute or cancel |
@@ -136,3 +140,22 @@ Missing settings use these defaults. Command changes are session-only. Heading c
 | `t` / Home | Return to today / top of overview |
 | `r` | Refresh statistics |
 | `Esc` / `q` / `F10` | Close dashboard |
+
+### Research metadata (Phase III)
+
+| Shortcut / command | Action |
+| --- | --- |
+| `Space m` / `F11` / `:metadata` / `:metadata-edit` | Open Metadata Editor |
+| `i` / Esc | Insert / Normal mode |
+| `:w` / `:wq` | Apply to note / apply and close |
+| `:q` / `:q!` | Close clean popup / discard unapplied edits |
+| Ctrl+arrows (Normal mode) | Resize popup |
+
+See [Research Toolkit](RESEARCH-TOOLKIT.md#phase-iii--metadata-editor).
+
+### Document export (Research Toolkit)
+
+Use `Space x` or `:export` in Normal mode, or F8 → **Export document or folder**. In the
+export dialog: Tab/Up/Down selects fields, Left/Right changes format, Space
+or Left/Right toggles citation processing, Ctrl+u clears a text field, Enter
+exports, Ctrl+o opens the last successful output, Ctrl+d toggles diagnostics, PageUp/PageDown scroll details, and Esc closes when idle. PDF engine selection uses Left/Right in the PDF engine field. See [Document export](DOCUMENT-EXPORT.md).

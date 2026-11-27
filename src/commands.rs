@@ -15,6 +15,8 @@ pub(crate) enum Command {
     TogglePreview,
     ToggleOutline,
     FocusOutline,
+    ToggleMetadata,
+    FocusMetadata,
     SearchHeadings,
     OpenPalette,
     WritingAnalytics,
@@ -38,6 +40,9 @@ pub(crate) enum Command {
     EnterFolder,
     ParentFolder,
     CitationPicker,
+    CitationPreview,
+    CitationCheck,
+    ExportDocument,
     SnippetPicker,
     Save,
     Hide,
@@ -82,6 +87,7 @@ impl Command {
                 F(8) if key.modifiers.is_empty() => Some(OpenPalette),
                 F(9) if key.modifiers.is_empty() => Some(ToggleHiddenFolders),
                 F(10) if key.modifiers.is_empty() => Some(WritingAnalytics),
+                F(11) if key.modifiers.is_empty() => Some(FocusMetadata),
                 Up if key.modifiers == KeyModifiers::ALT => Some(WidenOutline),
                 Down if key.modifiers == KeyModifiers::ALT => Some(NarrowOutline),
                 Char('f') if ctrl => Some(SearchText),
@@ -133,6 +139,8 @@ impl Command {
                 Char('e') => Some(ToggleFiles),
                 Char('p') => Some(TogglePreview),
                 Char('o') => Some(ToggleOutline),
+                Char('m') => Some(ToggleMetadata),
+                Char('x') => Some(ExportDocument),
                 Char('l') => Some(FocusOutline),
                 Char('h') => Some(SearchHeadings),
                 Char('c') => Some(OpenPalette),
@@ -155,6 +163,10 @@ impl Command {
         use Command::*;
         match input.trim() {
             "w" => Some(Save),
+            "cite" => Some(CitationPicker),
+            "cite-preview" => Some(CitationPreview),
+            "cite-check" => Some(CitationCheck),
+            "export" => Some(ExportDocument),
             "hide" => Some(Hide),
             "buffers" | "ls" => Some(BufferPicker),
             "bn" => Some(NextBuffer),
@@ -174,6 +186,8 @@ impl Command {
             "toggle preview" => Some(TogglePreview),
             "toggle outline" => Some(ToggleOutline),
             "outline" => Some(FocusOutline),
+            "metadata" | "toggle metadata" => Some(ToggleMetadata),
+            "metadata-edit" => Some(FocusMetadata),
             "headings" => Some(SearchHeadings),
             "commands" => Some(OpenPalette),
             "analytics" | "stats" => Some(WritingAnalytics),
@@ -208,6 +222,12 @@ pub(crate) struct CommandInfo {
 }
 
 pub(crate) const CATALOG: &[CommandInfo] = &[
+    CommandInfo {
+        command: Command::ExportDocument,
+        title: "Export document or folder",
+        shortcut: "Space x / :export",
+        aliases: "pandoc pdf docx html epub latex export",
+    },
     CommandInfo {
         command: Command::WritingAnalytics,
         title: "Writing analytics and calendar",
@@ -385,8 +405,20 @@ pub(crate) const CATALOG: &[CommandInfo] = &[
     CommandInfo {
         command: Command::CitationPicker,
         title: "Insert Zotero citation",
-        shortcut: "Ctrl+P",
+        shortcut: "Ctrl+P / :cite",
         aliases: "bibliography references",
+    },
+    CommandInfo {
+        command: Command::CitationPreview,
+        title: "Preview citation under cursor",
+        shortcut: ":cite-preview",
+        aliases: "reference details abstract pdf",
+    },
+    CommandInfo {
+        command: Command::CitationCheck,
+        title: "Check unresolved citations in current note",
+        shortcut: ":cite-check",
+        aliases: "missing references bibliography audit",
     },
     CommandInfo {
         command: Command::SnippetPicker,
@@ -411,6 +443,18 @@ pub(crate) const CATALOG: &[CommandInfo] = &[
         title: "Toggle Outline panel",
         shortcut: "F4",
         aliases: "sidebar :toggle outline",
+    },
+    CommandInfo {
+        command: Command::ToggleMetadata,
+        title: "Open Metadata Editor",
+        shortcut: "Space m / F11 / :metadata",
+        aliases: "yaml frontmatter properties tags title",
+    },
+    CommandInfo {
+        command: Command::FocusMetadata,
+        title: "Open Metadata Editor (alias)",
+        shortcut: "F11 / :metadata-edit",
+        aliases: "yaml fields properties edit",
     },
     CommandInfo {
         command: Command::FocusOutline,
@@ -582,6 +626,9 @@ mod tests {
         use Command::*;
         for (input, expected) in [
             ("w", Save),
+            ("cite", CitationPicker),
+            ("cite-preview", CitationPreview),
+            ("cite-check", CitationCheck),
             ("hide", Hide),
             ("buffers", BufferPicker),
             ("ls", BufferPicker),
@@ -605,6 +652,9 @@ mod tests {
             ("toggle preview", TogglePreview),
             ("toggle outline", ToggleOutline),
             ("outline", FocusOutline),
+            ("metadata", ToggleMetadata),
+            ("toggle metadata", ToggleMetadata),
+            ("metadata-edit", FocusMetadata),
             ("headings", SearchHeadings),
             ("commands", OpenPalette),
             ("analytics", WritingAnalytics),
@@ -775,6 +825,25 @@ mod tests {
         assert_eq!(Command::from_ex("q"), Some(Command::Close));
         assert_eq!(Command::from_ex("q!"), Some(Command::DiscardAndClose));
         assert_eq!(Command::from_ex("set textwidth=100"), None);
+    }
+
+    #[test]
+    fn export_leader_preserves_files_and_editor_keys() {
+        let plain = KeyModifiers::NONE;
+        let x = KeyEvent::new(KeyCode::Char('x'), plain);
+        assert_eq!(
+            Command::from_key(KeyScope::Leader, x),
+            Command::from_ex("export")
+        );
+        assert_eq!(
+            Command::from_key(KeyScope::Leader, x),
+            Some(Command::ExportDocument)
+        );
+        assert_eq!(Command::from_key(KeyScope::Editor, x), None);
+        assert_eq!(
+            Command::from_key(KeyScope::Leader, KeyEvent::new(KeyCode::Char('e'), plain)),
+            Some(Command::ToggleFiles)
+        );
     }
 
     #[test]

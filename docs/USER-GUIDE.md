@@ -85,3 +85,7 @@ For source builds use `cargo run --locked --` instead of `zettui`. Export/import
 snapshots to exchange history; never share the live state file. Real multi-computer
 exchange has not yet been tested by the maintainer. See [writing analytics](WRITING-ANALYTICS.md)
 for counting rules, storage, source labels, backups, transfer instructions and limitations.
+
+## Research toolkit
+
+Use `Ctrl+P` for Zotero citations, `Ctrl+V` in the picker for reference previews, `Space m` for the metadata editor, and `Space x` or `:export` in Normal mode for document export. The F8 palette also supports export from the file browser. See [Research Toolkit](RESEARCH-TOOLKIT.md) and [Document export](DOCUMENT-EXPORT.md).

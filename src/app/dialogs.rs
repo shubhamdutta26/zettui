@@ -387,7 +387,7 @@ impl App {
         }
     }
 
-    fn insert_citation(&mut self, key: &str) {
+    fn insert_citation(&mut self, keys: &[String]) {
         let Some(note) = self.editor.as_mut() else {
             return;
         };
@@ -405,7 +405,8 @@ impl App {
                 &mut note.state,
             );
         }
-        for character in format!("[@{key}]").chars() {
+        let citation = format!("[@{}]", keys.join("; @"));
+        for character in citation.chars() {
             self.editor_keys.on_key_event(
                 KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE),
                 &mut note.state,
@@ -417,7 +418,7 @@ impl App {
                 &mut note.state,
             );
         }
-        self.message = format!("Inserted [@{key}] — use :w to save your note.");
+        self.message = format!("Inserted {citation} — use :w to save your note.");
     }
 
     pub(super) fn handle_citation_key(&mut self, key: KeyEvent) {
@@ -428,13 +429,39 @@ impl App {
             KeyCode::Esc => {
                 self.message = "Citation picker closed.".to_owned();
             }
-            KeyCode::Enter => {
+            KeyCode::Char('v') if key.modifiers == KeyModifiers::CONTROL => {
                 if let Some(&index) = dialog.matches.get(dialog.selected) {
-                    let citekey = dialog.bibliography.references[index].key.clone();
-                    self.insert_citation(&citekey);
-                } else {
+                    self.preview_reference(&dialog.bibliography.references[index]);
+                }
+                self.citation_picker = Some(dialog);
+            }
+            KeyCode::Char('t') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                dialog.toggle_mark();
+                self.citation_picker = Some(dialog);
+            }
+            KeyCode::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if let Some(path) = &self.bibliography_path {
+                    match Bibliography::load(path) {
+                        Ok(bibliography) => {
+                            let removed = dialog.reload(bibliography);
+                            self.message =
+                                format!("Bibliography reloaded; {removed} missing marks removed.");
+                        }
+                        Err(e) => {
+                            self.message =
+                                format!("Reload failed; previous bibliography retained: {e}");
+                        }
+                    }
+                }
+                self.citation_picker = Some(dialog);
+            }
+            KeyCode::Enter => {
+                let keys = dialog.citation_keys();
+                if keys.is_empty() {
                     self.message = "No matching reference. Try another search.".to_owned();
                     self.citation_picker = Some(dialog);
+                } else {
+                    self.insert_citation(&keys);
                 }
             }
             _ => {

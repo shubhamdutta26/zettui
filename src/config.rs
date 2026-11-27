@@ -24,6 +24,7 @@ pub struct Config {
     pub browser: BrowserSettings,
     pub session: crate::session::Settings,
     pub writing_goals: zettui::analytics::Goals,
+    pub export: crate::document_export::Settings,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -153,6 +154,14 @@ impl Config {
             .workspace
             .snippets_dir
             .map(|p| expand_path(p, config_dir));
+        cfg.export.output_dir = cfg.export.output_dir.map(|p| expand_path(p, config_dir));
+        cfg.export.csl = cfg.export.csl.map(|p| expand_path(p, config_dir));
+        cfg.export.resource_dirs = cfg
+            .export
+            .resource_dirs
+            .into_iter()
+            .map(|p| expand_path(p, config_dir))
+            .collect();
         Ok(cfg)
     }
 }

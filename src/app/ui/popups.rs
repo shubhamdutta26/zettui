@@ -153,6 +153,41 @@ fn picker_body(
     areas[1]
 }
 
+/// Wrap preview text into terminal-cell lines so scrolling is bounded even after resize.
+fn research_lines(text: &str, width: usize) -> Vec<String> {
+    let width = width.max(1);
+    let mut lines = Vec::new();
+    for source in text.split('\n') {
+        let mut line = String::new();
+        let mut cells = 0;
+        for raw in source.split_whitespace() {
+            let word = display_component(raw);
+            let word_width = Span::raw(word.as_str()).width();
+            if cells > 0 && cells + 1 + word_width > width {
+                lines.push(std::mem::take(&mut line));
+                cells = 0;
+            }
+            if cells > 0 {
+                line.push(' ');
+                cells += 1;
+            }
+            for ch in word.chars() {
+                let mut encoded = [0; 4];
+                let encoded_char: &str = ch.encode_utf8(&mut encoded);
+                let ch_width = Span::raw(encoded_char).width();
+                if cells > 0 && cells + ch_width > width {
+                    lines.push(std::mem::take(&mut line));
+                    cells = 0;
+                }
+                line.push(ch);
+                cells += ch_width;
+            }
+        }
+        lines.push(line);
+    }
+    lines
+}
+
 impl App {
     /// Display links on demand. Only this dialog captures j/k/Enter/Esc.
     pub(super) fn draw_link_dialog(&mut self, frame: &mut Frame) {
@@ -222,11 +257,18 @@ impl App {
             inner,
             "Search references",
             &dialog.query,
-            &format!("{} results · max 200", dialog.matches.len()),
+            &format!(
+                "{} results · {} marked · max 200",
+                dialog.matches.len(),
+                dialog.marked.len()
+            ),
             &[
                 ("Esc", "Cancel"),
                 ("↑↓", "Select"),
                 ("Enter", "Insert"),
+                ("Ctrl+T", "Mark"),
+                ("Ctrl+R", "Reload"),
+                ("Ctrl+V", "Preview"),
                 ("Ctrl+U", "Clear"),
             ],
         );
@@ -235,8 +277,15 @@ impl App {
             .iter()
             .map(|&index| {
                 let reference = &dialog.bibliography.references[index];
-                let title =
-                    Line::styled(reference.summary(), Style::default().fg(theme.foreground));
+                let mark = if dialog.marked.contains(&reference.key) {
+                    "[x]"
+                } else {
+                    "[ ]"
+                };
+                let title = Line::styled(
+                    format!("{mark} {}", reference.summary()),
+                    Style::default().fg(theme.foreground),
+                );
                 if area.height >= 2 {
                     ListItem::new(vec![
                         title,
@@ -258,6 +307,146 @@ impl App {
             dialog.selected,
             "No matching citations.",
         );
+    }
+
+    pub(super) fn draw_research_dialog(&mut self, frame: &mut Frame) {
+        use super::super::research::ResearchDialog;
+        let Some(dialog) = &mut self.research_dialog else {
+            return;
+        };
+        let theme = self.theme;
+        let title = match dialog {
+            ResearchDialog::Preview { .. } => "Citation preview",
+            ResearchDialog::Audit { .. } => "Unresolved citations",
+        };
+        let Some(inner) = popup_inner(frame, theme, title, 100, 32) else {
+            return;
+        };
+        let footer = if inner.height >= 6 { 2 } else { 1 };
+        let header_height = if matches!(dialog, ResearchDialog::Preview { .. }) && inner.height >= 6
+        {
+            2
+        } else {
+            1
+        };
+        let areas = Layout::vertical([
+            Constraint::Length(header_height),
+            Constraint::Min(1),
+            Constraint::Length(footer),
+        ])
+        .split(inner);
+        match dialog {
+            ResearchDialog::Preview {
+                text,
+                pdfs,
+                selected,
+                scroll,
+                status,
+                lookup_status,
+                ..
+            } => {
+                let attachment = pdfs.get(*selected).map_or_else(
+                    || "No local PDF selected".to_owned(),
+                    |path| {
+                        format!(
+                            "PDF {}/{}: {}",
+                            *selected + 1,
+                            pdfs.len(),
+                            display_component(
+                                &path
+                                    .file_name()
+                                    .unwrap_or(path.as_os_str())
+                                    .to_string_lossy()
+                            )
+                        )
+                    },
+                );
+                let detail = display_component(if status.is_empty() {
+                    lookup_status.as_str()
+                } else {
+                    status.as_str()
+                });
+                let header = if header_height == 2 {
+                    format!("{attachment}\n{detail}")
+                } else if pdfs.is_empty() || !status.is_empty() {
+                    detail
+                } else {
+                    attachment
+                };
+                frame.render_widget(
+                    Paragraph::new(header).style(Style::default().fg(theme.accent)),
+                    areas[0],
+                );
+                let lines = research_lines(text, usize::from(areas[1].width));
+                let height = usize::from(areas[1].height);
+                *scroll = (*scroll).min(lines.len().saturating_sub(height));
+                let visible = lines
+                    .iter()
+                    .skip(*scroll)
+                    .take(height)
+                    .map(|line| Line::raw(line.as_str()))
+                    .collect::<Vec<_>>();
+                frame.render_widget(
+                    Paragraph::new(visible).style(Style::default().fg(theme.foreground)),
+                    areas[1],
+                );
+                popup_help(
+                    frame,
+                    theme,
+                    areas[2],
+                    &[
+                        ("Esc", "Back"),
+                        ("↑↓/PgUp/PgDn", "Scroll"),
+                        ("←→", "PDF"),
+                        ("o", "Open PDF"),
+                        ("r", "Refresh PDFs"),
+                    ],
+                );
+            }
+            ResearchDialog::Audit {
+                hits,
+                selected,
+                total,
+            } => {
+                frame.render_widget(
+                    Paragraph::new(format!(
+                        "{} unresolved of {} citation occurrences",
+                        hits.len(),
+                        total
+                    ))
+                    .style(Style::default().fg(theme.accent)),
+                    areas[0],
+                );
+                let items = hits
+                    .iter()
+                    .map(|hit| {
+                        ListItem::new(format!(
+                            "Line {} · @{}",
+                            hit.row + 1,
+                            display_component(&hit.key)
+                        ))
+                    })
+                    .collect();
+                popup_list(
+                    frame,
+                    theme,
+                    areas[1],
+                    items,
+                    *selected,
+                    "No unresolved citation groups found.",
+                );
+                popup_help(
+                    frame,
+                    theme,
+                    areas[2],
+                    &[
+                        ("Esc", "Close"),
+                        ("↑↓/jk", "Select"),
+                        ("Enter", "Jump to citation"),
+                    ],
+                );
+            }
+        }
     }
 
     pub(super) fn draw_wiki_completion(&self, frame: &mut Frame) {

@@ -10,13 +10,17 @@ The inherited commands below were checked against the [edtui 0.11.7 reference](h
 Open a note, press Esc to enter Normal mode, type `:` followed by a command,
 and press Enter. Esc cancels and Backspace edits the command. Commands are
 case-sensitive, with surrounding whitespace trimmed. This reference covers
-all 43 fixed application command spellings (including aliases). These are the fixed
+the fixed application command spellings (including aliases). These are the fixed
 commands in `Command::from_ex` plus the parameterized width command in
 `Writing::command`. There is no arbitrary shell execution through Ex.
 
 | Command | Action |
 | --- | --- |
 | `:w` | Save active note (refuses unsafe overwrite). |
+| `:cite` | Open Zotero citation picker. |
+| `:cite-preview` | Preview the bracketed citation key under the cursor. |
+| `:cite-check` | Inspect unresolved bracketed citations in the active note. |
+| `:export` | Open the document export dialog. |
 | `:q` | Close active note and return to Files; refuse if modified. |
 | `:q!` | Discard active note changes and close it. |
 | `:wq` | Save and close active note if save succeeds. |
@@ -37,7 +41,7 @@ commands in `Command::from_ex` plus the parameterized width command in
 | `:outline` | Focus Outline, or return to editor. |
 | `:headings` | Fuzzy-search headings in current Markdown note. |
 | `:commands` | Open global command palette. |
-| `:analytics`, `:stats` | Open writing analytics dashboard (development feature). |
+| `:analytics`, `:stats` | Open writing analytics dashboard. |
 | `:zen` | Toggle Zen. |
 | `:focus` | Toggle Focus mode. |
 | `:focus off` | Disable Focus mode. |
@@ -62,6 +66,7 @@ Unrecognized commands display an error rather than being delegated to Vim.
 | `Space b d`, `Space b o` | Close current / other buffers. |
 | `Space b t`, `Space b s` | Toggle tabs / save all. |
 | `Space e`, `Space p`, `Space o` | Toggle Files / Preview / Outline. |
+| `Space x` | Open document export. |
 | `Space l`, `Space h`, `Space c` | Focus Outline / heading search / command palette. |
 | `Space z`, `Space f`, `Space t` | Toggle Zen / Focus / Typewriter. |
 | `Space 1`, `Space 2`, `Space 3` | Line / paragraph / section Focus. |
@@ -112,3 +117,10 @@ claim of complete Neovim compatibility.
   it in Zettui or change the existing reserved keys.
 - The application consumes key-press events only; explicit terminal Repeat
   and Release events are ignored. Holding a key depends on terminal encoding.
+
+### Research metadata
+
+`:metadata` and `:metadata-edit` open a modal YAML editor. Inside it, `:w`
+applies to the active note, `:wq` applies and closes, `:q` closes only if clean,
+and `:q!` discards unapplied changes. Save the note to disk separately.
+See [Research Toolkit](RESEARCH-TOOLKIT.md#phase-iii--metadata-editor).

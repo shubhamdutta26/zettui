@@ -32,11 +32,18 @@ Versions identify development milestones; not all have a separate published rele
 
 Release validation for v0.7.15 is tracked in the [release checklist](docs/RELEASE-CHECKLIST-0.7.15.md). COSMIC and physical multi-computer statistics exchange remain manually unverified.
 
+## Release candidate
+
+| Version | Features |
+| --- | --- |
+| 0.8.0 | Research Toolkit: Zotero search and PDF previews, metadata editor, Pandoc export and export UI refinement |
+
+See [release checklist](docs/RELEASE-CHECKLIST-0.8.0.md) before tagging.
+
 ## Planned
 
 | Milestone | Possible work |
 | --- | --- |
-| 0.8.0 | Optional note metadata panel and further configurable UI elements |
 | 0.8.x | Search highlighting, ranked results, faster indexing, optional inline hashtag index |
 | 0.9.x | Link-aware rename/move and broken-link reports |
 | Later | In-editor snippet tab stops, ARM64 packages, configurable ZKN IDs |

@@ -4,11 +4,12 @@ A local-first, Vim-style terminal notes manager written in Rust. Browse and edit
 
 ## Installation
 
-Zettui **v0.7.15 — Codebase Maintenance and Stability** builds on the writing
-analytics introduced in v0.7.14, with internal cleanup, CLI validation,
-documentation and release checks. See the [changelog](CHANGELOG.md).
-COSMIC compatibility for this version and physical multi-computer statistics
-exchange remain manually unverified.
+Zettui **v0.8.0 — Research Toolkit** adds richer Zotero citation search,
+reference previews and local PDF attachments, a standalone YAML metadata editor,
+and optional Pandoc-powered document export. See the [changelog](CHANGELOG.md).
+The release candidate requires final validation before tagging; the previous
+COSMIC and physical multi-computer statistics checks remain unverified unless
+retested. See the [release checklist](docs/RELEASE-CHECKLIST-0.8.0.md).
 
 Download Linux releases from [GitHub Releases](https://github.com/shubhamdutta26/zettui/releases) (portable x86-64 archive, `.deb` for Debian/Ubuntu, `.rpm` for Fedora, or `PKGBUILD` for Arch/Omarchy), or build from source with a compatible Rust toolchain:
 
@@ -44,6 +45,10 @@ cargo run --locked -- "$demo/notes" --bibliography examples/bibliography/referen
 ```
 
 Use `j`/`k` to browse, Enter to open, `i` to edit, Escape for Normal mode, and `:w` to save. `Space z` toggles Zen mode. See the full references below.
+
+## Research toolkit
+
+Search and mark Zotero citations with `Ctrl+P`, preview with `Ctrl+V`, inspect a citation under the cursor with `:cite-preview`, and audit missing references using `:cite-check`. Open the modal YAML Metadata Editor with `:metadata`, `Space m` or `F11`; apply with `:wq` without saving the note to disk. See [Research Toolkit](docs/RESEARCH-TOOLKIT.md) for usage, supported exports and PDF attachment requirements.
 
 ## Syntax highlighting
 
@@ -137,3 +142,10 @@ See [Buffers and Sessions](docs/BUFFERS-AND-SESSIONS.md) for the full command re
 For installed release packages, the complete documentation is also available in the [GitHub repository](https://github.com/shubhamdutta26/zettui).
 
 MIT License.
+
+## Research toolkit: document export
+
+Press `Space x` in Normal mode or enter `:export` in a Markdown note, or use F8 → **Export document or folder** in the
+file browser. Export PDF, DOCX, standalone HTML, EPUB or LaTeX using optional
+Pandoc. See [Document export](docs/DOCUMENT-EXPORT.md) for configuration, images,
+citation processing and limitations.

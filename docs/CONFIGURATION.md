@@ -229,3 +229,11 @@ Statistics live in `$XDG_STATE_HOME/zettui/statistics.json` (default
 `~/.local/state/zettui/statistics.json`), separate from configuration and note
 workspaces. Keep one independent state per installation; exchange exported
 snapshots instead of synchronizing the live file. See [writing analytics](WRITING-ANALYTICS.md).
+
+### `[export]` (Research Toolkit)
+
+The optional export section accepts `format` (`pdf`, `docx`, `html`, `epub`,
+`latex`; default `pdf`), `output_dir`, `csl`, `resource_dirs` (array of paths)
+and `pdf_engine` (default automatic; prefers Typst when installed). Paths follow normal config-relative and home expansion rules.
+Pandoc is an external dependency only when exporting. See
+[Document export](DOCUMENT-EXPORT.md).

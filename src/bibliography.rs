@@ -2,8 +2,13 @@
 //! Supports Better CSL JSON (array of CSL items) and BetterBibTeX JSON
 //! debug exports (object with an `items` array and `citationKey` fields).
 
+use crate::fuzzy::{Score, score};
 use serde_json::Value;
-use std::{collections::HashSet, fs, io, path::Path};
+use std::{
+    collections::HashSet,
+    fs, io,
+    path::{Path, PathBuf},
+};
 
 const MAX_BIB_BYTES: u64 = 32 * 1024 * 1024;
 
@@ -14,6 +19,11 @@ pub struct Reference {
     pub authors: String,
     pub year: String,
     all_authors: String,
+    journal: String,
+    doi: String,
+    full_authors: String,
+    abstract_text: String,
+    attachments: Vec<PathBuf>,
 }
 
 impl Reference {
@@ -24,13 +34,58 @@ impl Reference {
         )
     }
 
-    fn matches(&self, words: &[&str]) -> bool {
-        let haystack = format!(
-            "{} {} {} {}",
-            self.key, self.title, self.all_authors, self.year
+    /// Read-only bibliographic details, with absent fields made explicit.
+    pub fn preview(&self) -> String {
+        fn present(value: &str) -> &str {
+            if value.is_empty() {
+                "Not available"
+            } else {
+                value
+            }
+        }
+        format!(
+            "@{}\n\n{}\n\nAuthors: {}\nYear: {}\nJournal: {}\nDOI: {}\n\nAbstract\n{}",
+            self.key,
+            self.title,
+            present(&self.full_authors),
+            self.year,
+            present(&self.journal),
+            present(&self.doi),
+            present(&self.abstract_text)
         )
-        .to_lowercase();
-        words.iter().all(|word| haystack.contains(*word))
+    }
+
+    /// Resolve only exported local PDF paths, not URLs or Zotero storage IDs.
+    pub fn pdf_paths(&self, bibliography_path: &Path) -> Vec<PathBuf> {
+        let parent = bibliography_path.parent().unwrap_or_else(|| Path::new("."));
+        self.attachments
+            .iter()
+            .map(|path| {
+                if path.is_absolute() {
+                    path.clone()
+                } else {
+                    parent.join(path)
+                }
+            })
+            .collect()
+    }
+
+    fn search_score(&self, words: &[&str]) -> Option<Vec<Score>> {
+        let fields = [
+            self.key.as_str(),
+            self.title.as_str(),
+            self.all_authors.as_str(),
+            self.year.as_str(),
+            self.journal.as_str(),
+            self.doi.as_str(),
+        ];
+        let mut scores = words
+            .iter()
+            .map(|word| fields.iter().filter_map(|field| score(field, word)).min())
+            .collect::<Option<Vec<_>>>()?;
+        // Compare weakest token first, so exact multi-token hits beat fuzzy hits.
+        scores.sort_unstable_by(|a, b| b.cmp(a));
+        Some(scores)
     }
 }
 
@@ -110,6 +165,14 @@ impl Bibliography {
                 authors,
                 year,
                 all_authors,
+                journal: first_text(
+                    item,
+                    &["container-title", "publicationTitle", "journalAbbreviation"],
+                ),
+                doi: first_text(item, &["DOI", "doi"]),
+                full_authors: full_author_names(item),
+                abstract_text: first_text(item, &["abstract", "abstractNote"]),
+                attachments: pdf_attachments(item),
             });
         }
         if references.is_empty() {
@@ -124,14 +187,35 @@ impl Bibliography {
     pub fn search(&self, query: &str, max_results: usize) -> Vec<usize> {
         let query = query.to_lowercase();
         let words: Vec<&str> = query.split_whitespace().collect();
-        self.references
+        if words.is_empty() {
+            return (0..self.references.len().min(max_results)).collect();
+        }
+        if max_results == 0 {
+            return Vec::new();
+        }
+        let mut ranked: Vec<_> = self
+            .references
             .iter()
             .enumerate()
-            .filter(|(_, item)| item.matches(&words))
+            .filter_map(|(index, item)| Some((item.search_score(&words)?, index)))
+            .collect();
+        ranked.sort_unstable();
+        ranked
+            .into_iter()
             .take(max_results)
-            .map(|(i, _)| i)
+            .map(|(_, index)| index)
             .collect()
     }
+}
+
+fn first_text(item: &Value, fields: &[&str]) -> String {
+    fields
+        .iter()
+        .filter_map(|field| item.get(*field).and_then(Value::as_str))
+        .map(str::trim)
+        .find(|text| !text.is_empty())
+        .unwrap_or_default()
+        .to_owned()
 }
 
 fn invalid(message: &str) -> io::Error {
@@ -146,6 +230,83 @@ fn valid_key(key: &str) -> bool {
                 && !c.is_control()
                 && !matches!(c, '[' | ']' | '@' | ',' | ';' | '{' | '}')
         })
+}
+
+fn pdf_attachments(item: &Value) -> Vec<PathBuf> {
+    fn add_path(paths: &mut Vec<PathBuf>, raw: &str) {
+        let raw = raw.trim();
+        if raw.is_empty()
+            || raw.contains("://")
+            || raw.starts_with("storage:")
+            || raw.contains('\0')
+        {
+            return;
+        }
+        let path = PathBuf::from(raw);
+        if path
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("pdf"))
+            && !paths.contains(&path)
+        {
+            paths.push(path);
+        }
+    }
+    fn add_file(paths: &mut Vec<PathBuf>, file: &str) {
+        for raw in file.split(';') {
+            add_path(paths, raw);
+        }
+    }
+    let mut paths = Vec::new();
+    if let Some(attachments) = item.get("attachments").and_then(Value::as_array) {
+        for attachment in attachments {
+            if let Some(path) = attachment.as_str() {
+                add_path(&mut paths, path);
+            } else {
+                add_path(&mut paths, &first_text(attachment, &["path", "localPath"]));
+            }
+        }
+    }
+    // Some CSL JSON exports add a custom file field containing plain paths.
+    match item.get("file") {
+        Some(Value::String(file)) => add_file(&mut paths, file),
+        Some(Value::Array(files)) => {
+            for file in files.iter().filter_map(Value::as_str) {
+                add_file(&mut paths, file);
+            }
+        }
+        _ => {}
+    }
+    paths
+}
+
+fn full_author_names(item: &Value) -> String {
+    let authors = item
+        .get("author")
+        .and_then(Value::as_array)
+        .or_else(|| item.get("creators").and_then(Value::as_array));
+    let Some(authors) = authors else {
+        return String::new();
+    };
+    authors
+        .iter()
+        .filter(|creator| {
+            creator
+                .get("creatorType")
+                .and_then(Value::as_str)
+                .is_none_or(|role| role == "author")
+        })
+        .map(|creator| {
+            let literal = first_text(creator, &["literal", "name"]);
+            if !literal.is_empty() {
+                return literal;
+            }
+            let given = first_text(creator, &["given", "firstName"]);
+            let family = first_text(creator, &["family", "lastName"]);
+            format!("{given} {family}").trim().to_owned()
+        })
+        .filter(|name| !name.is_empty())
+        .collect::<Vec<_>>()
+        .join("; ")
 }
 
 fn contributor_names(item: &Value) -> Vec<String> {
@@ -249,6 +410,71 @@ mod tests {
         let bibliography = Bibliography::parse(raw).unwrap();
         assert_eq!(bibliography.references[0].authors, "Forness");
         assert_eq!(bibliography.references[0].year, "2018");
+    }
+
+    #[test]
+    fn fuzzy_search_ranks_exact_matches_before_subsequences() {
+        let bibliography = Bibliography::parse(
+            r#"[{"id":"Alpha","title":"Size exclusion chromatography"},
+                {"id":"Zulu","title":"SEC"}]"#,
+        )
+        .unwrap();
+        assert_eq!(bibliography.search("sec", 10), vec![1, 0]);
+        assert_eq!(bibliography.search("sec", 1), vec![1]);
+        assert_eq!(bibliography.search("szex", 10), vec![0]);
+    }
+
+    #[test]
+    fn searches_journal_and_doi_in_both_export_formats() {
+        let csl = Bibliography::parse(
+            r#"[{"id":"A","container-title":"Nature Methods","DOI":"10.1234/test"}]"#,
+        )
+        .unwrap();
+        assert_eq!(csl.search("nature 10.1234/test", 10), vec![0]);
+        let bbt = Bibliography::parse(
+            r#"{"items":[{"citationKey":"B","publicationTitle":"Science","DOI":"10.1234/other"}]}"#,
+        )
+        .unwrap();
+        assert_eq!(bbt.search("science 10.1234/other", 10), vec![0]);
+    }
+
+    #[test]
+    fn preview_metadata_and_pdf_paths_from_both_formats() {
+        let csl = Bibliography::parse(r#"[{"id":"A","title":"Study","author":[{"given":"Ada","family":"Lovelace"}],"abstract":"Results","DOI":"10.1/a"}]"#).unwrap();
+        let reference = &csl.references[0];
+        assert!(reference.preview().contains("Ada Lovelace"));
+        assert!(reference.preview().contains("Results"));
+        assert!(
+            reference
+                .pdf_paths(Path::new("/bib/references.json"))
+                .is_empty()
+        );
+        let bbt = Bibliography::parse(r#"{"items":[{"citationKey":"B","abstractNote":"Findings","attachments":[{"path":"papers/a.PDF"},{"path":"/tmp/b.pdf"},{"path":"https://example.org/x.pdf"},{"path":"storage:paper.pdf"},{"path":"papers/a.PDF"},{"path":"notes.txt"}]}]}"#).unwrap();
+        let reference = &bbt.references[0];
+        assert!(reference.preview().contains("Findings"));
+        assert_eq!(
+            reference.pdf_paths(Path::new("/bib/references.json")),
+            vec![
+                PathBuf::from("/bib/papers/a.PDF"),
+                PathBuf::from("/tmp/b.pdf")
+            ]
+        );
+    }
+
+    #[test]
+    fn csl_file_field_accepts_plain_pdf_paths() {
+        let bibliography = Bibliography::parse(r#"[{"id":"A","file":"papers/one.pdf; /tmp/two.PDF; https://example.org/x.pdf"},{"id":"B","file":["papers/three.pdf","notes.txt"]}]"#).unwrap();
+        assert_eq!(
+            bibliography.references[0].pdf_paths(Path::new("/bib/refs.json")),
+            vec![
+                PathBuf::from("/bib/papers/one.pdf"),
+                PathBuf::from("/tmp/two.PDF")
+            ]
+        );
+        assert_eq!(
+            bibliography.references[1].pdf_paths(Path::new("/bib/refs.json")),
+            vec![PathBuf::from("/bib/papers/three.pdf")]
+        );
     }
 
     #[test]

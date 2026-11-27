@@ -21,6 +21,12 @@ impl App {
             SearchText | SearchTags | ToggleFiles | TogglePreview | ToggleOutline
             | NarrowBrowser | WidenBrowser | NarrowOutline | WidenOutline | CycleTheme => true,
             SearchHeadings => note.is_some_and(|note| markdown::is_markdown(&note.path)),
+            ExportDocument => note.map_or_else(
+                || selected.is_none_or(|entry| entry.is_dir || markdown::is_markdown(&entry.path)),
+                |note| markdown::is_markdown(&note.path),
+            ),
+            ToggleMetadata => note.is_some_and(|note| markdown::is_markdown(&note.path)),
+            FocusMetadata => false, // legacy alias; avoid a duplicate palette entry
             FocusOutline => {
                 note.is_some_and(|note| markdown::is_markdown(&note.path))
                     && !self.writing.zen.enabled
@@ -32,7 +38,9 @@ impl App {
                 self.editor.len() > 0
             }
             ToggleTabs | ToggleHiddenFolders => true,
-            CitationPicker => editing && self.bibliography_path.is_some(),
+            CitationPicker | CitationPreview | CitationCheck => {
+                editing && self.bibliography_path.is_some()
+            }
             SnippetPicker => note.is_some_and(|note| note.state.lines.to_string().is_empty()),
             OutgoingLinks | Backlinks => editing || selected.is_some_and(|entry| !entry.is_dir),
             PreviousNote => !self.history.is_empty(),
