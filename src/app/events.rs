@@ -668,6 +668,100 @@ mod tests {
     }
 
     #[test]
+    fn code_block_command_and_hotkey_place_cursor_inside_live_note() {
+        let (dir, mut app) = fixture();
+        let path = dir.path().join("Code.md");
+        fs::write(&path, "First\nNext").unwrap();
+        app.editor.open(&path).unwrap();
+        type_text(&mut app, ":code r python");
+        press(&mut app, KeyCode::Enter);
+        assert_eq!(
+            app.editor.as_ref().unwrap().state.lines.to_string(),
+            "First\nNext"
+        );
+        type_text(&mut app, ":code r");
+        press(&mut app, KeyCode::Enter);
+        let note = app.editor.as_ref().unwrap();
+        assert_eq!(note.state.lines.to_string(), "First\n\n```r\n\n```\n\nNext");
+        assert_eq!(note.state.mode, EditorMode::Insert);
+        assert_eq!(note.state.cursor, edtui::Index2::new(3, 0));
+        assert!(note.is_dirty());
+        type_text(&mut app, "plot(x)");
+        assert!(
+            app.editor
+                .as_ref()
+                .unwrap()
+                .state
+                .lines
+                .to_string()
+                .contains("```r\nplot(x)\n```")
+        );
+        assert_eq!(fs::read_to_string(&path).unwrap(), "First\nNext");
+        let before = app.editor.as_ref().unwrap().state.lines.to_string();
+        app.route_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::ALT))
+            .unwrap();
+        assert_eq!(app.command.as_deref(), Some("code "));
+        type_text(&mut app, "python");
+        press(&mut app, KeyCode::Esc);
+        assert_eq!(app.editor.as_ref().unwrap().state.lines.to_string(), before);
+        assert_eq!(app.editor.as_ref().unwrap().state.mode, EditorMode::Insert);
+        // Clearing the prefilled input cannot execute unrelated Ex commands in Insert mode.
+        app.route_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::ALT))
+            .unwrap();
+        app.route_key(KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL))
+            .unwrap();
+        type_text(&mut app, "w");
+        press(&mut app, KeyCode::Enter);
+        assert_eq!(fs::read_to_string(&path).unwrap(), "First\nNext");
+        assert_eq!(app.editor.as_ref().unwrap().state.mode, EditorMode::Insert);
+        // Hotkey works in Insert mode, too, without requiring a colon first.
+        let empty = dir.path().join("EmptyCode.md");
+        fs::write(&empty, "").unwrap();
+        app.editor.open(&empty).unwrap();
+        press(&mut app, KeyCode::Char('i'));
+        app.route_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::ALT))
+            .unwrap();
+        type_text(&mut app, "python");
+        press(&mut app, KeyCode::Enter);
+        let note = app.editor.as_ref().unwrap();
+        assert_eq!(note.state.lines.to_string(), "```python\n\n```");
+        assert_eq!(note.state.mode, EditorMode::Insert);
+        assert_eq!(note.state.cursor, edtui::Index2::new(1, 0));
+    }
+
+    #[test]
+    fn parameterized_insert_commands_edit_live_buffer_without_saving() {
+        let (dir, mut app) = fixture();
+        let path = dir.path().join("Chemistry.md");
+        fs::write(&path, "").unwrap();
+        app.editor.open(&path).unwrap();
+        type_text(&mut app, ":chem CO2 + C -> 2 CO");
+        press(&mut app, KeyCode::Enter);
+        let note = app.editor.as_ref().unwrap();
+        assert_eq!(note.state.lines.to_string(), r"$\ce{CO2 + C -> 2 CO}$");
+        assert_eq!(note.state.mode, EditorMode::Normal);
+        assert!(note.is_dirty());
+        assert_eq!(fs::read_to_string(&path).unwrap(), "");
+        type_text(&mut app, ":lorem 0");
+        press(&mut app, KeyCode::Enter);
+        assert_eq!(
+            app.editor.as_ref().unwrap().state.lines.to_string(),
+            r"$\ce{CO2 + C -> 2 CO}$"
+        );
+        type_text(&mut app, ":lorem 3");
+        press(&mut app, KeyCode::Enter);
+        assert!(
+            app.editor
+                .as_ref()
+                .unwrap()
+                .state
+                .lines
+                .to_string()
+                .contains("Lorem ipsum dolor.")
+        );
+    }
+
+    #[test]
     fn markdown_reference_dialogs_insert_cancel_and_preserve_modes() {
         let (dir, mut app) = fixture();
         let path = dir.path().join("Empty.md");

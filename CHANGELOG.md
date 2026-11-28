@@ -1,10 +1,24 @@
 # Changelog
 
-## Unreleased — 0.8.2
+## 0.8.2 — Command & Editing Enhancements
 
-- Floating theme-aware Ex command input with compact fallback and Ctrl+U clearing.
-- Markdown hyperlink and image-reference insertion forms, hotkeys and palette entries.
-- No new dependencies or configuration changes.
+### Added
+
+- Compact, theme-aware floating Ex command window with existing save and quit safeguards.
+- Markdown hyperlink insertion via `Ctrl+K` and `:link`.
+- Markdown image insertion via `Alt+I` and `:image`.
+- Chemical formulas and reactions via `:chem` and `:chemblock`.
+- Chemistry export support using mhchem and Typst Whalogen.
+- Lorem ipsum word and paragraph generation via `:lorem`.
+- Fenced Markdown code block insertion via `Alt+C` and `:code`, with automatic cursor positioning in Insert mode.
+- Regression tests and updated documentation.
+
+### Compatibility
+
+- No new Rust dependencies or configuration changes.
+- Chemical notation remains portable Markdown.
+- Code blocks use standard Markdown syntax.
+- See the [v0.8.2 release checklist](docs/RELEASE-CHECKLIST-0.8.2.md) for validation requirements.
 
 ## 0.8.1 — UI and Theme Refinements
 

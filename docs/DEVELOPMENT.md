@@ -25,4 +25,4 @@ Keep comments focused on invariants, edge cases and design decisions. Historical
 
 For the Intelligent Navigation integration and terminal smoke tests, see [Navigation regression checklist](NAVIGATION-TESTS.md). Use it for navigation regressions in subsequent releases as well. See also the [v0.7.13](RELEASE-CHECKLIST-0.7.13.md) and [v0.7.14](RELEASE-CHECKLIST-0.7.14.md) checklists for historical and reusable test procedures. Multi-computer statistics exchange remains manually unverified on separate physical computers.
 
-For UI and Theme Refinements, run the [v0.8.1 release checklist](RELEASE-CHECKLIST-0.8.1.md). The [v0.8.0 Research Toolkit checklist](RELEASE-CHECKLIST-0.8.0.md) remains a historical reference.
+For Command & Editing Enhancements, run the [v0.8.2 release checklist](RELEASE-CHECKLIST-0.8.2.md). The [v0.8.1](RELEASE-CHECKLIST-0.8.1.md) and [v0.8.0](RELEASE-CHECKLIST-0.8.0.md) checklists remain historical references.

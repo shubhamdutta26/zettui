@@ -69,6 +69,20 @@ impl App {
 
     /// Minimal Vim-style application commands (separate from edtui's text motions).
     fn run_command(&mut self, command: String) {
+        // Alt+C can open Ex input from Insert mode, but it must not turn
+        // into an arbitrary save, quit or other command from that mode.
+        if self
+            .editor
+            .as_ref()
+            .is_some_and(|note| note.state.mode == EditorMode::Insert)
+            && command.split_whitespace().next() != Some("code")
+        {
+            self.message = "Only :code is available from Insert mode.".into();
+            return;
+        }
+        if self.run_insertion_command(&command) {
+            return;
+        }
         if let Some(action) = Command::from_ex(&command) {
             self.execute_editor_command(action);
         } else if self.writing.command(command.trim()) {

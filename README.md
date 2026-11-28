@@ -2,22 +2,22 @@
 
 A local-first, Vim-style terminal notes manager written in Rust. Browse and edit Markdown and other UTF-8 text files, connect notes with wiki links, insert Zotero citations, use reusable snippets, and search across your notes. Your files stay on disk.
 
-## Command and editing enhancements (v0.8.2 development)
+## Command and editing enhancements (v0.8.2)
 
 Press `:` in Normal mode for a floating Ex command window; F8 remains the
 searchable command palette. In Markdown notes, `Ctrl+K` / `:link` inserts a
 link and `Alt+I` / `:image` inserts an image reference using a two-field form.
+Use `:chem H2O` / `:chemblock CO2 + C -> 2 CO` for mhchem notation with
+Typst or LaTeX export, and `:lorem 100` / `:lorem 3p` for placeholder text.
 See the [user guide](docs/USER-GUIDE.md) and [keyboard shortcuts](docs/KEYBINDINGS.md).
 
 ## Installation
 
-Zettui **v0.8.1 — UI and Theme Refinements** aligns Outline heading colors with
-Markdown syntax highlighting, uses the active theme accent in the writing
-calendar and yearly heatmap, and enables `Ctrl+G` theme cycling inside Writing
-Analytics. The v0.8.0 Research Toolkit includes richer Zotero citation search,
-reference previews, local PDF attachments, a standalone YAML metadata editor,
-and optional Pandoc-powered document export. See the [changelog](CHANGELOG.md)
-and [release checklist](docs/RELEASE-CHECKLIST-0.8.1.md). COSMIC and physical
+Zettui **v0.8.2 — Command & Editing Enhancements** adds a compact floating
+Ex command window, Markdown link and image insertion, chemical notation,
+Lorem ipsum generation and fenced code blocks. It retains the v0.8.1 theme
+refinements and v0.8.0 Research Toolkit. See the [changelog](CHANGELOG.md)
+and [release checklist](docs/RELEASE-CHECKLIST-0.8.2.md). COSMIC and physical
 multi-computer statistics checks remain unverified unless retested.
 
 Download Linux releases from [GitHub Releases](https://github.com/shubhamdutta26/zettui/releases) (portable x86-64 archive, `.deb` for Debian/Ubuntu, `.rpm` for Fedora, or `PKGBUILD` for Arch/Omarchy), or build from source with a compatible Rust toolchain:

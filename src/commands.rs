@@ -42,6 +42,7 @@ pub(crate) enum Command {
     CitationPicker,
     InsertLink,
     InsertImage,
+    InsertCodeBlock,
     CitationPreview,
     CitationCheck,
     ExportDocument,
@@ -129,6 +130,7 @@ impl Command {
             }
             KeyScope::Editor if key.modifiers == KeyModifiers::ALT => match key.code {
                 Char('i') => Some(InsertImage),
+                Char('c') => Some(InsertCodeBlock),
                 _ => None,
             },
             KeyScope::Editor if ctrl => match key.code {
@@ -422,6 +424,12 @@ pub(crate) const CATALOG: &[CommandInfo] = &[
         title: "Insert Markdown image",
         shortcut: "Alt+I / :image",
         aliases: "figure picture image path",
+    },
+    CommandInfo {
+        command: Command::InsertCodeBlock,
+        title: "Insert Markdown code block",
+        shortcut: "Alt+C / :code LANG",
+        aliases: "fenced code chunk snippet language programming",
     },
     CommandInfo {
         command: Command::CitationPicker,

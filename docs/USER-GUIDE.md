@@ -108,3 +108,26 @@ for counting rules, storage, source labels, backups, transfer instructions and l
 ## Research toolkit
 
 Use `Ctrl+P` for Zotero citations, `Ctrl+V` in the picker for reference previews, `Space m` for the metadata editor, and `Space x` or `:export` in Normal mode for document export. The F8 palette also supports export from the file browser. See [Research Toolkit](RESEARCH-TOOLKIT.md) and [Document export](DOCUMENT-EXPORT.md).
+
+
+## Chemical equations and placeholder text (v0.8.2)
+
+In Normal mode, type `:chem H2O` or `:chem CO2 + C -> 2 CO` to insert
+inline mhchem notation (`$\ce{...}$`). Use `:chemblock N2 + 3 H2 <=> 2 NH3`
+for a displayed equation. You can also type the same notation directly. The
+editor stores source Markdown, not a rendered chemistry preview; the commands
+check braces but do not validate chemical syntax or balance reactions.
+
+Pandoc export loads LaTeX's `mhchem` package for LaTeX output and TeX-based PDF
+engines, and converts standalone chemical math to Typst's Whalogen 0.3.0
+package for Typst PDF output. Typst may need internet access to obtain the
+package on first use; TeX-based PDF engines need `mhchem` installed. Whalogen
+is mhchem-inspired, not a complete compatibility implementation. In Typst,
+keep each `\ce{...}` in its own math expression. Chemistry math in other
+export formats reports an explicit unsupported-format error. Ordinary math and
+code examples are unchanged.
+
+Use `:lorem` for 30 words, `:lorem 100` for exactly 100 words, or `:lorem 3p`
+for three repeated placeholder paragraphs. The commands insert editable text at
+the cursor without saving automatically. Word counts are limited to 1000 and
+paragraph counts to 20. No generator dependencies or configuration are needed.

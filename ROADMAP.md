@@ -30,6 +30,7 @@ Versions identify development milestones; not all have a separate published rele
 | 0.7.14 | Writing Analytics & Goals: daily activity tracking, goals, dashboard, monthly calendar, yearly heatmap, manual multi-device snapshot exchange and Zettlr statistics migration (physical multi-computer validation pending) |
 | 0.7.15 | Codebase Maintenance and Stability: allocation cleanup, module refactoring, keyboard routing, CLI/configuration validation, documentation and release checks |
 | 0.8.0 | Research Toolkit: Zotero search and PDF previews, metadata editor, Pandoc export and export UI refinement |
+| 0.8.1 | UI and Theme Refinements: matching Outline heading colors, accent-based activity heatmaps and theme cycling in Writing Analytics |
 
 Historical release validation is tracked in the [v0.7.15](docs/RELEASE-CHECKLIST-0.7.15.md) and [v0.8.0](docs/RELEASE-CHECKLIST-0.8.0.md) checklists. COSMIC and physical multi-computer statistics exchange remain manually unverified.
 
@@ -37,15 +38,14 @@ Historical release validation is tracked in the [v0.7.15](docs/RELEASE-CHECKLIST
 
 | Version | Features |
 | --- | --- |
-| 0.8.1 | UI and Theme Refinements: matching Outline heading colors, accent-based activity heatmaps and theme cycling in Writing Analytics |
+| 0.8.2 | Command & Editing Enhancements: floating Ex window, Markdown links/images, chemistry notation and export, Lorem ipsum, fenced code blocks |
 
-See [release checklist](docs/RELEASE-CHECKLIST-0.8.1.md) before tagging.
+See [release checklist](docs/RELEASE-CHECKLIST-0.8.2.md) before tagging.
 
 ## Planned
 
 | Milestone | Possible work |
 | --- | --- |
-| 0.8.2 | Floating Ex command window and Markdown link/image insertion (in development) |
 | 0.8.x | Search highlighting, ranked results, faster indexing, optional inline hashtag index |
 | 0.9.x | Link-aware rename/move and broken-link reports |
 | Later | In-editor snippet tab stops, ARM64 packages, configurable ZKN IDs |

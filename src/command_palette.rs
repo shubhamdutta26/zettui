@@ -81,6 +81,7 @@ mod tests {
             ("zotero", Command::CitationPicker),
             ("insert markdown link", Command::InsertLink),
             ("insert markdown image", Command::InsertImage),
+            ("insert markdown code block", Command::InsertCodeBlock),
             ("delete", Command::Trash),
         ] {
             palette.query = query.into();

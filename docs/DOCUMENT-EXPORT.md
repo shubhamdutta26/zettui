@@ -71,3 +71,15 @@ LaTeX. Zettui does not execute shell commands from filenames or dialog inputs.
 
 PDF is the default unless an existing configuration explicitly sets another format.
 An omitted engine or `pdf_engine = "auto"` checks PATH in this order: Typst, XeLaTeX, LuaLaTeX, pdfLaTeX, Tectonic, wkhtmltopdf. The dialog lists installed known engines and any explicitly configured engine. Explicit missing engines fail preflight; Auto can be selected instead. This detects executables, not engine packages or Pandoc-version compatibility. Successful conversions with diagnostics are reported separately from failures; diagnostic capture is bounded.
+
+
+## Chemical equations (v0.8.2)
+
+Use inline `$\ce{H2O}$` or display `$$` math containing `\ce{...}`. The
+`:chem` and `:chemblock` commands insert this source syntax. For LaTeX source
+and TeX-based PDF export, the filter loads `mhchem`; install that package for
+PDF compilation. Typst export uses Whalogen 0.3.0, which may need to be downloaded
+on first use. Keep each `\ce{...}` in its own math expression for Typst.
+Whalogen does not implement all mhchem syntax. Other output formats report an
+unsupported chemistry error when chemical math is present. The filter leaves
+ordinary math and literal code examples alone. Notes are never rewritten.

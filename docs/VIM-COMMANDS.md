@@ -12,12 +12,16 @@ and press Enter in the floating window. Esc cancels, Backspace edits and Ctrl+U 
 case-sensitive, with surrounding whitespace trimmed. This reference covers
 the fixed application command spellings (including aliases). These are the fixed
 commands in `Command::from_ex` plus the parameterized width command in
-`Writing::command`. There is no arbitrary shell execution through Ex.
+`Writing::command`, plus the parameterized insertion commands below. There is no arbitrary shell execution through Ex.
 
 | Command | Action |
 | --- | --- |
 | `:w` | Save active note (refuses unsafe overwrite). |
 | `:link` / `:image` | Insert a Markdown hyperlink / image reference in the current note. |
+| `:chem FORMULA` | Insert inline mhchem notation in a Markdown note. |
+| `:chemblock FORMULA` | Insert a displayed chemical equation on separate lines. |
+| `:lorem [N]` | Insert N placeholder words (default 30; maximum 1000). |
+| `:lorem Np` | Insert N placeholder paragraphs (1–20). |
 | `:cite` | Open Zotero citation picker. |
 | `:cite-preview` | Preview the bracketed citation key under the cursor. |
 | `:cite-check` | Inspect unresolved bracketed citations in the active note. |

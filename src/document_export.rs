@@ -322,7 +322,13 @@ fn convert(job: &Job, source: &Path, output: &Path) -> io::Result<String> {
     }
     input.seek(SeekFrom::Start(0))?;
     let mut errors = tempfile::tempfile()?;
+    // Embed the filter in the binary so packages need no additional runtime files.
+    let mut chemistry = tempfile::Builder::new().suffix(".lua").tempfile()?;
+    chemistry.write_all(include_bytes!("chemistry.lua"))?;
+    chemistry.flush()?;
     let mut child = pandoc_command(job, source, output)?
+        .arg("--lua-filter")
+        .arg(chemistry.path())
         .stdin(Stdio::from(input))
         .stdout(Stdio::null())
         .stderr(Stdio::from(errors.try_clone()?))
@@ -538,6 +544,26 @@ mod tests {
         assert!(args.contains(&job.bibliography.unwrap().to_string_lossy().into_owned()));
         assert!(args.contains(&job.csl.unwrap().to_string_lossy().into_owned()));
         assert_eq!(args.last().unwrap(), "-");
+    }
+
+    #[test]
+    fn export_latex_chemistry_from_live_buffer_when_pandoc_is_available() {
+        if !executable_exists("pandoc") {
+            return;
+        }
+        let (_temp, mut job) = fixture(false);
+        job.format = Format::Latex;
+        job.destination.set_extension("tex");
+        job.snapshots
+            .insert(job.source.clone(), r"Water: $\ce{H2O}$.".into());
+        let destination = job.destination.clone();
+        let source = job.source.clone();
+        let (tx, _rx) = std::sync::mpsc::channel();
+        run(job, &tx).unwrap();
+        let tex = fs::read_to_string(destination).unwrap();
+        assert!(tex.contains(r"\usepackage{mhchem}"));
+        assert!(tex.contains(r"\ce{H2O}"));
+        assert_eq!(fs::read_to_string(source).unwrap(), "Disk content");
     }
 
     #[test]
