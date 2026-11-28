@@ -146,6 +146,7 @@ impl App {
         frame.render_widget(Block::default().style(theme.base_style()), frame.area());
         let zen = self.editor.is_some() && self.writing.zen.enabled;
         let interactive = self.command.is_some()
+            || self.markdown_insert.is_some()
             || self.note_search.input.is_some()
             || self.writing.leader
             || self.buffer_prefix.is_some();
@@ -375,6 +376,8 @@ impl App {
                         || self.metadata.is_some()
                         || self.export_dialog.is_some()
                         || self.heading_search.is_some()
+                        || self.command.is_some()
+                        || self.markdown_insert.is_some()
                         || self.command_palette.is_some()
                         || self.buffer_picker.is_some()
                     {
@@ -443,6 +446,8 @@ impl App {
                 "SEARCH".to_owned()
             } else if self.command.is_some() {
                 "COMMAND".to_owned()
+            } else if self.markdown_insert.is_some() {
+                "DIALOG".to_owned()
             } else {
                 note.state.mode.name().to_uppercase()
             };
@@ -464,12 +469,12 @@ impl App {
                     self.note_search.active,
                     self.note_search.count
                 )
-            } else if let Some(command) = &self.command {
-                format!(":{command}▏   Enter run | Esc cancel")
+            } else if self.command.is_some() {
+                "Enter run | Esc cancel".to_owned()
             } else if mode == "NORMAL" {
-                "i Insert | :w Save | F5 Buffers | F8 Commands | / Find".to_owned()
+                "i Insert | : Commands | F5 Buffers | F8 Palette | / Find".to_owned()
             } else if mode == "INSERT" {
-                "Esc Normal | Ctrl+S Save | Ctrl+P Cite | Ctrl+E Snippet | Ctrl+F Search".to_owned()
+                "Esc Normal | Ctrl+S Save | Ctrl+K Link | Alt+I Image | Ctrl+P Cite".to_owned()
             } else {
                 "Esc Normal | Ctrl+S Save | Ctrl+F Search | Alt+T Tags".to_owned()
             };
@@ -780,6 +785,12 @@ impl App {
         }
         if self.export_dialog.is_some() {
             self.draw_export(frame);
+        }
+        if self.command.is_some() {
+            self.draw_ex_popup(frame);
+        }
+        if self.markdown_insert.is_some() {
+            self.draw_markdown_insert(frame);
         }
     }
 

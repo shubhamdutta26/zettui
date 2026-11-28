@@ -96,6 +96,8 @@ impl App {
             }
             Command::ParentFolder => self.go_back()?,
             Command::CitationPicker => self.open_citation_picker(),
+            Command::InsertLink => self.open_markdown_insert(false),
+            Command::InsertImage => self.open_markdown_insert(true),
             Command::CitationPreview => self.preview_citation_at_cursor(),
             Command::CitationCheck => self.check_citations(),
             Command::ExportDocument => self.open_export(),

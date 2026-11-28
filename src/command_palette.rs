@@ -79,6 +79,8 @@ mod tests {
             ("SAVE NOTE", Command::Save),
             ("f7", Command::SearchHeadings),
             ("zotero", Command::CitationPicker),
+            ("insert markdown link", Command::InsertLink),
+            ("insert markdown image", Command::InsertImage),
             ("delete", Command::Trash),
         ] {
             palette.query = query.into();

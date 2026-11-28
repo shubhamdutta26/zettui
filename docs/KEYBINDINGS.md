@@ -3,7 +3,7 @@
 ## Keyboard shortcuts
 
 Shortcuts are context-sensitive. Active dialogs, pickers, in-note search input and
-the Ex command bar take precedence over global shortcuts. Editor text motions
+the floating Ex command window take precedence over global shortcuts. Editor text motions
 not intercepted by Zettui are delegated to the pinned `edtui` editing engine.
 See [Vim-style commands](VIM-COMMANDS.md) for the Ex reference, inherited editor keys and known conflicts. Browser file actions require plain keys (Shift is allowed for uppercase keys); Ctrl+G and Ctrl+T remain browser shortcuts. Global shortcuts are resolved before browser actions.
 
@@ -23,7 +23,10 @@ See [Vim-style commands](VIM-COMMANDS.md) for the Ex reference, inherited editor
 | Editor | `h` / `j` / `k` / `l`, `w` / `b`, `gg` / `G` | Vim cursor navigation |
 | Editor | `u`, `Ctrl+R`, `v` | Undo, redo, Visual mode |
 | Editor / Outline | `Ctrl+S` | Save active note |
+| Editor (Normal) | `:` | Open floating Ex command window |
 | Editor (Normal) | `:w`, `:wq`, `:q`, `:q!` | Save; save and close; close; discard and close |
+| Editor (Normal / Insert, Markdown) | `Ctrl+K` / `Alt+I` | Insert Markdown link / image reference |
+| Editor (Normal, Markdown) | `:link` / `:image` | Open link / image form |
 | Editor (Insert, Markdown) | `[[` | Search and insert a wiki link to an existing note |
 | Editor | `Ctrl+O`, `Ctrl+B`, `Ctrl+T` | Outgoing links, backlinks, return to previously linked note |
 | Editor | `Ctrl+P`, `Ctrl+E` | Zotero citation picker; snippet picker (empty note only) |
@@ -61,7 +64,8 @@ See [Vim-style commands](VIM-COMMANDS.md) for the Ex reference, inherited editor
 | Citation audit | `↑` / `↓`, `j` / `k`, `Enter`, `Esc` | Select unresolved occurrence, jump, close |
 | Buffer picker | Type, `Backspace`, `↑` / `↓`, `Ctrl+P` / `Ctrl+N`, `Enter`, `Esc` / `F5`, `Ctrl+U` | Filter, edit query, select, activate, cancel, clear query |
 | In-note search input | Type, `Backspace`, `Ctrl+U`, `Enter`, `Esc` | Edit query, clear, confirm or cancel |
-| Ex command bar | Type, `Backspace`, `Enter`, `Esc` | Edit command, execute or cancel |
+| Floating Ex command window | Type, `Backspace`, `Ctrl+U`, `Enter`, `Esc` | Edit, clear, execute or cancel |
+| Markdown link / image form | Type, `Backspace`, `Ctrl+U`, `Tab` / `Shift+Tab`, `Enter`, `Esc` | Edit/clear field, switch fields, next/insert, cancel |
 | Link dialog | `j` / `k`, `↓` / `↑`, `Enter`, `Esc` / `q` | Select, follow or cancel |
 | File-operation prompt | Type, `Backspace`, `Ctrl+U`, `Enter`, `Esc` | Edit path/name, clear, confirm or cancel |
 | Trash confirmation | `y`, `n` / `Esc` / `Enter` | Confirm Trash or cancel |
@@ -80,7 +84,7 @@ F7, `Space h` or `:headings` opens a searchable list of the current Markdown not
 
 ## Global command palette
 
-F8 opens a searchable list of available application commands from the browser, Normal-mode editor or focused Outline. `Space c` and `:commands` also open it from the Normal-mode editor. Ctrl+P remains the Zotero shortcut in the editor. There is no Ctrl+Shift+P palette binding: terminals may encode it identically to Ctrl+P. The palette cannot interrupt Insert/Visual mode or an active dialog, search or `:` command bar. Search command titles, shortcut hints or aliases (e.g. `delete`, `zotero`, `f7`, `srchhdngs`). Empty queries retain catalog order; ranked matches use the same fuzzy matcher as heading search. Use arrows or Ctrl+N/Ctrl+P, Home/End, Backspace and Ctrl+U; Enter executes, Esc or F8 cancels. No match means no action. Canceling restores the prior focus; executing returns to the editor if the Outline was focused, except for the Outline focus toggle itself.
+F8 opens a searchable list of available application commands from the browser, Normal-mode editor or focused Outline. `Space c` and `:commands` also open it from the Normal-mode editor. Ctrl+P remains the Zotero shortcut in the editor. There is no Ctrl+Shift+P palette binding: terminals may encode it identically to Ctrl+P. The palette cannot interrupt Insert/Visual mode or an active dialog, search or `:` command window. Search command titles, shortcut hints or aliases (e.g. `delete`, `zotero`, `f7`, `srchhdngs`). Empty queries retain catalog order; ranked matches use the same fuzzy matcher as heading search. Use arrows or Ctrl+N/Ctrl+P, Home/End, Backspace and Ctrl+U; Enter executes, Esc or F8 cancels. No match means no action. Canceling restores the prior focus; executing returns to the editor if the Outline was focused, except for the Outline focus toggle itself.
 
 Only context-appropriate actions are listed: file operations and Quit in browser mode, Save and writing modes in the editor, heading navigation in Markdown notes, citations with a configured bibliography, snippets in empty notes, and link navigation when unsaved edits permit it. File/Trash actions reuse existing prompts; closing and saving still enforce the existing safety checks. Explicit forced discard (`:q!`) is deliberately not offered. The palette does not execute arbitrary shell commands and does not modify the configuration file.
 

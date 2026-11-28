@@ -36,6 +36,24 @@ Only context-appropriate commands are offered. Trash still requires confirmation
 
 Heading navigation recognizes top-level ATX headings (`#` through `######`), not Setext or list/blockquote headings. It ignores YAML frontmatter, fenced and indented code, multiline HTML comments and standalone display math. See [keyboard shortcuts](KEYBINDINGS.md) for all navigation bindings.
 
+## Floating commands and Markdown insertion
+
+In a note, press `:` in Normal mode to open the centered Ex command window.
+Type a command (for example `w`, `q`, `qa`) and press Enter. Esc cancels,
+Backspace edits, and Ctrl+U clears the command. Existing save and quit safety
+checks remain in force. The F8 fuzzy palette is separate. In Insert mode `:`
+is ordinary text. Small terminals use a compact input row instead.
+
+Use `Ctrl+K` for a link or `Alt+I` for an image in a Markdown note, in Normal
+or Insert mode. `:link`, `:image` and F8 also open the forms in Normal mode.
+Enter the display/alt text, then Tab or Enter to move to the URL or path;
+Enter in the second field inserts, Esc cancels without editing. The label can
+be empty; the destination is required. Paths are relative to the note unless
+absolute, and spaces/parentheses are percent-encoded. The reference is inserted
+at the cursor using the editor's undo history and is not saved automatically.
+The original editor mode is retained. Image files are not copied, downloaded or
+rendered by the insertion form; existing wiki-link completion is unchanged.
+
 ## Notes and snippets
 
 - `[[Note Name]]` links, outgoing links, and backlinks work across your notes; duplicate filenames may require folder-qualified links.

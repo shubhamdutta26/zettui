@@ -45,6 +45,7 @@ See [release checklist](docs/RELEASE-CHECKLIST-0.8.1.md) before tagging.
 
 | Milestone | Possible work |
 | --- | --- |
+| 0.8.2 | Floating Ex command window and Markdown link/image insertion (in development) |
 | 0.8.x | Search highlighting, ranked results, faster indexing, optional inline hashtag index |
 | 0.9.x | Link-aware rename/move and broken-link reports |
 | Later | In-editor snippet tab stops, ARM64 packages, configurable ZKN IDs |

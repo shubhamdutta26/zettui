@@ -20,7 +20,9 @@ impl App {
             QuitAll | SaveQuitAll | WritingAnalytics => true,
             SearchText | SearchTags | ToggleFiles | TogglePreview | ToggleOutline
             | NarrowBrowser | WidenBrowser | NarrowOutline | WidenOutline | CycleTheme => true,
-            SearchHeadings => note.is_some_and(|note| markdown::is_markdown(&note.path)),
+            SearchHeadings | InsertLink | InsertImage => {
+                note.is_some_and(|note| markdown::is_markdown(&note.path))
+            }
             ExportDocument => note.map_or_else(
                 || selected.is_none_or(|entry| entry.is_dir || markdown::is_markdown(&entry.path)),
                 |note| markdown::is_markdown(&note.path),

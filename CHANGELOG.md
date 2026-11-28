@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — 0.8.2
+
+- Floating theme-aware Ex command input with compact fallback and Ctrl+U clearing.
+- Markdown hyperlink and image-reference insertion forms, hotkeys and palette entries.
+- No new dependencies or configuration changes.
+
 ## 0.8.1 — UI and Theme Refinements
 
 ### Improved

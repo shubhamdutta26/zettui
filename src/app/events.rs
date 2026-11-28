@@ -93,6 +93,10 @@ impl App {
         if key.kind != KeyEventKind::Press {
             return Ok(false);
         }
+        if self.markdown_insert.is_some() {
+            self.handle_markdown_insert_key(key);
+            return Ok(false);
+        }
         if self.export_dialog.is_some() {
             self.handle_export_key(key);
             return Ok(false);
@@ -664,7 +668,99 @@ mod tests {
     }
 
     #[test]
-    fn ex_bar_owns_global_shortcuts_until_confirmed() {
+    fn markdown_reference_dialogs_insert_cancel_and_preserve_modes() {
+        let (dir, mut app) = fixture();
+        let path = dir.path().join("Empty.md");
+        fs::write(&path, "").unwrap();
+        app.editor.open(&path).unwrap();
+        type_text(&mut app, ":link");
+        press(&mut app, KeyCode::Enter);
+        assert!(app.markdown_insert.is_some());
+        type_text(&mut app, "Paper");
+        press(&mut app, KeyCode::Tab);
+        press(&mut app, KeyCode::Enter);
+        assert!(app.markdown_insert.is_some());
+        assert!(!app.editor.as_ref().unwrap().is_dirty());
+        type_text(&mut app, "https://example.org/paper");
+        press(&mut app, KeyCode::F(8));
+        assert!(app.command_palette.is_none());
+        press(&mut app, KeyCode::Enter);
+        let note = app.editor.as_ref().unwrap();
+        assert_eq!(
+            note.state.lines.to_string(),
+            "[Paper](https://example.org/paper)"
+        );
+        assert_eq!(note.state.mode, EditorMode::Normal);
+        assert!(note.is_dirty());
+        assert_eq!(fs::read_to_string(&path).unwrap(), "");
+        assert!(
+            !app.route_key(KeyEvent::new(KeyCode::Char('A'), KeyModifiers::SHIFT))
+                .unwrap()
+        );
+
+        assert_eq!(app.editor.as_ref().unwrap().state.mode, EditorMode::Insert);
+        let before = app.editor.as_ref().unwrap().state.lines.to_string();
+        app.route_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::CONTROL))
+            .unwrap();
+        assert!(app.markdown_insert.is_some());
+        type_text(&mut app, "Canceled");
+        press(&mut app, KeyCode::Esc);
+        assert_eq!(app.editor.as_ref().unwrap().state.lines.to_string(), before);
+        assert_eq!(app.editor.as_ref().unwrap().state.mode, EditorMode::Insert);
+        app.route_key(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::ALT))
+            .unwrap();
+        assert!(app.markdown_insert.as_ref().unwrap().image);
+        type_text(&mut app, "Figure");
+        press(&mut app, KeyCode::Enter);
+        type_text(&mut app, "assets/figure 1.png");
+        press(&mut app, KeyCode::Enter);
+        let note = app.editor.as_ref().unwrap();
+        assert_eq!(
+            note.state.lines.to_string(),
+            format!("{before}![Figure](assets/figure%201.png)")
+        );
+        assert_eq!(note.state.mode, EditorMode::Insert);
+        assert!(!app.has_active_popup());
+    }
+
+    #[test]
+    fn floating_ex_input_can_be_canceled_cleared_and_drawn() {
+        let (_dir, mut app) = fixture();
+        press(&mut app, KeyCode::Enter);
+        let original = app.editor.as_ref().unwrap().state.lines.to_string();
+        type_text(&mut app, ":q!");
+        app.route_key(KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL))
+            .unwrap();
+        assert_eq!(app.command.as_deref(), Some(""));
+        type_text(&mut app, "w");
+        for (width, height) in [(30, 8), (80, 24)] {
+            let mut terminal =
+                ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height)).unwrap();
+            terminal.draw(|frame| app.draw(frame)).unwrap();
+            let buffer = terminal.backend().buffer();
+            assert!((0..height).any(|y| (0..width - 1).any(|x| {
+                buffer[(x, y)].symbol() == ":" && buffer[(x + 1, y)].symbol() == "w"
+            })));
+        }
+        press(&mut app, KeyCode::Esc);
+        assert!(!app.has_active_popup());
+        assert_eq!(
+            app.editor.as_ref().unwrap().state.lines.to_string(),
+            original
+        );
+        type_text(&mut app, ":image");
+        press(&mut app, KeyCode::Enter);
+        for (width, height) in [(30, 8), (80, 24)] {
+            let mut terminal =
+                ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height)).unwrap();
+            terminal.draw(|frame| app.draw(frame)).unwrap();
+        }
+        press(&mut app, KeyCode::Esc);
+        assert!(!app.has_active_popup());
+    }
+
+    #[test]
+    fn ex_popup_owns_global_shortcuts_until_confirmed() {
         let (_dir, mut app) = fixture();
         press(&mut app, KeyCode::Enter);
         type_text(&mut app, ":headings");
@@ -678,7 +774,7 @@ mod tests {
         );
         assert_eq!(app.command.as_deref(), Some("headings"));
         assert_eq!(app.panels, panels);
-        assert!(!app.has_active_popup());
+        assert!(app.has_active_popup());
         press(&mut app, KeyCode::Enter);
         assert!(app.heading_search.is_some());
         assert!(app.command.is_none());

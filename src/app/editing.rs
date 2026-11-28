@@ -40,6 +40,7 @@ impl App {
         self.wiki_completion = None;
         self.pending_open_bracket = false;
         self.command = None;
+        self.markdown_insert = None;
         self.highlight_cache = crate::markdown::HighlightCache::default();
     }
 
@@ -225,7 +226,7 @@ impl App {
         {
             self.pending_open_bracket = false;
         }
-        // Once a colon command is started, keys go into the command bar.
+        // Once a colon command is started, the floating input owns all keys.
         if let Some(command) = &mut self.command {
             match key.code {
                 KeyCode::Esc => {
@@ -233,15 +234,21 @@ impl App {
                 }
                 KeyCode::Enter => {
                     let cmd = self.command.take().unwrap_or_default();
-                    self.run_command(cmd);
+                    if !cmd.trim().is_empty() {
+                        self.run_command(cmd);
+                    }
                 }
                 KeyCode::Backspace => {
                     command.pop();
                 }
+                KeyCode::Char('u') if key.modifiers == KeyModifiers::CONTROL => {
+                    command.clear();
+                }
                 KeyCode::Char(c)
-                    if !key
-                        .modifiers
-                        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+                    if !c.is_control()
+                        && !key
+                            .modifiers
+                            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
                 {
                     command.push(c)
                 }
@@ -297,6 +304,7 @@ impl App {
                 .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
         {
             self.command = Some(String::new());
+            self.editor_keys = EditorEventHandler::default();
             return;
         }
 

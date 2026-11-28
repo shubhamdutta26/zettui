@@ -40,6 +40,8 @@ pub(crate) enum Command {
     EnterFolder,
     ParentFolder,
     CitationPicker,
+    InsertLink,
+    InsertImage,
     CitationPreview,
     CitationCheck,
     ExportDocument,
@@ -125,11 +127,16 @@ impl Command {
                     _ => None,
                 }
             }
+            KeyScope::Editor if key.modifiers == KeyModifiers::ALT => match key.code {
+                Char('i') => Some(InsertImage),
+                _ => None,
+            },
             KeyScope::Editor if ctrl => match key.code {
                 Char('o') => Some(OutgoingLinks),
                 Char('b') => Some(Backlinks),
                 Char('t') => Some(PreviousNote),
                 Char('p') => Some(CitationPicker),
+                Char('k') if key.modifiers == KeyModifiers::CONTROL => Some(InsertLink),
                 Char('e') => Some(SnippetPicker),
                 Char('g') => Some(CycleTheme),
                 Char('s') => Some(Save),
@@ -164,6 +171,8 @@ impl Command {
         match input.trim() {
             "w" => Some(Save),
             "cite" => Some(CitationPicker),
+            "link" => Some(InsertLink),
+            "image" => Some(InsertImage),
             "cite-preview" => Some(CitationPreview),
             "cite-check" => Some(CitationCheck),
             "export" => Some(ExportDocument),
@@ -403,6 +412,18 @@ pub(crate) const CATALOG: &[CommandInfo] = &[
         aliases: "history back",
     },
     CommandInfo {
+        command: Command::InsertLink,
+        title: "Insert Markdown link",
+        shortcut: "Ctrl+K / :link",
+        aliases: "url hyperlink",
+    },
+    CommandInfo {
+        command: Command::InsertImage,
+        title: "Insert Markdown image",
+        shortcut: "Alt+I / :image",
+        aliases: "figure picture image path",
+    },
+    CommandInfo {
         command: Command::CitationPicker,
         title: "Insert Zotero citation",
         shortcut: "Ctrl+P / :cite",
@@ -627,6 +648,8 @@ mod tests {
         for (input, expected) in [
             ("w", Save),
             ("cite", CitationPicker),
+            ("link", InsertLink),
+            ("image", InsertImage),
             ("cite-preview", CitationPreview),
             ("cite-check", CitationCheck),
             ("hide", Hide),

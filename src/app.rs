@@ -9,6 +9,7 @@ mod dialogs;
 mod editing;
 mod events;
 mod export;
+mod markdown_insert;
 mod metadata;
 mod navigation;
 mod palette;
@@ -410,6 +411,7 @@ struct App {
     quit_requested: bool,
     editor_keys: EditorEventHandler,
     command: Option<String>,
+    markdown_insert: Option<markdown_insert::InsertDialog>,
     note_search: NoteSearch,
     prompt: Option<Prompt>,
     links: Option<LinkDialog>,
@@ -487,6 +489,7 @@ impl App {
             quit_requested: false,
             editor_keys: EditorEventHandler::default(),
             command: None,
+            markdown_insert: None,
             note_search: NoteSearch::default(),
             prompt: None,
             links: None,
@@ -529,7 +532,9 @@ impl App {
 
     /// Check whether a modal window currently has input focus.
     fn has_active_popup(&self) -> bool {
-        self.analytics_dashboard.is_some()
+        self.command.is_some()
+            || self.markdown_insert.is_some()
+            || self.analytics_dashboard.is_some()
             || self.metadata.is_some()
             || self.export_dialog.is_some()
             || self.prompt.is_some()

@@ -22,7 +22,7 @@ fn popup_inner(
     let screen = frame.area();
     let width = screen.width.saturating_sub(2).min(max_width);
     let height = screen.height.saturating_sub(2).min(max_height);
-    if width < 12 || height < 5 {
+    if width < 12 || height < 4 {
         return None;
     }
     let area = Rect::new(
@@ -188,7 +188,123 @@ fn research_lines(text: &str, width: usize) -> Vec<String> {
     lines
 }
 
+/// Keep input visible even if the terminal is too small for popup chrome.
+fn draw_compact_input(frame: &mut Frame, theme: Theme, text: &str) {
+    let screen = frame.area();
+    if screen.height == 0 || screen.width == 0 {
+        return;
+    }
+    let row = Rect::new(screen.x, screen.y + screen.height - 1, screen.width, 1);
+    frame.render_widget(Clear, row);
+    frame.render_widget(
+        Paragraph::new(tail_label(text, usize::from(row.width)))
+            .style(Style::default().fg(theme.foreground).bg(theme.surface)),
+        row,
+    );
+}
+
 impl App {
+    /// Render the Ex input without changing the existing command dispatcher.
+    pub(super) fn draw_ex_popup(&self, frame: &mut Frame) {
+        let Some(command) = &self.command else {
+            return;
+        };
+        let theme = self.theme;
+        let input = format!(":{command}▏");
+        if let Some(inner) = popup_inner(frame, theme, "Command", 64, 4) {
+            let rows =
+                Layout::vertical([Constraint::Length(1), Constraint::Length(1)]).split(inner);
+            frame.render_widget(
+                Paragraph::new(tail_label(&input, usize::from(rows[0].width)))
+                    .style(Style::default().fg(theme.foreground)),
+                rows[0],
+            );
+            popup_help(
+                frame,
+                theme,
+                rows[1],
+                &[("Enter", "run"), ("Esc", "cancel"), ("Ctrl+U", "clear")],
+            );
+        } else {
+            draw_compact_input(frame, theme, &input);
+        }
+    }
+
+    pub(super) fn draw_markdown_insert(&self, frame: &mut Frame) {
+        let Some(dialog) = &self.markdown_insert else {
+            return;
+        };
+        let theme = self.theme;
+        let title = if dialog.image {
+            "Insert Image"
+        } else {
+            "Insert Link"
+        };
+        let label = if dialog.image {
+            "Alt text"
+        } else {
+            "Display text"
+        };
+        let target = if dialog.image {
+            "Image path or URL"
+        } else {
+            "URL or path"
+        };
+        let active_label = if dialog.target_active { target } else { label };
+        let active_value = if dialog.target_active {
+            &dialog.target
+        } else {
+            &dialog.label
+        };
+        if frame.area().height < 10 {
+            draw_compact_input(
+                frame,
+                theme,
+                &format!("{active_label}: {active_value}▏ {}", dialog.error),
+            );
+            return;
+        }
+        let Some(inner) = popup_inner(frame, theme, title, 72, 8) else {
+            draw_compact_input(
+                frame,
+                theme,
+                &format!("{active_label}: {active_value}▏ {}", dialog.error),
+            );
+            return;
+        };
+        let rows = Layout::vertical([Constraint::Length(1); 6]).split(inner);
+        for (i, caption, value, active) in [
+            (0, label, &dialog.label, !dialog.target_active),
+            (2, target, &dialog.target, dialog.target_active),
+        ] {
+            let color = if active { theme.accent } else { theme.muted };
+            frame.render_widget(
+                Paragraph::new(caption).style(Style::default().fg(color)),
+                rows[i],
+            );
+            let text = format!("{}{}", value, if active { "▏" } else { "" });
+            frame.render_widget(
+                Paragraph::new(tail_label(&text, usize::from(rows[i + 1].width)))
+                    .style(Style::default().fg(theme.foreground).bg(theme.background)),
+                rows[i + 1],
+            );
+        }
+        frame.render_widget(
+            Paragraph::new(dialog.error).style(Style::default().fg(theme.warning)),
+            rows[4],
+        );
+        popup_help(
+            frame,
+            theme,
+            rows[5],
+            &[
+                ("Tab", "field"),
+                ("Enter", "next/insert"),
+                ("Esc", "cancel"),
+            ],
+        );
+    }
+
     /// Display links on demand. Only this dialog captures j/k/Enter/Esc.
     pub(super) fn draw_link_dialog(&mut self, frame: &mut Frame) {
         let Some(dialog) = &self.links else {

@@ -8,7 +8,7 @@ The inherited commands below were checked against the [edtui 0.11.7 reference](h
 ## Application Ex commands
 
 Open a note, press Esc to enter Normal mode, type `:` followed by a command,
-and press Enter. Esc cancels and Backspace edits the command. Commands are
+and press Enter in the floating window. Esc cancels, Backspace edits and Ctrl+U clears the command. Commands are
 case-sensitive, with surrounding whitespace trimmed. This reference covers
 the fixed application command spellings (including aliases). These are the fixed
 commands in `Command::from_ex` plus the parameterized width command in
@@ -17,6 +17,7 @@ commands in `Command::from_ex` plus the parameterized width command in
 | Command | Action |
 | --- | --- |
 | `:w` | Save active note (refuses unsafe overwrite). |
+| `:link` / `:image` | Insert a Markdown hyperlink / image reference in the current note. |
 | `:cite` | Open Zotero citation picker. |
 | `:cite-preview` | Preview the bracketed citation key under the cursor. |
 | `:cite-check` | Inspect unresolved bracketed citations in the active note. |
@@ -77,7 +78,7 @@ Insert mode. Escape cancels pending leader and buffer-prefix sequences. The
 application handles search before passing ordinary keys to edtui. Global keys
 and modal inputs have higher routing priority. Editor Ctrl shortcuts also
 intercept keys, including `Ctrl+O`, `Ctrl+B`, `Ctrl+T`, `Ctrl+P`, `Ctrl+E`,
-`Ctrl+G`, and `Ctrl+S`; these need not behave like Neovim's defaults.
+`Ctrl+G`, `Ctrl+K`, and `Ctrl+S`; these need not behave like Neovim's defaults.
 
 See [Keyboard shortcuts](KEYBINDINGS.md) for browser, picker and editor bindings,
 and [Buffers and Sessions](BUFFERS-AND-SESSIONS.md) for save and discard semantics.
